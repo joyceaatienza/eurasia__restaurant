@@ -455,8 +455,7 @@ function Menu() {
 
         <main className="flex-1">
   {filteredItems.length > 0 ? (
-    <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4">
-      {filteredItems.map((item) => (
+<div className="grid grid-cols-1 gap-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">      {filteredItems.map((item) => (
         <div
           key={item.id}
           className="flex h-full flex-col justify-between overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm transition-shadow hover:shadow-md"

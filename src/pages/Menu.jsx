@@ -1,15 +1,15 @@
 import { useState } from 'react'
+import 'flag-icons/css/flag-icons.min.css'
 import heroImage from '../assets/bgHero.jpg'
 import logo from '../assets/logoword.png'
 import trayIcon from '../assets/tray-icon.png'
-import bakedSalmon from '../assets/baked-salmon2.png'
+import bakedSalmon from '../assets/bakedSalmon2.png'
 import bbqRibs from '../assets/texas-bbq-ribs2.png'
 import norwegianSalmon from '../assets/norwegian-salmon2.png'
-import chickenBbq from '../assets/texas-chicken-bbq2.png'
+import chickenBbq from '../assets/chicken-bbq2.png'
 import tuttoMare from '../assets/tutto-mare2.png'
 import carneSupreme from '../assets/carne-supreme2.png'
 import alTonno from '../assets/al-tonno2.png'
-import baconCheese from '../assets/bacon-cheese-pizza2.png'
 import margherita from '../assets/margherita2.png'
 import mexicana from '../assets/mexicana.png'
 import pepperoni from '../assets/pepperoni2.png'
@@ -17,12 +17,22 @@ import quatroFormaggi from '../assets/quatro-formaggi2.png'
 import redskins from '../assets/redskins2.png'
 import fishStrips from '../assets/fish-strips2.png'
 import gyoza from '../assets/gyoza2.png'
-import  bastocine from '../assets/quezo-bastocine2.png'
+import bastocine from '../assets/quezo-bastocine2.png'
+import camarones from '../assets/camarones.png'
+import yakiTori from '../assets/yaki-tori2.png'
+import sopa from '../assets/sopa-de-calabasa2.png'
+import chowder from '../assets/seafood-chowder2.png'
+import tomKaGhai from '../assets/tom-ka-ghai2.png'
+import zuppa from '../assets/zuppa-di-funghi2.png'
+import udon from '../assets/tempura-udon2.png'
+
+
 
 const categories = [
   'Best Sellers',
   'Appetizers',
   'Main Courses',
+  'Soup',
   'Salad',
   'Pasta',
   'Noodles',
@@ -57,96 +67,96 @@ const menuItems = [
   },
   {
     id: 3,
-    name: 'Salpicao',
-    flags: '🇵🇭🐄',
-    description: 'Cubed beef sauteed in garlic, butter, and soy sauce',
-    price: 690,
-    image: '/menu/salpicao.jpg',
+    name: 'Norwegian Salmon',
+    flags: '🇳🇴',
+    description: 'Baked 200 grams salmon filet served with steamed vegetables, lemon butter capers sauce',
+    price: 1490,
+    image: norwegianSalmon,
     category: 'Best Sellers',
   },
   {
     id: 4,
-    name: 'Tutto Mare',
-    flags: '🇮🇹🦐',
-    description: 'Seafood pasta in a light white wine tomato sauce',
-    price: 578,
-    image: '/menu/tutto-mare.jpg',
+    name: 'Texas Chicken BBQ',
+    flags: '🇺🇸🐔',
+    description: 'Strip of chicken breast with olives and bell peppers drizzled with barbeque sauce',
+    price: 599,
+    image: chickenBbq,
     category: 'Best Sellers',
   },
   {
     id: 5,
-    name: 'Strawberry Yogurt Smoothie',
-    flags: '🍓',
-    description: 'Fresh strawberries blended with yogurt and honey',
-    price: 200,
-    image: '/menu/strawberry-smoothie.jpg',
-    category: 'Beverage',
+    name: 'Al Tonno',
+    flags: '🇮🇹🐟',
+    description: 'Tuna chunks, bell pepper, olives, onion served with lemon wedges on the side',
+    price: 578,
+    image: alTonno,
+    category: 'Best Sellers',
   },
 {
     id: 6,
-    name: 'Calamari',
-    flags: '🇮🇹🦑',
-    description: 'Crispy fried squid rings served with garlic aioli',
-    price: 320,
-    image: '/menu/calamari.jpg',
+    name: 'Mexicana',
+    flags: '🇲🇽🐮🌶️',
+    description: 'Chili con carne, bell peppers, and choppped fesh jalapenos',
+    price: 704,
+    image: mexicana,
     category: 'Best Sellers',
   },
   {
     id: 7,
-    name: 'Chicken Adobo',
-    flags: '🇵🇭🐔',
-    description: 'Braised chicken in soy sauce, vinegar, garlic, and bay leaf',
-    price: 350,
-    image: '/menu/chicken-adobo.jpg',
-    category: 'Main Courses',
+    name: 'Tutto Mare',
+    flags: '🇮🇹🦐',
+    description: 'Calamari, shrimp, tuna, bell peppers, and onion',
+    price: 578,
+    image: tuttoMare,
+    category: 'Best Sellers',
   },
   {
     id: 8,
-    name: 'Beef Wellington',
-    flags: '🇬🇧🐄',
-    description: 'Tenderloin wrapped in puff pastry with mushroom duxelles',
-    price: 1250,
-    image: '/menu/beef-wellington.jpg',
-    category: 'Main Courses',
+    name: 'Pepperoni',
+    flags: '🇮🇹🐷',
+    description: 'Pomodoro sauce, cheddar, and mozzarella cheese',
+    price: 578,
+    image: pepperoni,
+    category: 'Best Sellers',
   },
   {
     id: 9,
-    name: 'Grilled Salmon',
-    flags: '🇳🇴🐟',
-    description: 'Norwegian salmon fillet with lemon butter sauce and asparagus',
-    price: 720,
-    image: '/menu/grilled-salmon.jpg',
-    category: 'Main Courses',
+    name: 'Margherita',
+    flags: '🇮🇹🌿',
+    description: 'Fresh slice tomato, basil leaves, mozzarella cheese drizzled with pesto sauce',
+    price: 578,
+    image: margherita,
+    category: 'Best Sellers',
   },
   {
     id: 10,
-    name: 'Caesar Salad',
-    flags: '🇺🇸🥬',
-    description: 'Romaine lettuce, parmesan, croutons, and classic caesar dressing',
-    price: 280,
-    image: '/menu/caesar-salad.jpg',
-    category: 'Salad',
+    name: 'Quatro Formaggi',
+    flags: '🇮🇹🧀',
+    description: 'Béchamel, mozzarella, cheddar, Swiss cheese and parmesan',
+    price: 693,
+    image: quatroFormaggi,
+    category: 'Best Sellers',
   },
   {
     id: 11,
-    name: 'Greek Salad',
-    flags: '🇬🇷🧀',
-    description: 'Tomato, cucumber, olives, red onion, and feta cheese',
-    price: 260,
-    image: '/menu/greek-salad.jpg',
-    category: 'Salad',
-  },
-  {
-    id: 12,
-    name: 'Caprese Salad',
-    flags: '🇮🇹🍅',
-    description: 'Fresh mozzarella, tomatoes, and basil drizzled with balsamic glaze',
-    price: 300,
-    image: '/menu/caprese-salad.jpg',
+    name: 'Carne Supreme',
+    flags: '🇮🇹🐷🐮',
+    description: 'Chili con carne, bacon, Italian sausage, bell peppers, onions, and olives',
+    price: 711,
+    image: carneSupreme,
     category: 'Best Sellers',
   },
 
-  // Appetizers
+  //Appetizers
+  {
+    id: 12,
+    name: 'Yaki Tori',
+    flags: '🇯🇵🐔',
+    description: 'Grilled Chicken skewers served with teriyaki sauce',
+    price: 210,
+    image:yakiTori,
+    category: 'Appetizers',
+  },
   {
     id: 13,
     name: 'Redskins',
@@ -185,62 +195,62 @@ const menuItems = [
   },
   {
     id: 17,
-    name: 'Beef Pho',
-    flags: '🇻🇳🐄',
-    description: 'Vietnamese noodle soup with slow-simmered beef broth',
-    price: 380,
-    image: '/menu/beef-pho.jpg',
-    category: 'Noodles',
-  },
-  {
-    id: 18,
-    name: 'Yakisoba',
-    flags: '🇯🇵🍜',
-    description: 'Japanese stir-fried noodles with vegetables and savory sauce',
-    price: 310,
-    image: '/menu/yakisoba.jpg',
-    category: 'Noodles',
+    name: 'Camarones',
+    flags: '🇪🇸🦐',
+    description: 'Deep fried coated shrimps in beer batter served with sriracha mayo',
+    price: 464,
+    image: camarones,
+    category: 'Appetizers',
   },
 
-  // Veggies & Rice
+  //Soups
+  {
+    id: 18,
+    name: 'Sopa De Calabasa',
+    flags: '🇪🇸🎃🐷',
+    description: 'Marinated pumpkin with paprika and Italian herbs topped with crispy bacon',
+    price: 290,
+    image: sopa,
+    category: 'Soup',
+  },
   {
     id: 19,
-    name: 'Vegetable Fried Rice',
-    flags: '🇨🇳🥕',
-    description: 'Wok-fried rice with mixed vegetables and scallions',
-    price: 220,
-    image: '/menu/vegetable-fried-rice.jpg',
-    category: 'Veggies & Rice',
+    name: 'Tom Ka Ghai',
+    flags: '🇹🇭🐔🌶️',
+    description: 'Strip Chicken fillet, fresh shitake mushroom, fresh red chili, Thai ginger, lemon grass, simmered in coconut cream',
+    price: 288,
+    image: tomKaGhai,
+    category: 'Soup',
   },
   {
     id: 20,
-    name: 'Stir-Fried Vegetables',
-    flags: '🇨🇳🥦',
-    description: 'Seasonal vegetables tossed in garlic and oyster sauce',
-    price: 240,
-    image: '/menu/stir-fried-vegetables.jpg',
-    category: 'Veggies & Rice',
+    name: 'Zuppa Di Funghi',
+    flags: '🇮🇹🍄‍🟫',
+    description: 'Sautéed button mushroom and shitake mixed with homemade vegetable stock',
+    price: 288,
+    image: zuppa,
+    category: 'Soup',
   },
   {
     id: 21,
-    name: 'Mushroom Risotto',
-    flags: '🇮🇹🍄',
-    description: 'Creamy arborio rice with wild mushrooms and parmesan',
-    price: 380,
-    image: '/menu/mushroom-risotto.jpg',
-    category: 'Veggies & Rice',
+    name: 'Seafood Chowder',
+    flags: '🇬🇧🦐',
+    description: 'Combination of mixed seafood, heavy cream and garnished with shredded parmesan cheese',
+    price: 365,
+    image: chowder,
+    category: 'Soup',
   },
-
-  // Sandwiches
   {
     id: 22,
-    name: 'Club Sandwich',
-    flags: '🇺🇸🥪',
-    description: 'Triple-decker with chicken, bacon, lettuce, and tomato',
-    price: 320,
-    image: '/menu/club-sandwich.jpg',
-    category: 'Sandwiches',
+    name: 'Tempura Udon',
+    flags: '🇯🇵🦐',
+    description: 'Deep fried tempura, dried seaweeds and udon noodles',
+    price: 380,
+    image: udon,
+    category: 'Soup',
   },
+
+  //Salad
   {
     id: 23,
     name: 'Philly Cheesesteak',

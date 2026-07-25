@@ -10,6 +10,7 @@ import AboutUs from "./pages/AboutUs";
 import Tray from "./pages/Tray";
 import "./index.css";
 
+
 const router = createBrowserRouter([
   {
     path: "/",
@@ -19,7 +20,7 @@ const router = createBrowserRouter([
       { path: "menu", element: <MenuPage /> },
       { path: "payment", element: <Payment /> },
       { path: "reservation", element: <Reservation /> },
-      { path: "about-us", element: <AboutUs /> },
+      { path: "about", element: <AboutUs /> },
       { path: "tray", element: <Tray /> },
     ],
   },

@@ -1,13 +1,12 @@
 import logo from '../assets/logopic2.png'
 import bg from '../assets/bg.jpg'
-import bakedSalmon from '../assets/baked-salmon2.png'
+import bakedSalmon from '../assets/bakedSalmon2.png'
 import bbqRibs from '../assets/texas-bbq-ribs2.png'
 import norwegianSalmon from '../assets/norwegian-salmon2.png'
-import chickenBbq from '../assets/texas-chicken-bbq2.png'
+import chickenBbq from '../assets/chicken-bbq2.png'
 import tuttoMare from '../assets/tutto-mare2.png'
 import carneSupreme from '../assets/carne-supreme2.png'
 import alTonno from '../assets/al-tonno2.png'
-import baconCheese from '../assets/bacon-cheese-pizza2.png'
 import margherita from '../assets/margherita2.png'
 import mexicana from '../assets/mexicana.png'
 import pepperoni from '../assets/pepperoni2.png'
@@ -89,13 +88,6 @@ function Homepage() {
       price: 'Php. 599',
       desc: 'Strip of chicken breast with olives and bell peppers drizzled with barbeque sauce',
       img: chickenBbq,
-      position: 'object-bottom',
-    },
-     {
-      name: 'Bacon Cheese Pizza',
-      price: 'Php. 366',
-      desc: 'Thin crust pizza dough toppped with pomodoro sauce, mozzarella, cheddar, and slices of bacon',
-      img: baconCheese,
       position: 'object-bottom',
     },
     {

@@ -322,7 +322,6 @@ function Menu() {
   const filteredItems = menuItems.filter((item) => item.category.includes(activeCategory))
 
   return (
-    /* Applied font-['Prata'] to entire Menu page */
     <div className="flex min-h-screen flex-col bg-white text-[#1d080f] font-['Prata'],serif">
       
       {/* Hero Header */}

@@ -25,12 +25,14 @@ import chowder from '../assets/seafood-chowder2.png'
 import tomKaGhai from '../assets/tom-ka-ghai2.png'
 import zuppa from '../assets/zuppa-di-funghi2.png'
 import udon from '../assets/tempura-udon2.png'
-
-
+import marinera from '../assets/ensalada-marinera.png'
+import greekSalad from '../assets/greek-salad.png'
+import caesar from '../assets/insalata-caesar.png'
+import affumicato from '../assets/affumicato.png'
 
 const categories = [
   'Best Sellers',
-  'Appetizers',
+  ['Appetizers'],
   'Main Courses',
   'Soup',
   'Salad',
@@ -50,117 +52,130 @@ const menuItems = [
   {
     id: 1,
     name: 'Baked Salmon',
-    flags: '🇯🇵',
+    flag: 'jp',
+    emoji: '',
     description: 'Herb-roasted salmon served with fresh mixed greens',
     price: 755,
     image: bakedSalmon,
-    category: 'Best Sellers',
+    category: ['Best Sellers', 'Main Courses'],
   },
   {
     id: 2,
     name: 'Texas BBQ Ribs',
-    flags: '🇺🇸',
+    flag: 'us',
+    emoji: '',
     description: 'Slow cooked marinated 300 grams Baby back ribs served with potato wedges, pesto tossed veggies and coleslaw',
     price: 876,
     image: bbqRibs,
-    category: 'Best Sellers',
+    category: ['Best Sellers', 'Main Courses'],
   },
   {
     id: 3,
     name: 'Norwegian Salmon',
-    flags: '🇳🇴',
+    flag: 'no',
+    emoji: '',
     description: 'Baked 200 grams salmon filet served with steamed vegetables, lemon butter capers sauce',
     price: 1490,
     image: norwegianSalmon,
-    category: 'Best Sellers',
+    category: ['Best Sellers', 'Main Courses'],
   },
   {
     id: 4,
     name: 'Texas Chicken BBQ',
-    flags: '🇺🇸🐔',
+    flag: 'us',
+    emoji: '🐔',
     description: 'Strip of chicken breast with olives and bell peppers drizzled with barbeque sauce',
     price: 599,
     image: chickenBbq,
-    category: 'Best Sellers',
+    category: ['Best Sellers', 'Pizza'],
   },
   {
     id: 5,
     name: 'Al Tonno',
-    flags: '🇮🇹🐟',
+    flag: 'it',
+    emoji: '🐟',
     description: 'Tuna chunks, bell pepper, olives, onion served with lemon wedges on the side',
     price: 578,
     image: alTonno,
-    category: 'Best Sellers',
+    category: ['Best Sellers', 'Pizza'],
   },
-{
+  {
     id: 6,
     name: 'Mexicana',
-    flags: '🇲🇽🐮🌶️',
+    flag: 'mx',
+    emoji: '🐮🌶️',
     description: 'Chili con carne, bell peppers, and choppped fesh jalapenos',
     price: 704,
     image: mexicana,
-    category: 'Best Sellers',
+    category: ['Best Sellers', 'Pizza'],
   },
   {
     id: 7,
     name: 'Tutto Mare',
-    flags: '🇮🇹🦐',
+    flag: 'it',
+    emoji: '🦐',
     description: 'Calamari, shrimp, tuna, bell peppers, and onion',
     price: 578,
     image: tuttoMare,
-    category: 'Best Sellers',
+    category: ['Best Sellers', 'Pizza'],
   },
   {
     id: 8,
     name: 'Pepperoni',
-    flags: '🇮🇹🐷',
+    flag: 'it',
+    emoji: '🐷',
     description: 'Pomodoro sauce, cheddar, and mozzarella cheese',
     price: 578,
     image: pepperoni,
-    category: 'Best Sellers',
+    category: ['Best Sellers', 'Pizza'],
   },
   {
     id: 9,
     name: 'Margherita',
-    flags: '🇮🇹🌿',
+    flag: 'it',
+    emoji: '🌿',
     description: 'Fresh slice tomato, basil leaves, mozzarella cheese drizzled with pesto sauce',
     price: 578,
     image: margherita,
-    category: 'Best Sellers',
+    category: ['Best Sellers', 'Pizza'],
   },
   {
     id: 10,
     name: 'Quatro Formaggi',
-    flags: '🇮🇹🧀',
+    flag: 'it',
+    emoji: '🧀',
     description: 'Béchamel, mozzarella, cheddar, Swiss cheese and parmesan',
     price: 693,
     image: quatroFormaggi,
-    category: 'Best Sellers',
+    category: ['Best Sellers', 'Pizza'],
   },
   {
     id: 11,
     name: 'Carne Supreme',
-    flags: '🇮🇹🐷🐮',
+    flag: 'it',
+    emoji: '🐷🐮',
     description: 'Chili con carne, bacon, Italian sausage, bell peppers, onions, and olives',
     price: 711,
     image: carneSupreme,
-    category: 'Best Sellers',
+    category: ['Best Sellers', 'Pizza'],
   },
 
   //Appetizers
   {
     id: 12,
     name: 'Yaki Tori',
-    flags: '🇯🇵🐔',
+    flag: 'jp',
+    emoji: '🐔',
     description: 'Grilled Chicken skewers served with teriyaki sauce',
     price: 210,
-    image:yakiTori,
+    image: yakiTori,
     category: 'Appetizers',
   },
   {
     id: 13,
     name: 'Redskins',
-    flags: '🇺🇸🌿',
+    flag: 'us',
+    emoji: '🌿',
     description: 'Deep fried potato wedges served with dynamite creamy sauce',
     price: 179,
     image: redskins,
@@ -169,7 +184,8 @@ const menuItems = [
   {
     id: 14,
     name: 'Fish Strips',
-    flags: '🇮🇪🐟',
+    flag: 'ie',
+    emoji: '🐟',
     description: 'Marinated fish fillet with Cajun spices coated with beer battered mixture served with homemade sauce',
     price: 360,
     image: fishStrips,
@@ -178,7 +194,8 @@ const menuItems = [
   {
     id: 15,
     name: 'Quezo Bastocine',
-    flags: '🇮🇹🧀',
+    flag: 'it',
+    emoji: '🧀',
     description: 'Deep fried Mozzarella sticks served with Pomodoro sauce and sriracha mayo',
     price: 309,
     image: bastocine,
@@ -187,7 +204,8 @@ const menuItems = [
   {
     id: 16,
     name: 'Gyoza',
-    flags: '🇯🇵🐷',
+    flag: 'jp',
+    emoji: '🐷',
     description: 'Pan-fried dumplings filled with savory pork and vegetables, served with a special sauce',
     price: 360,
     image: gyoza,
@@ -196,18 +214,20 @@ const menuItems = [
   {
     id: 17,
     name: 'Camarones',
-    flags: '🇪🇸🦐',
+    flag: 'es',
+    emoji: '🦐',
     description: 'Deep fried coated shrimps in beer batter served with sriracha mayo',
     price: 464,
     image: camarones,
     category: 'Appetizers',
   },
 
-  //Soups
+  //Soup
   {
     id: 18,
     name: 'Sopa De Calabasa',
-    flags: '🇪🇸🎃🐷',
+    flag: 'es',
+    emoji: '🎃🐷',
     description: 'Marinated pumpkin with paprika and Italian herbs topped with crispy bacon',
     price: 290,
     image: sopa,
@@ -216,7 +236,8 @@ const menuItems = [
   {
     id: 19,
     name: 'Tom Ka Ghai',
-    flags: '🇹🇭🐔🌶️',
+    flag: 'th',
+    emoji: '🐔🌶️',
     description: 'Strip Chicken fillet, fresh shitake mushroom, fresh red chili, Thai ginger, lemon grass, simmered in coconut cream',
     price: 288,
     image: tomKaGhai,
@@ -225,7 +246,8 @@ const menuItems = [
   {
     id: 20,
     name: 'Zuppa Di Funghi',
-    flags: '🇮🇹🍄‍🟫',
+    flag: 'it',
+    emoji: '🍄',
     description: 'Sautéed button mushroom and shitake mixed with homemade vegetable stock',
     price: 288,
     image: zuppa,
@@ -234,7 +256,8 @@ const menuItems = [
   {
     id: 21,
     name: 'Seafood Chowder',
-    flags: '🇬🇧🦐',
+    flag: 'gb',
+    emoji: '🦐',
     description: 'Combination of mixed seafood, heavy cream and garnished with shredded parmesan cheese',
     price: 365,
     image: chowder,
@@ -243,7 +266,8 @@ const menuItems = [
   {
     id: 22,
     name: 'Tempura Udon',
-    flags: '🇯🇵🦐',
+    flag: 'jp',
+    emoji: '🦐',
     description: 'Deep fried tempura, dried seaweeds and udon noodles',
     price: 380,
     image: udon,
@@ -253,172 +277,49 @@ const menuItems = [
   //Salad
   {
     id: 23,
-    name: 'Philly Cheesesteak',
-    flags: '🇺🇸🧀',
-    description: 'Sliced beef and melted cheese in a soft hoagie roll',
-    price: 390,
-    image: '/menu/philly-cheesesteak.jpg',
-    category: 'Sandwiches',
+    name: 'Ensalada Marinera',
+    flag: 'ar',
+    emoji: '🦐',
+    description: 'Romaine, lollo rosso, calamari, shrimps, salmon cubes and mussels mixed with sesame dressing',
+    price: 489,
+    image: marinera,
+    category: 'Salad',
   },
   {
     id: 24,
-    name: 'Croque Monsieur',
-    flags: '🇫🇷🧀',
-    description: 'Grilled ham and gruyere sandwich with bechamel sauce',
-    price: 350,
-    image: '/menu/croque-monsieur.jpg',
-    category: 'Sandwiches',
+    name: 'Greek Salad',
+    flag: 'gr',
+    emoji: '🌿',
+    description: 'Feta cheese, black olives, green olives, cucumber, tomato, onion, capsicum with olive oil and lemon dressing',
+    price: 450,
+    image: greekSalad,
+    category: 'Salad',
   },
-
-  // Pizza
   {
     id: 25,
-    name: 'Margherita Pizza',
-    flags: '🇮🇹🍅',
-    description: 'Wood-fired pizza with tomato, mozzarella, and fresh basil',
-    price: 480,
-    image: '/menu/margherita-pizza.jpg',
-    category: 'Pizza',
+    name: 'Insalata Ceasar',
+    flag: 'it',
+    emoji: '🐷',
+    description: 'Fresh romaine lettuce tossed with homemade Caesar dressing, herb croutons and topped with crispy bacon',
+    price: 425,
+    image: caesar,
+    category: 'Salad',
   },
   {
     id: 26,
-    name: 'Pepperoni Pizza',
-    flags: '🇮🇹🌶️',
-    description: 'Classic pizza topped with spicy pepperoni and mozzarella',
-    price: 520,
-    image: '/menu/pepperoni-pizza.jpg',
-    category: 'Pizza',
-  },
-  {
-    id: 27,
-    name: 'Quattro Formaggi',
-    flags: '🇮🇹🧀',
-    description: 'Four-cheese pizza with mozzarella, gorgonzola, and parmesan',
-    price: 550,
-    image: '/menu/quattro-formaggi.jpg',
-    category: 'Pizza',
-  },
-
-  // Kids Menu
-  {
-    id: 28,
-    name: 'Chicken Nuggets',
-    flags: '🐔',
-    description: 'Crispy breaded chicken bites served with fries and ketchup',
-    price: 220,
-    image: '/menu/chicken-nuggets.jpg',
-    category: 'Kids Menu',
-  },
-  {
-    id: 29,
-    name: 'Mini Cheeseburger',
-    flags: '🍔',
-    description: 'Kid-sized beef patty with cheese, served with fries',
-    price: 240,
-    image: '/menu/mini-cheeseburger.jpg',
-    category: 'Kids Menu',
-  },
-  {
-    id: 30,
-    name: 'Mac and Cheese',
-    flags: '🧀',
-    description: 'Creamy cheese sauce tossed with elbow macaroni',
-    price: 200,
-    image: '/menu/mac-and-cheese.jpg',
-    category: 'Kids Menu',
-  },
-
-  // Dessert
-  {
-    id: 31,
-    name: 'Tiramisu',
-    flags: '🇮🇹☕',
-    description: 'Layered coffee-soaked ladyfingers with mascarpone cream',
-    price: 260,
-    image: '/menu/tiramisu.jpg',
-    category: 'Dessert',
-  },
-  {
-    id: 32,
-    name: 'Creme Brulee',
-    flags: '🇫🇷🍮',
-    description: 'Vanilla custard topped with a crisp caramelized sugar crust',
-    price: 240,
-    image: '/menu/creme-brulee.jpg',
-    category: 'Dessert',
-  },
-  {
-    id: 33,
-    name: 'Chocolate Lava Cake',
-    flags: '🍫',
-    description: 'Warm chocolate cake with a molten center, served with ice cream',
-    price: 280,
-    image: '/menu/chocolate-lava-cake.jpg',
-    category: 'Dessert',
-  },
-
-  // Chef's Special
-  {
-    id: 34,
-    name: 'Duck Confit',
-    flags: '🇫🇷🦆',
-    description: 'Slow-cooked duck leg with crispy skin and red wine jus',
-    price: 890,
-    image: '/menu/duck-confit.jpg',
-    category: "Chef's Special",
-  },
-  {
-    id: 35,
-    name: 'Wagyu Steak',
-    flags: '🇯🇵🐄',
-    description: 'Premium wagyu beef grilled to perfection with truffle butter',
-    price: 1850,
-    image: '/menu/wagyu-steak.jpg',
-    category: "Chef's Special",
-  },
-  {
-    id: 36,
-    name: 'Lobster Thermidor',
-    flags: '🇫🇷🦞',
-    description: 'Baked lobster in a creamy brandy and cheese sauce',
-    price: 1650,
-    image: '/menu/lobster-thermidor.jpg',
-    category: "Chef's Special",
-  },
-
-  // Beverage
-  {
-    id: 37,
-    name: 'Strawberry Yogurt Smoothie',
-    flags: '🍓',
-    description: 'Fresh strawberries blended with yogurt and honey',
-    price: 200,
-    image: '/menu/strawberry-smoothie.jpg',
-    category: 'Beverage',
-  },
-  {
-    id: 38,
-    name: 'Iced Matcha Latte',
-    flags: '🇯🇵🍵',
-    description: 'Ceremonial grade matcha whisked with cold milk over ice',
-    price: 220,
-    image: '/menu/iced-matcha-latte.jpg',
-    category: 'Beverage',
-  },
-  {
-    id: 39,
-    name: 'Mango Sago',
-    flags: '🇵🇭🥭',
-    description: 'Sweet mango puree with sago pearls and coconut milk',
-    price: 180,
-    image: '/menu/mango-sago.jpg',
-    category: 'Beverage',
+    name: 'Insalata Di Salmone Affumicato',
+    flag: 'it',
+    emoji: '🐟',
+    description: 'Smoked salmon, romaine, lollo rosso, olives, capers mixed with dill mustard dressing',
+    price: 450,
+    image: affumicato,
+    category: 'Salad',
   },
 ]
 
 function Menu() {
-  const [activeCategory, setActiveCategory] = useState(categories[1]) // Appetizers
-  const filteredItems = menuItems.filter((item) => item.category === activeCategory)
+  const [activeCategory, setActiveCategory] = useState(categories[0]) // Appetizers
+  const filteredItems = menuItems.filter((item) => item.category.includes(activeCategory))
 
   return (
     /* Applied font-['Prata'] to entire Menu page */
@@ -477,7 +378,16 @@ function Menu() {
             <div className="px-5 pt-5 text-left font-['Prata']">
               <h3 className="text-base md:text-lg font-bold text-neutral-900 leading-snug [text-shadow:_0.3px_0_0_#1d080f]">
                 {item.name}{' '}
-                <span className="inline-block text-sm font-normal">{item.flags}</span>
+                <span className="inline-flex items-center gap-1 align-middle text-sm font-normal">
+                  {item.flag && (
+                    <span
+                      className={`fi fi-${item.flag} border border-neutral-301`}
+                      style={{ width: '1.1em', height: '0.8em' }}
+                      title={item.flag.toUpperCase()}
+                    />
+                  )}
+                  <span>{item.emoji}</span>
+                </span>
               </h3>
               <p className="mt-1 text-sm md:text-base font-bold text-neutral-800 [text-shadow:_0.3px_0_0_#1d080f]">
                 Php. {item.price}

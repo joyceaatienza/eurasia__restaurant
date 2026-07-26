@@ -336,7 +336,7 @@ function Menu() {
           <img
             src={logo}
             alt="Eurasia Restaurant"
-            className="h-20 w-auto md:h-36"
+            className="h-20 w-auto md:h-32"
           />
         </div>
       </div>

@@ -377,12 +377,15 @@ function Reservation() {
   return (
     <div className="bg-white text-[#1d080f]">
       {/* Hero Header */}
-      <div className="relative h-64 md:h-72 overflow-hidden shrink-0">
-        <img src={heroImage} alt="" className="absolute inset-0 h-full w-full object-cover" />
-        <div className="absolute inset-0 bg-white/30" />
+      <div className="relative h-64 overflow-hidden shrink-0 md:h-60">
+        <img src={heroImage}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+        <div className="absolute inset-0 bg-white/40" />
         <div className="relative flex h-full items-start justify-center px-4 pt-10 md:pt-14">
           <h1
-            className="font-[Prata] font-bold text-3xl md:text-5xl text-[#1d080f]"
+            className="font-[Prata] font-bold text-base md:text-xl text-[#1d080f]"
             style={{ WebkitTextStroke: '0.7px #1d080f' }}
           >
             Have a Reservation Now!
@@ -391,8 +394,9 @@ function Reservation() {
       </div>
 
       {/* Main Container */}
-      <div className="max-w-5xl mx-auto px-4 md:px-0 -mt-24 md:-mt-32 relative z-10 pb-16">
-        <div className="bg-[#e6e1d8] rounded-2xl shadow-xl p-6 md:p-10">
+      <div style={{ marginTop: '4rem' }}> </div>
+      <div className="max-w-5xl mx-auto px-4 md:px-3 -mt-24 md:-mt-32 relative z-10 pb-16">
+        <div className="bg-[#e6e1d8] rounded-xl shadow-xl p-6 md:p-10">
           {/* Tabs */}
           <div className="flex gap-3 mb-8">
             <button

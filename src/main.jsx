@@ -7,9 +7,7 @@ import MenuPage from "./pages/Menu";
 import Payment from "./pages/Payment";
 import Reservation from "./pages/Reservation";
 import AboutUs from "./pages/AboutUs";
-import Tray from "./pages/Tray";
 import "./index.css";
-
 
 const router = createBrowserRouter([
   {
@@ -21,7 +19,6 @@ const router = createBrowserRouter([
       { path: "payment", element: <Payment /> },
       { path: "reservation", element: <Reservation /> },
       { path: "about", element: <AboutUs /> },
-      { path: "tray", element: <Tray /> },
     ],
   },
 ]);

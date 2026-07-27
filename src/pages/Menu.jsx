@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import 'flag-icons/css/flag-icons.min.css'
 import heroImage from '../assets/bgHero.jpg'
 import logo from '../assets/logoword.png'
@@ -29,6 +30,7 @@ import marinera from '../assets/ensalada-marinera.png'
 import greekSalad from '../assets/greek-salad.png'
 import caesar from '../assets/insalata-caesar.png'
 import affumicato from '../assets/affumicato.png'
+import { useCart } from '../context/CartContext'
 
 const categories = [
   'Best Sellers',
@@ -320,6 +322,33 @@ const menuItems = [
 function Menu() {
   const [activeCategory, setActiveCategory] = useState(categories[0]) // Appetizers
   const filteredItems = menuItems.filter((item) => item.category.includes(activeCategory))
+  const { addToCart, flyToCart } = useCart()
+  const navigate = useNavigate()
+
+  const handleAddToTray = (item, event) => {
+    const rect = event.currentTarget.getBoundingClientRect()
+    flyToCart(item.image, rect)
+    addToCart({
+      id: item.id,
+      name: item.name,
+      price: item.price,
+      image: item.image,
+      flag: item.flag,
+      emoji: item.emoji,
+    })
+  }
+
+  const handleBuyNow = (item) => {
+    addToCart({
+      id: item.id,
+      name: item.name,
+      price: item.price,
+      image: item.image,
+      flag: item.flag,
+      emoji: item.emoji,
+    })
+    navigate('/payment')
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-white text-[#1d080f] font-['Prata'],serif">
@@ -364,81 +393,84 @@ function Menu() {
         </aside>
 
         <main className="flex-1">
-  {filteredItems.length > 0 ? (
-<div className="grid grid-cols-1 gap-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">      {filteredItems.map((item) => (
-        <div
-          key={item.id}
-          className="flex h-full flex-col justify-between overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm transition-shadow hover:shadow-md"
-        >
-          {/* Card Inner Content */}
-          <div className="flex flex-1 flex-col">
-            
-            {/* 1. TOP HEADER: Prata Font with faux bold stroke */}
-            <div className="px-5 pt-5 text-left font-['Prata']">
-              <h3 className="text-base md:text-lg font-bold text-neutral-900 leading-snug [text-shadow:_0.3px_0_0_#1d080f]">
-                {item.name}{' '}
-                <span className="inline-flex items-center gap-1 align-middle text-sm font-normal">
-                  {item.flag && (
-                    <span
-                      className={`fi fi-${item.flag} border border-neutral-301`}
-                      style={{ width: '1.1em', height: '0.8em' }}
-                      title={item.flag.toUpperCase()}
-                    />
-                  )}
-                  <span>{item.emoji}</span>
-                </span>
-              </h3>
-              <p className="mt-1 text-sm md:text-base font-bold text-neutral-800 [text-shadow:_0.3px_0_0_#1d080f]">
-                Php. {item.price}
-              </p>
+          {filteredItems.length > 0 ? (
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+              {filteredItems.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex h-full flex-col justify-between overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm transition-shadow hover:shadow-md"
+                >
+                  {/* Card Inner Content */}
+                  <div className="flex flex-1 flex-col">
+                    
+                    {/* 1. TOP HEADER: Prata Font with faux bold stroke */}
+                    <div className="px-5 pt-5 text-left font-['Prata']">
+                      <h3 className="text-base md:text-lg font-bold text-neutral-900 leading-snug [text-shadow:_0.3px_0_0_#1d080f]">
+                        {item.name}{' '}
+                        <span className="inline-flex items-center gap-1 align-middle text-sm font-normal">
+                          {item.flag && (
+                            <span
+                              className={`fi fi-${item.flag} border border-neutral-301`}
+                              style={{ width: '1.1em', height: '0.8em' }}
+                              title={item.flag.toUpperCase()}
+                            />
+                          )}
+                          <span>{item.emoji}</span>
+                        </span>
+                      </h3>
+                      <p className="mt-1 text-sm md:text-base font-bold text-neutral-800 [text-shadow:_0.3px_0_0_#1d080f]">
+                        Php. {item.price}
+                      </p>
+                    </div>
+
+                    {/* 2. MIDDLE: Food Image */}
+                    <div className="mt-4 aspect-[4/3] w-full overflow-hidden bg-white">
+                      <img
+                        src={item.image}
+                        alt={item.name}
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
+
+                    {/* 3. DESCRIPTION: Clean Prata Font */}
+                    <div className="flex flex-1 px-5 py-4">
+                      <p className="text-center font-['Prata'] text-xs md:text-sm leading-relaxed text-neutral-600">
+                        {item.description}
+                      </p>
+                    </div>
+
+                  </div>
+
+                  {/* 4. BUTTONS: Solid Dark Buy Now + Gray Add to Tray */}
+                  <div className="mt-auto flex h-12 border-t border-neutral-200 font-['Prata']">
+                    {/* Buy Now Button */}
+                    <button
+                      type="button"
+                      onClick={() => handleBuyNow(item)}
+                      className="flex flex-1 items-center justify-center bg-[#1d080f] text-xs text-white transition-opacity hover:opacity-90"
+                    >
+                      Buy Now
+                    </button>
+
+                    {/* Add to Tray Button */}
+                    <button
+                      type="button"
+                      onClick={(e) => handleAddToTray(item, e)}
+                      className="flex flex-1 items-center justify-center gap-1.5 border-l border-neutral-200 bg-neutral-100 text-xs text-neutral-800 transition-colors hover:bg-neutral-200"
+                    >
+                      <img src={trayIcon} alt="" className="h-4 w-4 shrink-0" />
+                      Add to Tray
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
-
-            {/* 2. MIDDLE: Food Image */}
-            <div className="mt-4 aspect-[4/3] w-full overflow-hidden bg-white">
-              <img
-                src={item.image}
-                alt={item.name}
-                className="h-full w-full object-cover"
-              />
-            </div>
-
-            {/* 3. DESCRIPTION: Clean Prata Font */}
-            <div className="flex flex-1 px-5 py-4">
-              <p className="text-center font-['Prata'] text-xs md:text-sm leading-relaxed text-neutral-600">
-                {item.description}
-              </p>
-            </div>
-
-          </div>
-
-          {/* 4. BUTTONS: Solid Dark Buy Now + Gray Add to Tray */}
-          <div className="mt-auto flex h-12 border-t border-neutral-200 font-['Prata']">
-            {/* Buy Now Button */}
-            <button
-              type="button"
-              className="flex flex-1 items-center justify-center bg-[#1d080f] text-xs text-white transition-opacity hover:opacity-90"
-            >
-              Buy Now
-            </button>
-
-            {/* Add to Tray Button */}
-            <button
-              type="button"
-              className="flex flex-1 items-center justify-center gap-1.5 border-l border-neutral-200 bg-neutral-100 text-xs text-neutral-800 transition-colors hover:bg-neutral-200"
-            >
-              <img src={trayIcon} alt="" className="h-4 w-4 shrink-0" />
-              Add to Tray
-            </button>
-          </div>
-        </div>
-      ))}
-    </div>
-  ) : (
-    <p className="col-span-full py-12 text-center text-neutral-400 font-['Prata']">
-      No items in this category yet.
-    </p>
-  )}
-</main>
+          ) : (
+            <p className="col-span-full py-12 text-center text-neutral-400 font-['Prata']">
+              No items in this category yet.
+            </p>
+          )}
+        </main>
       </div>
     </div>
   )

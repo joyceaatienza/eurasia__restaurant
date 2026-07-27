@@ -32,7 +32,6 @@ function Payment() {
   const [discountIdFile, setDiscountIdFile] = useState(null);
   const [orderItems, setOrderItems] = useState([]);
 
-  // Load cart items dynamically from localStorage
   useEffect(() => {
     const savedCart = localStorage.getItem(CART_STORAGE_KEY);
     if (savedCart) {
@@ -49,9 +48,8 @@ function Payment() {
     }
   }, []);
 
-  // Calculation based on cart content and Eurasia's structure (Service Fee instead of VAT)
   const subtotal = orderItems.reduce((sum, item) => sum + item.price * item.qty, 0);
-  const serviceFee = Math.round(subtotal * 0.05 * 100) / 100; // Estimated service charge rate
+  const serviceFee = Math.round(subtotal * 0.05 * 100) / 100;
   const discountRate = discount ? 0.20 : 0;
   const discountAmount = Math.round(subtotal * discountRate);
   const total = subtotal + serviceFee - discountAmount;
@@ -77,52 +75,45 @@ function Payment() {
       return;
     }
 
-    // Clear cart state after successful checkout
     localStorage.removeItem(CART_STORAGE_KEY);
     localStorage.removeItem(PAYMENT_METHOD_KEY);
     setOrderItems([]);
     
     alert("Payment submitted successfully! Thank you for dining with Eurasia San Jose.");
-    navigate('/');
+    navigate('/menu');
   };
 
   return (
     <div className="min-h-screen bg-[#faf8f5] text-[#1d080f] font-sans">
-      {/* Header Banner */}
-      <div className="relative h-48 md:h-56 overflow-hidden">
-        <img src={heroImage} alt="Eurasia Banner" className="absolute inset-0 h-full w-full object-cover" />
-        <div className="absolute inset-0 bg-black/40 backdrop-brightness-75" />
-        <div className="relative max-w-3xl mx-auto h-full flex flex-col justify-between px-6 py-6 text-white">
-          <button 
-            onClick={() => navigate(-1)}
-            className="flex items-center gap-2 text-xs font-medium tracking-wider uppercase hover:opacity-80 w-fit cursor-pointer"
+      {/* Hero Header */}
+      <div className="relative h-64 overflow-hidden shrink-0 md:h-60">
+        <img src={heroImage}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+        <div className="absolute inset-0 bg-white/40" />
+        <div className="relative flex h-full items-start justify-center px-4 pt-10 md:pt-14">
+          <h1
+            className="font-[Prata] font-bold text-xs md:text-xs text-[#1d080f]"
+            style={{ WebkitTextStroke: '0.7px #1d080f' }}
           >
-            <ArrowLeft size={16} /> Back to Menu
-          </button>
-          <div>
-            <h1 className="font-['Prata'],serif text-2xl md:text-3xl font-bold tracking-wide">
-              Eurasia San Jose
-            </h1>
-            <p className="text-xs md:text-sm text-neutral-200 mt-1">
-              Banay Banay San Jose Batangas &bull; Request for Payment
-            </p>
-          </div>
+            Complete your payment
+          </h1>
         </div>
       </div>
 
       <div className="max-w-3xl mx-auto px-4 md:px-6 py-8">
         {orderItems.length === 0 ? (
-          /* Empty Cart State */
           <div className="bg-white rounded-2xl border border-neutral-200/80 p-12 text-center shadow-xs">
             <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4 text-neutral-400">
               <ShoppingBag size={28} />
             </div>
-            <h2 className="font-['Prata'],serif text-xl font-bold mb-2">Your Tray is Empty</h2>
-            <p className="text-sm text-neutral-500 max-w-sm mx-auto mb-6">
+            <h2 className="font-['Prata'],serif text-xl font-bold mb-3">Your Tray is Empty</h2>
+            <p className="text-sm text-neutral-500 mx-auto mb-4 text-center">
               There are no items ready for checkout. Please add dishes from our menu first.
             </p>
             <button
-              onClick={() => navigate('/')}
+              onClick={() => navigate('/menu')}
               className="bg-[#1d080f] text-white text-sm font-semibold px-6 py-3 rounded-xl hover:opacity-90 transition cursor-pointer"
             >
               Browse Menu
@@ -133,9 +124,9 @@ function Payment() {
             
             {/* Step 1: Select Payment Method */}
             <div className="bg-white rounded-2xl border border-neutral-200/80 p-6 shadow-xs">
-              <h2 className="text-xs font-bold text-[#b38548] uppercase tracking-wider mb-4">
+              <h4 className="text-[16px] font-bold text-[#b38548] uppercase tracking-wider mb-4">
                 1. Select Payment Method
-              </h2>
+              </h4>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {PAYMENT_METHODS.map(({ id, label, icon: Icon }) => {
                   const isSelected = method === id;
@@ -159,9 +150,9 @@ function Payment() {
 
             {/* Step 2: Discounts & ID Verification Upload */}
             <div className="bg-white rounded-2xl border border-neutral-200/80 p-6 shadow-xs">
-              <h2 className="text-xs font-bold text-[#b38548] uppercase tracking-wider mb-4">
+              <h4 className="text-[16px] font-bold text-[#b38548] uppercase tracking-wider mb-4">
                 2. Select Discount (Optional)
-              </h2>
+              </h4>
               
               <div className="grid sm:grid-cols-2 gap-3 mb-4">
                 <button
@@ -209,7 +200,6 @@ function Payment() {
                 </button>
               </div>
 
-              {/* Upload Discount ID Photo Box */}
               {discount && (
                 <div className="mt-4 p-4 bg-[#faf8f5] rounded-xl border border-dashed border-amber-800/30">
                   <label className="flex flex-col items-center justify-center gap-2 cursor-pointer text-center">
@@ -238,9 +228,9 @@ function Payment() {
             {/* Step 3: Receipt Screenshot Upload for Non-Cash */}
             {method !== 'cash' && (
               <div className="bg-white rounded-2xl border border-neutral-200/80 p-6 shadow-xs">
-                <h2 className="text-xs font-bold text-[#b38548] uppercase tracking-wider mb-2">
+                <h4 className="text-[16px] font-bold text-[#b38548] uppercase tracking-wider mb-2">
                   3. Upload Payment Receipt
-                </h2>
+                </h4>
                 <p className="text-xs text-neutral-500 mb-4">
                   Attach a screenshot of your successful transaction via {PAYMENT_METHODS.find(m => m.id === method)?.label}.
                 </p>
@@ -264,15 +254,13 @@ function Payment() {
             {/* Step 4: Receipt Breakdown */}
             <div className="bg-white rounded-2xl border border-neutral-200/80 p-6 shadow-xs font-mono">
               
-              {/* Receipt Header */}
-              <div className="border-b border-dashed border-neutral-300 pb-3 mb-4 text-xs">
-                <div className="flex justify-between items-center font-bold text-neutral-800 font-sans">
-                  <span>EURASIA RESTAURANT</span>
+              <div className="border-b border-dashed border-neutral-300 pb-3 mb-4 text-base">
+                <div className="flex justify-between items-center font-bold text-neutral-800 font-[Prata]">
+                  <span>Eurasia Restaurant</span>
                   <Receipt size={18} className="text-neutral-400" />
                 </div>
               </div>
 
-              {/* Order Items List */}
               <div className="divide-y divide-neutral-100 max-h-64 overflow-y-auto pr-1">
                 {orderItems.map((item, i) => (
                   <div key={i} className="py-2 flex justify-between items-center text-xs">
@@ -285,37 +273,34 @@ function Payment() {
                   </div>
                 ))}
               </div>
-
-              {/* Eurasia Receipt Breakdown (Subtotal + Service Fee - Discount = Total) */}
-              <div className="mt-4 pt-4 border-t border-dashed border-neutral-300 space-y-2 text-xs">
-                <div className="flex justify-between text-neutral-600">
-                  <span>SUBTOTAL</span>
-                  <span>₱ {subtotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-                </div>
                 
-                <div className="flex justify-between text-neutral-600">
-                  <span>SERVICE</span>
-                  <span>₱ {serviceFee.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-                </div>
+              <div className="mt-4 pt-4 border-t border-dashed border-neutral-300 space-y-2 text-xs">
+  <div className="flex justify-between text-neutral-600">
+    <span>Subtotal</span>
+    <span>₱ {subtotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+  </div>
 
-                {discount && (
-                  <div className="flex justify-between text-red-600 font-semibold">
-                    <span>DISCOUNT ({discount === 'pwd' ? 'PWD' : 'SENIOR'})</span>
-                    <span>- ₱ {discountAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-                  </div>
-                )}
+  <div className="flex justify-between text-neutral-600">
+    <span>Service</span>
+    <span>₱ {serviceFee.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+  </div>
 
-                <div className="flex justify-between items-baseline text-base font-bold text-[#1d080f] pt-3 border-t border-neutral-800">
-                  <span>TOTAL</span>
-                  <span>₱ {total.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-                </div>
-              </div>
+  {discount && (
+    <div className="flex justify-between text-red-600 font-semibold">
+      <span>DISCOUNT ({discount === 'pwd' ? 'PWD' : 'SENIOR'})</span>
+      <span>- ₱ {discountAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+    </div>
+  )}
 
-              {/* Action Buttons */}
+  <div className="flex justify-between items-baseline text-base font-bold text-[#1d080f] pt-3 border-t border-neutral-800">
+    <span>TOTAL</span>
+    <span>₱ {total.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+  </div>
+</div>
               <div className="flex gap-3 mt-8 font-sans">
                 <button
                   type="button"
-                  onClick={() => navigate('/')}
+                  onClick={() => navigate('/menu')}
                   className="flex-1 border border-neutral-300 text-neutral-700 text-sm font-medium py-3 rounded-xl hover:bg-neutral-50 transition cursor-pointer"
                 >
                   Cancel

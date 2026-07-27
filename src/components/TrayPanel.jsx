@@ -194,7 +194,7 @@ function TrayPanel() {
                   <span className="font-medium text-neutral-800">₱{subtotal.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between text-xs font-sans text-neutral-600">
-                  <span>VAT (12%)</span>
+                  <span>Service (5%)</span>
                   <span className="font-medium text-neutral-800">₱{vat.toLocaleString()}</span>
                 </div>
                 

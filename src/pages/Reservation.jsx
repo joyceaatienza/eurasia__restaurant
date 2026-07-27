@@ -385,7 +385,7 @@ function Reservation() {
         <div className="absolute inset-0 bg-white/40" />
         <div className="relative flex h-full items-start justify-center px-4 pt-10 md:pt-14">
           <h1
-            className="font-[Prata] font-bold text-base md:text-xl text-[#1d080f]"
+            className="font-[Prata] font-bold text-xs md:text-xs text-[#1d080f]"
             style={{ WebkitTextStroke: '0.7px #1d080f' }}
           >
             Have a Reservation Now!

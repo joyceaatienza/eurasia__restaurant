@@ -68,7 +68,7 @@ function Footer() {
         <div className="flex flex-col items-center md:items-end">
           <h3 className="text-xs font-[Prata] font-bold mb-2 md:mb-4">Give your feedback</h3>
           <a
-            href="#"
+            href="feedback"
             className="border border-amber-300 text-amber-300 rounded-full px-5 py-0.5 md:py-1 text-[11px] md:text-xs font-[Prata] hover:bg-amber-300 hover:text-neutral-900 transition"
           >
             Feedback

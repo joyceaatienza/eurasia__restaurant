@@ -60,6 +60,55 @@ function FindUs() {
   );
 }
 
+function ReviewsSection({ reviews }) {
+  const [current, setCurrent] = useState(0);
+
+  return (
+    <section className="relative bg-[#1d080f] text-[#f1ece7] py-24 px-6 flex flex-col items-center justify-center text-center">
+      <div className="w-px h-10 bg-amber-500 mb-10" />
+
+      {reviews.length === 0 ? (
+        <p className="font-serif italic text-lg md:text-lg max-w-lg leading-relaxed">
+          No reviews yet — be the first to share your experience.
+        </p>
+      ) : (
+        <>
+          <div className="max-w-xl mb-4">
+            <p className="font-serif italic text-lg md:text-lg leading-relaxed">
+              "{reviews[current].message}"
+            </p>
+            <div className="flex justify-center gap-1 mt-4">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <span
+                  key={star}
+                  className={star <= reviews[current].rating ? "text-amber-400" : "text-neutral-600"}
+                  style={{ fontSize: 16 }}
+                >
+                  ★
+                </span>
+              ))}
+            </div>
+            <p className="mt-3 font-[Prata] text-sm text-amber-300">— {reviews[current].name}</p>
+          </div>
+
+          <div className="flex items-center justify-center gap-2 py-6">
+            {reviews.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setCurrent(i)}
+                aria-label={`Review ${i + 1}`}
+                className={`w-2 h-2 rounded-full transition ${
+                  i === current ? "bg-amber-400" : "bg-neutral-500"
+                }`}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
 function Homepage() {
   const bestSellers = [
     {
@@ -147,8 +196,13 @@ function Homepage() {
   useEffect(() => {
     fetch("/api/reviews")
       .then(res => res.json())
-      .then(data => setReviews(data));
+      .then(data => setReviews(data))
+      .catch(() => setReviews([]));
   }, []);
+
+  const handleSubmitReview = (newReview) => {
+    setReviews((prev) => [...prev, newReview]);
+  };
 
   const scroll = (direction) => {
     if (scrollRef.current) {
@@ -249,18 +303,7 @@ function Homepage() {
             </div>
       </div>
 
-    <section className="relative bg-[#1d080f] text-[#f1ece7] py-24 px-6 flex flex-col items-center justify-center text-center">
-  <div className="w-px h-10 bg-amber-500 mb-10" />
-        <p className="font-serif italic text-lg md:text-lg max-w-lg leading-relaxed mb-20">
-          No reviews yet — be the first to share your experience.
-        </p>
-
-        <div className="flex items-end justify-end gap-2 py-18">
-          <span className="w-2 h-2 rounded-full bg-neutral-500" />
-          <span className="w-2 h-2 rounded-full bg-neutral-500" />
-          <span className="w-2 h-2 rounded-full bg-neutral-500" />
-        </div>
-      </section>
+      <ReviewsSection reviews={reviews} onSubmitReview={handleSubmitReview} />
 
       <FindUs />
     </div>

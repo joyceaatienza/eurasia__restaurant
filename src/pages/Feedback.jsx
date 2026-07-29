@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import heroImage from "../assets/bgHero.jpg";
 import logo from "../assets/logoword.png";
+import { addReview } from "../utils/reviewsStore";
 
 const C = {
   bg: "#EFEAE2",
@@ -34,14 +35,13 @@ export default function Feedback() {
     setMessage("");
   };
 
-  const handleSubmit = () => {
-    if (!isValid) return;
+const handleSubmit = () => {
+  if (!isValid) return;
 
-    // TODO: replace with a real API call, e.g.
-    // await fetch("/api/feedback", { method: "POST", body: JSON.stringify({ name, message, rating }) })
+  addReview({ name: name.trim(), message: message.trim(), rating });
 
-    setSubmitted(true);
-  };
+  setSubmitted(true);
+};
 
   return (
     <div style={{ fontFamily: FONT, color: C.ink, background: C.bg }}>
@@ -62,7 +62,6 @@ export default function Feedback() {
         </div>
       </div>
 
-      {/* ---------------------------------------------------------- */}
       <div style={{ position: "relative", marginTop: -60, padding: "0 40px 60px" }}>
         <div
           style={{

@@ -11,7 +11,7 @@ import margherita from '../assets/margherita2.png'
 import mexicana from '../assets/mexicana.png'
 import pepperoni from '../assets/pepperoni2.png'
 import quatroFormaggi from '../assets/quatro-formaggi2.png'
-
+import { getReviews } from "../utils/reviewsStore";
 import { Link } from "react-router-dom";
 import { useRef, useState, useEffect } from "react";
 
@@ -193,12 +193,9 @@ function Homepage() {
   const scrollRef = useRef(null);
   const [reviews, setReviews] = useState([]);
 
-  useEffect(() => {
-    fetch("/api/reviews")
-      .then(res => res.json())
-      .then(data => setReviews(data))
-      .catch(() => setReviews([]));
-  }, []);
+ useEffect(() => {
+  setReviews(getReviews());
+}, []);
 
   const handleSubmitReview = (newReview) => {
     setReviews((prev) => [...prev, newReview]);

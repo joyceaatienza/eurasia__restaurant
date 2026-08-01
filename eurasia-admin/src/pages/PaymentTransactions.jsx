@@ -1,4 +1,3 @@
-// src/pages/OrderQueue.jsx
 
 function PaymentTransactions() {
   return (
@@ -6,5 +5,4 @@ function PaymentTransactions() {
   );
 }
 
-// Add this line at the bottom:
 export default PaymentTransactions;

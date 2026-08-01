@@ -1,10 +1,16 @@
-// src/pages/OrderQueue.jsx
+import React from "react";
+import { Navigate } from "react-router-dom";
 
-function ProtectedRoute() {
-  return (
-    <div>Route</div>
-  );
+export default function ProtectedRoute({ children, allow }) {
+  const role = localStorage.getItem("eurasia_role");
+
+  if (!role) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!allow.includes(role)) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
 }
-
-// Add this line at the bottom:
-export default ProtectedRoute;

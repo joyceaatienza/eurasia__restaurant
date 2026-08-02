@@ -4,16 +4,14 @@ import { UserRound, LogOut } from "lucide-react";
 import logo from "../assets/logopic3.png";
 
 const FONT = "'Prata', serif";
-const GOLD = "#c9a15a";
+const INK = "#1d080f";
+const MUTED = "#7a756c";
 
 export default function StaffHeader({ name, role }) {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
 
-  // 1. Titingin sa LocalStorage (kapag tunay na nag-login)
-  // 2. Kung wala, gagamitin ang ipinasang Prop
-  // 3. Kung wala pa rin, magde-default sa "Staff"
   const savedName = localStorage.getItem("eurasia_name");
   const savedRole = localStorage.getItem("eurasia_role");
 
@@ -47,14 +45,14 @@ export default function StaffHeader({ name, role }) {
         boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
       }}
     >
-      <img src={logo} alt="Eurasia Restaurant" style={{ height: 56, width: "auto" }} />
+      <img src={logo} alt="Eurasia Restaurant" style={{ height: 64, width: "auto" }} />
 
       <div style={{ display: "flex", alignItems: "center", gap: 14, position: "relative" }} ref={menuRef}>
         <div style={{ textAlign: "right" }}>
-          <div style={{ fontFamily: FONT, fontWeight: 700, fontSize: 15, color: "#3a1420" }}>
-            {displayName}
-          </div>
-          <div style={{ fontFamily: FONT, fontSize: 12, color: GOLD, textTransform: "capitalize"}}>
+         <div style={{ fontFamily: FONT, fontSize: 18, color: INK, WebkitTextStroke: "0.5px " + INK }}>
+          {displayName}
+        </div>
+          <div style={{ fontFamily: FONT, fontSize: 16, color: MUTED, textTransform: "capitalize" }}>
             {displayRole}
           </div>
         </div>
@@ -65,7 +63,7 @@ export default function StaffHeader({ name, role }) {
             width: 42,
             height: 42,
             borderRadius: "50%",
-            background: "#7fa8d8",
+            background: INK,
             border: "none",
             cursor: "pointer",
             display: "flex",
@@ -73,7 +71,7 @@ export default function StaffHeader({ name, role }) {
             justifyContent: "center",
           }}
         >
-          <UserRound size={22} color="#fff" />
+          <UserRound size={26} color="#fff" />
         </button>
 
         {menuOpen && (

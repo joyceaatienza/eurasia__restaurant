@@ -110,7 +110,7 @@ function ValidateModal({ transaction, onClose, onConfirm, onFail }) {
   );
 }
 
-export default function PaymentTransactions() {
+export default function PaymentTransactions({ embedded = false }) {
   const [transactions, setTransactions] = useState(INITIAL_TRANSACTIONS);
   const [modalTx, setModalTx] = useState(null);
 
@@ -129,11 +129,11 @@ export default function PaymentTransactions() {
 
   return (
     <div className="min-h-screen bg-[#f0eff3] font-[Prata] text-[#1d080f] text-left">
-      <StaffHeader role="Cashier" />
+      {!embedded && <StaffHeader role="Cashier" />}
 
       <main className="max-w-[1400px] mx-auto px-8" style={{ paddingTop: "16px", paddingBottom: "32px" }}>
         <h1
-          className="text-2xl text-[#1d080f] text-left"
+          className="text-sm text-[#1d080f] text-left"
           style={{ marginTop: 0, marginBottom: "20px", WebkitTextStroke: "0.8px #1d080f" }}
         >
           Payment Transactions

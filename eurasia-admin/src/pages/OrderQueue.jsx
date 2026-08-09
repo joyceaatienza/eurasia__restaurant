@@ -47,8 +47,8 @@ const INITIAL_ORDERS = [
   },
 ];
 
-export default function OrderQueue() {
-  const [orders, setOrders] = useState(INITIAL_ORDERS);
+export default function OrderQueue({ embedded = false }) {
+    const [orders, setOrders] = useState(INITIAL_ORDERS);
 
   const handleToggleItem = (orderId, itemId) => {
     setOrders((prev) =>
@@ -77,11 +77,11 @@ export default function OrderQueue() {
 
   return (
     <div className="min-h-screen bg-[#f0eff3] font-[Prata] text-[#1d080f] text-left">
-      <StaffHeader />
+      {!embedded && <StaffHeader />}
 
       <main className="max-w-[1400px] mx-auto px-8" style={{ paddingTop: "16px", paddingBottom: "32px" }}>
         <h1
-          className="font-[Prata] text-2xl text-[#1d080f] text-left"
+          className="font-[Prata] text-sm text-[#1d080f] text-left"
           style={{ marginTop: 0, marginBottom: "16px", WebkitTextStroke: "0.8px #1d080f" }}
         >
           Order Queue

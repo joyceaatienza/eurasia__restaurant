@@ -515,7 +515,7 @@ function DayView({ selectedISO, reservations, markStatus }) {
 /* ---------------------------------------------------------------- */
 /* Root                                                               */
 /* ---------------------------------------------------------------- */
-export default function Reservations() {
+export default function Reservations({ embedded = false }) {
   const [range, setRange] = useState("Day");
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [reservations, setReservations] = useState([]);
@@ -542,10 +542,9 @@ export default function Reservations() {
         * { box-sizing: border-box; }
       `}</style>
 
-      <StaffHeader />
-
+{!embedded && <StaffHeader />}
       <div style={{ padding: 28, display: "flex", flexDirection: "column", gap: 14, width: "100%" }}>
-        <div style={{ fontFamily: FONT, fontSize: 24, fontWeight: 700, color: C.ink, WebkitTextStroke: "0.5px " + C.ink, textAlign: "left", width: "100%",}}>
+        <div style={{ fontFamily: FONT, fontSize: 40, fontWeight: 700, color: C.ink, WebkitTextStroke: "0.5px " + C.ink, textAlign: "left", width: "100%",}}>
           Reservations
         </div>
 

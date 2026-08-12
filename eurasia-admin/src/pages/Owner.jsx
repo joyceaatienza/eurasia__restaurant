@@ -1,10 +1,12 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   CalendarCheck2,
   ChefHat,
   Wallet,
   Download,
+  LogOut,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -34,7 +36,7 @@ const C = {
   ink: "#1d080f",
   inkSoft: "#6b5b60",
   hair: "#e7e3e6",
-  flame: "#fa293f",
+  flame: "#1d080f",
   gold: "#f5e9d8",
   azure: "#4b7ff7",
   violet: "#9b7ee0",
@@ -139,42 +141,145 @@ const NAV = [
 ];
 
 function Sidebar({ active, setActive }) {
+  const navigate = useNavigate();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+
+  const savedName = localStorage.getItem("eurasia_name");
+  const savedRole = localStorage.getItem("eurasia_role");
+  const displayName = savedName || "Admin User";
+  const displayRole = savedRole || "Administrator";
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem("eurasia_role");
+    localStorage.removeItem("eurasia_name");
+    navigate("/login");
+  };
+
   return (
-    <aside style={{ width: 232, minWidth: 232, background: C.sidebarBg, borderRight: `1px solid ${C.hair}`, display: "flex", flexDirection: "column", padding: "24px 16px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "0 8px 28px 8px" }}>
-        <img src={logo} alt="Eurasia Restaurant" style={{ height: 42, width: 42, objectFit: "contain", borderRadius: "50%", background: "rgba(29,8,15,0.05)", padding: 2 }} />
-        <div>
-          <div style={{ fontFamily: "'Prata', serif", color: C.ink, fontSize: 16, lineHeight: 1.1, letterSpacing: "0.5px", WebkitTextStroke: "0.4px " + C.ink }}>
-            EURASIA
-          </div>
-          <div style={{ color: C.inkSoft, fontSize: 9.5, letterSpacing: 1.8, marginTop: 2 }}>
-            RESTAURANT
+    <aside style={{ width: 240, minWidth: 240, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      {/* Puting bahagi — logo lang */}
+      <div style={{ background: "#fff", padding: "24px 18px", borderBottom: `1px solid ${C.hair}` }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <img src={logo} alt="Eurasia Restaurant" style={{ height: 42, width: 42, objectFit: "contain", borderRadius: "50%", background: "rgba(29,8,15,0.05)", padding: 2 }} />
+          <div>
+            <div style={{ fontFamily: "'Prata', serif", color: C.ink, fontSize: 16, lineHeight: 1.1, letterSpacing: "0.5px", WebkitTextStroke: "0.4px " + C.ink }}>
+              EURASIA
+            </div>
+            <div style={{ color: C.inkSoft, fontSize: 9.5, letterSpacing: 1.8, marginTop: 2 }}>
+              RESTAURANT
+            </div>
           </div>
         </div>
       </div>
 
-      <nav style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {NAV.map((item) => {
-          const Icon = item.icon;
-          const isActive = active === item.key;
-          return (
-            <button key={item.key} onClick={() => setActive(item.key)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", borderRadius: 10, border: "none", cursor: "pointer", background: isActive ? C.flame : "transparent", color: isActive ? "#ffffff" : C.inkSoft, fontFamily: "'Prata', serif", fontSize: 14, fontWeight: 600, textAlign: "left", transition: "all 0.15s ease" }}>
-              <Icon size={17} />
-              {item.label}
-            </button>
-          );
-        })}
-      </nav>
+      {/* Dark crimson na bahagi — nav + account */}
+      <div style={{ flex: 1, background: C.void, display: "flex", flexDirection: "column", padding: "22px 16px" }}>
+        <nav style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {NAV.map((item) => {
+            const Icon = item.icon;
+            const isActive = active === item.key;
+            return (
+              <button
+                key={item.key}
+                onClick={() => setActive(item.key)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  padding: "11px 14px",
+                  borderRadius: 10,
+                  border: "none",
+                  cursor: "pointer",
+                  background: isActive ? C.flame : "transparent",
+                  color: isActive ? "#ffffff" : "rgba(245,233,216,0.75)",
+                  fontFamily: "'Prata', serif",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  textAlign: "left",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                <Icon size={17} />
+                {item.label}
+              </button>
+            );
+          })}
+        </nav>
 
-      <div style={{ marginTop: "auto", paddingTop: 20, borderTop: `1px solid ${C.hair}` }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px" }}>
-          <div style={{ width: 34, height: 34, borderRadius: "50%", background: C.void, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: C.gold, fontSize: 13 }}>
-            A
-          </div>
-          <div>
-            <div style={{ color: C.ink, fontSize: 13, fontWeight: 600 }}>Admin User</div>
-            <div style={{ color: C.inkSoft, fontSize: 11 }}>Administrator</div>
-          </div>
+        <div style={{ marginTop: "auto", paddingTop: 20, borderTop: `1px solid rgba(245,233,216,0.15)`, position: "relative" }} ref={menuRef}>
+          <button
+            onClick={() => setMenuOpen((prev) => !prev)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "8px",
+              border: "none",
+              background: "transparent",
+              cursor: "pointer",
+              width: "100%",
+              textAlign: "left",
+              borderRadius: 10,
+            }}
+          >
+            <div style={{ width: 34, height: 34, borderRadius: "50%", background: C.gold, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: C.void, fontSize: 13 }}>
+              {displayName.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <div style={{ color: C.gold, fontSize: 13, fontWeight: 600 }}>{displayName}</div>
+              <div style={{ color: "rgba(245,233,216,0.55)", fontSize: 11, textTransform: "capitalize" }}>{displayRole}</div>
+            </div>
+          </button>
+
+          {menuOpen && (
+            <div
+              style={{
+                position: "absolute",
+                bottom: "100%",
+                left: 8,
+                right: 8,
+                marginBottom: 6,
+                background: "#fff",
+                borderRadius: 10,
+                boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
+                overflow: "hidden",
+                zIndex: 20,
+              }}
+            >
+              <button
+                onClick={handleLogout}
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "12px 16px",
+                  border: "none",
+                  background: "#fff",
+                  cursor: "pointer",
+                  fontFamily: "'Prata', serif",
+                  fontSize: 13,
+                  color: "#c0392b",
+                  textAlign: "left",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#faf2f2")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "#fff")}
+              >
+                <LogOut size={15} /> Log out
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </aside>
@@ -203,12 +308,100 @@ function StatCard({ label, value }) {
   );
 }
 
+function PeriodDropdown({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const options = ["Today", "Week", "Month", "Year"];
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    <div style={{ position: "relative" }} ref={ref}>
+      <button
+        onClick={() => setOpen((prev) => !prev)}
+        style={{
+          border: `1px solid ${C.hair}`,
+          borderRadius: 10,
+          fontFamily: "'Prata', serif",
+          fontSize: 13,
+          padding: "9px 16px",
+          background: "#fff",
+          color: C.ink,
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+        }}
+      >
+        {value}
+      </button>
+
+      {open && (
+        <div
+          style={{
+            position: "absolute",
+            top: "110%",
+            right: 0,
+            background: "#fff",
+            borderRadius: 10,
+            boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+            overflow: "hidden",
+            minWidth: 130,
+            zIndex: 20,
+          }}
+        >
+          {options.map((opt) => (
+            <button
+              key={opt}
+              onClick={() => {
+                onChange(opt);
+                setOpen(false);
+              }}
+              style={{
+                width: "100%",
+                textAlign: "left",
+                padding: "10px 16px",
+                border: "none",
+                background: opt === value ? C.canvas : "#fff",
+                cursor: "pointer",
+                fontFamily: "'Prata', serif",
+                fontSize: 13,
+                color: C.ink,
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = C.canvas)}
+              onMouseLeave={(e) => (e.currentTarget.style.background = opt === value ? C.canvas : "#fff")}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DashboardPage() {
+  const [period, setPeriod] = useState("Today");
+  const [showExportToast, setShowExportToast] = useState(false);
+
+  const handleExport = () => {
+    setShowExportToast(true);
+    setTimeout(() => setShowExportToast(false), 3000);
+  };
+
   return (
     <div style={{ padding: 28, display: "flex", flexDirection: "column", gap: 20 }}>
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-        <Btn variant="ghost" small>Today</Btn>
-        <Btn variant="dark" small><Download size={14} /> Export</Btn>
+        <PeriodDropdown value={period} onChange={setPeriod} />
+        <Btn variant="dark" small onClick={handleExport}>
+          <Download size={14} /> Export
+        </Btn>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
@@ -309,6 +502,32 @@ function DashboardPage() {
           </div>
         </Card>
       </div>
+
+      {showExportToast && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: 28,
+            right: 28,
+            background: C.void,
+            color: "#fff",
+            padding: "14px 20px",
+            borderRadius: 10,
+            boxShadow: "0 6px 20px rgba(0,0,0,0.2)",
+            fontFamily: "'Prata', serif",
+            fontSize: 13.5,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            zIndex: 100,
+          }}
+        >
+          <span style={{ background: C.green, borderRadius: "50%", width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12 }}>
+            ✓
+          </span>
+          Data exported successfully
+        </div>
+      )}
     </div>
   );
 }

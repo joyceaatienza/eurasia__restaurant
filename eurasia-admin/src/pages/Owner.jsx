@@ -23,6 +23,7 @@ import {
   Tooltip,
 } from "recharts";
 import logo from "../assets/logopic3.png";
+import logoWord from "../assets/logoword.png";
 import Reservations from "./Reservations";
 import OrderQueue from "./OrderQueue";
 import PaymentTransactions from "./PaymentTransactions";
@@ -119,7 +120,15 @@ function Btn({ children, variant = "primary", onClick, small }) {
 
 function Card({ children, style }) {
   return (
-    <div style={{ background: C.card, borderRadius: 16, padding: 22, boxShadow: "0 1px 3px rgba(23,3,16,0.06)", ...style }}>
+    <div
+      style={{
+        background: C.card,
+        borderRadius: 16,
+        padding: 22,
+        boxShadow: "0 1px 3px rgba(23,3,16,0.06)",
+        ...style,
+      }}
+    >
       {children}
     </div>
   );
@@ -127,7 +136,15 @@ function Card({ children, style }) {
 
 function SectionTitle({ children }) {
   return (
-    <h3 style={{ fontFamily: "'Prata', serif", fontSize: 18, margin: "0 0 16px 0", color: C.ink, WebkitTextStroke: "0.4px " + C.ink }}>
+    <h3
+      style={{
+        fontFamily: "'Prata', serif",
+        fontSize: 18,
+        margin: "0 0 16px 0",
+        color: C.ink,
+        WebkitTextStroke: "0.4px " + C.ink,
+      }}
+    >
       {children}
     </h3>
   );
@@ -139,6 +156,31 @@ const NAV = [
   { key: "kitchen", label: "Kitchen", icon: ChefHat },
   { key: "cashier", label: "Cashier", icon: Wallet },
 ];
+
+function TopHeader() {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        padding: "18px 28px",
+        borderBottom: "none",
+        background: "transparent",
+      }}
+    >
+      <img
+        src={logoWord}
+        alt="Eurasia Restaurant Logo"
+        style={{
+          height: 48, 
+          width: "auto", 
+          objectFit: "contain",
+        }}
+      />
+    </div>
+  );
+}
 
 function Sidebar({ active, setActive }) {
   const navigate = useNavigate();
@@ -167,143 +209,175 @@ function Sidebar({ active, setActive }) {
   };
 
   return (
-    <aside style={{ width: 240, minWidth: 240, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      {/* Puting bahagi — logo lang */}
-      <div style={{ background: "#fff", padding: "24px 18px", borderBottom: `1px solid ${C.hair}` }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <img src={logo} alt="Eurasia Restaurant" style={{ height: 42, width: 42, objectFit: "contain", borderRadius: "50%", background: "rgba(29,8,15,0.05)", padding: 2 }} />
-          <div>
-            <div style={{ fontFamily: "'Prata', serif", color: C.ink, fontSize: 16, lineHeight: 1.1, letterSpacing: "0.5px", WebkitTextStroke: "0.4px " + C.ink }}>
-              EURASIA
-            </div>
-            <div style={{ color: C.inkSoft, fontSize: 9.5, letterSpacing: 1.8, marginTop: 2 }}>
-              RESTAURANT
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Dark crimson na bahagi — nav + account */}
-      <div style={{ flex: 1, background: C.void, display: "flex", flexDirection: "column", padding: "22px 16px" }}>
-        <nav style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {NAV.map((item) => {
-            const Icon = item.icon;
-            const isActive = active === item.key;
-            return (
-              <button
-                key={item.key}
-                onClick={() => setActive(item.key)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  padding: "11px 14px",
-                  borderRadius: 10,
-                  border: "none",
-                  cursor: "pointer",
-                  background: isActive ? C.flame : "transparent",
-                  color: isActive ? "#ffffff" : "rgba(245,233,216,0.75)",
-                  fontFamily: "'Prata', serif",
-                  fontSize: 14,
-                  fontWeight: 600,
-                  textAlign: "left",
-                  transition: "all 0.15s ease",
-                }}
-              >
-                <Icon size={17} />
-                {item.label}
-              </button>
-            );
-          })}
-        </nav>
-
-        <div style={{ marginTop: "auto", paddingTop: 20, borderTop: `1px solid rgba(245,233,216,0.15)`, position: "relative" }} ref={menuRef}>
-          <button
-            onClick={() => setMenuOpen((prev) => !prev)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              padding: "8px",
-              border: "none",
-              background: "transparent",
-              cursor: "pointer",
-              width: "100%",
-              textAlign: "left",
-              borderRadius: 10,
-            }}
-          >
-            <div style={{ width: 34, height: 34, borderRadius: "50%", background: C.gold, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: C.void, fontSize: 13 }}>
-              {displayName.charAt(0).toUpperCase()}
-            </div>
-            <div>
-              <div style={{ color: C.gold, fontSize: 13, fontWeight: 600 }}>{displayName}</div>
-              <div style={{ color: "rgba(245,233,216,0.55)", fontSize: 11, textTransform: "capitalize" }}>{displayRole}</div>
-            </div>
-          </button>
-
-          {menuOpen && (
-            <div
+    <aside
+      style={{
+        width: 240,
+        minWidth: 240,
+        background: C.void,
+        display: "flex",
+        flexDirection: "column",
+        padding: "22px 16px",
+        borderTopRightRadius: 35,
+      }}
+    >
+      <nav style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {NAV.map((item) => {
+          const Icon = item.icon;
+          const isActive = active === item.key;
+          return (
+            <button
+              key={item.key}
+              onClick={() => setActive(item.key)}
               style={{
-                position: "absolute",
-                bottom: "100%",
-                left: 8,
-                right: 8,
-                marginBottom: 6,
-                background: "#fff",
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "11px 14px",
                 borderRadius: 10,
-                boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
-                overflow: "hidden",
-                zIndex: 20,
+                border: "none",
+                cursor: "pointer",
+                background: isActive ? C.flame : "transparent",
+                color: isActive ? "#ffffff" : "rgba(245,233,216,0.75)",
+                fontFamily: "'Prata', serif",
+                fontSize: 14,
+                fontWeight: 600,
+                textAlign: "left",
+                transition: "all 0.15s ease",
               }}
             >
-              <button
-                onClick={handleLogout}
-                style={{
-                  width: "100%",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  padding: "12px 16px",
-                  border: "none",
-                  background: "#fff",
-                  cursor: "pointer",
-                  fontFamily: "'Prata', serif",
-                  fontSize: 13,
-                  color: "#c0392b",
-                  textAlign: "left",
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#faf2f2")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "#fff")}
-              >
-                <LogOut size={15} /> Log out
-              </button>
+              <Icon size={17} />
+              {item.label}
+            </button>
+          );
+        })}
+      </nav>
+
+      <div
+        style={{
+          marginTop: "auto",
+          paddingTop: 20,
+          borderTop: `1px solid rgba(245,233,216,0.15)`,
+          position: "relative",
+        }}
+        ref={menuRef}
+      >
+        <button
+          onClick={() => setMenuOpen((prev) => !prev)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            padding: "8px",
+            border: "none",
+            background: "transparent",
+            cursor: "pointer",
+            width: "100%",
+            textAlign: "left",
+            borderRadius: 10,
+          }}
+        >
+          <div
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: "50%",
+              background: C.gold,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontWeight: 700,
+              color: C.void,
+              fontSize: 13,
+            }}
+          >
+            {displayName.charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <div style={{ color: C.gold, fontSize: 13, fontWeight: 600 }}>
+              {displayName}
             </div>
-          )}
-        </div>
+            <div
+              style={{
+                color: "rgba(245,233,216,0.55)",
+                fontSize: 11,
+                textTransform: "capitalize",
+              }}
+            >
+              {displayRole}
+            </div>
+          </div>
+        </button>
+
+        {menuOpen && (
+          <div
+            style={{
+              position: "absolute",
+              bottom: "100%",
+              left: 8,
+              right: 8,
+              marginBottom: 6,
+              background: "#fff",
+              borderRadius: 10,
+              boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
+              overflow: "hidden",
+              zIndex: 20,
+            }}
+          >
+            <button
+              onClick={handleLogout}
+              style={{
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "12px 16px",
+                border: "none",
+                background: "#fff",
+                cursor: "pointer",
+                fontFamily: "'Prata', serif",
+                fontSize: 13,
+                color: "#c0392b",
+                textAlign: "left",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.background = "#faf2f2")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.background = "#fff")
+              }
+            >
+              <LogOut size={15} /> Log out
+            </button>
+          </div>
+        )}
       </div>
     </aside>
-  );
-}
-
-function Topbar({ title, subtitle }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 32px", background: C.void, borderBottom: `1px solid rgba(245,233,216,0.1)` }}>
-      <div>
-        <div style={{ fontFamily: "'Prata', serif", fontSize: 24, color: C.gold, WebkitTextStroke: "0.5px " + C.gold }}>
-          {title}
-        </div>
-        {subtitle && <div style={{ color: "rgba(245,233,216,0.65)", fontSize: 13, marginTop: 2 }}>{subtitle}</div>}
-      </div>
-    </div>
   );
 }
 
 function StatCard({ label, value }) {
   return (
     <Card style={{ padding: "18px 20px" }}>
-      <div style={{ color: C.inkSoft, fontSize: 12.5, fontWeight: 600, marginBottom: 8 }}>{label}</div>
-      <div style={{ fontFamily: "'Prata', serif", fontSize: 24, color: C.ink, WebkitTextStroke: "0.5px " + C.ink }}>{value}</div>
+      <div
+        style={{
+          color: C.inkSoft,
+          fontSize: 12.5,
+          fontWeight: 600,
+          marginBottom: 8,
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          fontFamily: "'Prata', serif",
+          fontSize: 24,
+          color: C.ink,
+          WebkitTextStroke: "0.5px " + C.ink,
+        }}
+      >
+        {value}
+      </div>
     </Card>
   );
 }
@@ -374,8 +448,13 @@ function PeriodDropdown({ value, onChange }) {
                 fontSize: 13,
                 color: C.ink,
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = C.canvas)}
-              onMouseLeave={(e) => (e.currentTarget.style.background = opt === value ? C.canvas : "#fff")}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.background = C.canvas)
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.background =
+                  opt === value ? C.canvas : "#fff")
+              }
             >
               {opt}
             </button>
@@ -396,29 +475,73 @@ function DashboardPage() {
   };
 
   return (
-    <div style={{ padding: 28, display: "flex", flexDirection: "column", gap: 20 }}>
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-        <PeriodDropdown value={period} onChange={setPeriod} />
-        <Btn variant="dark" small onClick={handleExport}>
-          <Download size={14} /> Export
-        </Btn>
-      </div>
+    <div
+      style={{
+        padding: 28,
+        display: "flex",
+        flexDirection: "column",
+        gap: 20,
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
+  <div>
+    <h2 style={{ fontFamily: "'Prata', serif", fontSize: 39, margin: 0, color: C.ink, WebkitTextStroke: "0.4px " + C.ink }}>
+      Sales Overview
+    </h2>
+    <p style={{ margin: "2px 0 0 0", fontSize: 13, color: C.inkSoft }}>
+      Track revenue, orders and guest activity
+    </p>
+  </div>
+
+
+  <div style={{ display: "flex", gap: 10 }}>
+    <PeriodDropdown value={period} onChange={setPeriod} />
+    <Btn variant="dark" small onClick={handleExport}>
+      <Download size={14} /> Export
+    </Btn>
+  </div>
+</div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(4, 1fr)",
+          gap: 16,
+        }}
+      >
         <StatCard label="Total Revenue" value="₱ 12,324.21" />
         <StatCard label="Total Orders" value="173" />
-        <StatCard label="Total Amount Deducted (Discounts)" value="₱ 424.19" />
+        <StatCard
+          label="Total Amount Deducted (Discounts)"
+          value="₱ 424.19"
+        />
         <StatCard label="Total Guests" value="164" />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr", gap: 16 }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1.4fr 1fr 1fr",
+          gap: 16,
+        }}
+      >
         <Card>
           <SectionTitle>Category Breakdown</SectionTitle>
           <ResponsiveContainer width="100%" height={210}>
             <BarChart data={categoryBreakdown}>
               <CartesianGrid vertical={false} stroke={C.hair} />
-              <XAxis dataKey="name" tick={{ fontSize: 11, fill: C.inkSoft }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: C.inkSoft }} axisLine={false} tickLine={false} />
+              <XAxis
+                dataKey="name"
+                tick={{ fontSize: 11, fill: C.inkSoft }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                tick={{ fontSize: 11, fill: C.inkSoft }}
+                axisLine={false}
+                tickLine={false}
+              />
               <Tooltip />
               <Bar dataKey="value" fill={C.azure} radius={[6, 6, 0, 0]} />
             </BarChart>
@@ -429,8 +552,17 @@ function DashboardPage() {
           <SectionTitle>Top Selling Items</SectionTitle>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {topSelling.map((it) => (
-              <div key={it.name} style={{ display: "flex", justifyContent: "space-between", fontSize: 14 }}>
-                <span style={{ color: C.ink, fontWeight: 600 }}>{it.name}</span>
+              <div
+                key={it.name}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontSize: 14,
+                }}
+              >
+                <span style={{ color: C.ink, fontWeight: 600 }}>
+                  {it.name}
+                </span>
                 <span style={{ color: C.inkSoft }}>{it.amount}</span>
               </div>
             ))}
@@ -441,21 +573,48 @@ function DashboardPage() {
           <SectionTitle>Order &amp; Cancellation Stats</SectionTitle>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {orderStats.map((s) => (
-              <div key={s.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: 13.5, color: C.ink, fontWeight: 600 }}>{s.label}</span>
-                <span style={{ fontSize: 15, fontWeight: 700, color: s.color }}>{s.value}</span>
+              <div
+                key={s.label}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <span
+                  style={{ fontSize: 13.5, color: C.ink, fontWeight: 600 }}
+                >
+                  {s.label}
+                </span>
+                <span
+                  style={{ fontSize: 15, fontWeight: 700, color: s.color }}
+                >
+                  {s.value}
+                </span>
               </div>
             ))}
           </div>
         </Card>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.3fr 1fr", gap: 16 }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1.3fr 1fr",
+          gap: 16,
+        }}
+      >
         <Card>
           <SectionTitle>Payment Method Analysis</SectionTitle>
           <ResponsiveContainer width="100%" height={190}>
             <PieChart>
-              <Pie data={paymentMethods} dataKey="value" nameKey="name" innerRadius={0} outerRadius={80}>
+              <Pie
+                data={paymentMethods}
+                dataKey="value"
+                nameKey="name"
+                innerRadius={0}
+                outerRadius={80}
+              >
                 {paymentMethods.map((entry, i) => (
                   <Cell key={i} fill={entry.color} />
                 ))}
@@ -463,10 +622,34 @@ function DashboardPage() {
               <Tooltip />
             </PieChart>
           </ResponsiveContainer>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 4 }}>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 10,
+              marginTop: 4,
+            }}
+          >
             {paymentMethods.map((p) => (
-              <div key={p.name} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: C.inkSoft }}>
-                <span style={{ width: 8, height: 8, borderRadius: 2, background: p.color, display: "inline-block" }} />
+              <div
+                key={p.name}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  fontSize: 11.5,
+                  color: C.inkSoft,
+                }}
+              >
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: 2,
+                    background: p.color,
+                    display: "inline-block",
+                  }}
+                />
                 {p.name} {p.value}%
               </div>
             ))}
@@ -478,10 +661,25 @@ function DashboardPage() {
           <ResponsiveContainer width="100%" height={190}>
             <LineChart data={salesTrend}>
               <CartesianGrid vertical={false} stroke={C.hair} />
-              <XAxis dataKey="month" tick={{ fontSize: 10, fill: C.inkSoft }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: C.inkSoft }} axisLine={false} tickLine={false} />
+              <XAxis
+                dataKey="month"
+                tick={{ fontSize: 10, fill: C.inkSoft }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                tick={{ fontSize: 11, fill: C.inkSoft }}
+                axisLine={false}
+                tickLine={false}
+              />
               <Tooltip />
-              <Line type="monotone" dataKey="value" stroke={C.azure} strokeWidth={2.5} dot={{ r: 3 }} />
+              <Line
+                type="monotone"
+                dataKey="value"
+                stroke={C.azure}
+                strokeWidth={2.5}
+                dot={{ r: 3 }}
+              />
             </LineChart>
           </ResponsiveContainer>
         </Card>
@@ -489,14 +687,36 @@ function DashboardPage() {
         <Card>
           <SectionTitle>Revenue &amp; Profit Summary</SectionTitle>
           <div style={{ marginBottom: 18 }}>
-            <div style={{ color: C.inkSoft, fontSize: 12.5, fontWeight: 600 }}>Total Revenue</div>
-            <div style={{ fontFamily: "'Prata', serif", fontSize: 22, color: C.green, WebkitTextStroke: "0.4px " + C.green }}>
+            <div
+              style={{ color: C.inkSoft, fontSize: 12.5, fontWeight: 600 }}
+            >
+              Total Revenue
+            </div>
+            <div
+              style={{
+                fontFamily: "'Prata', serif",
+                fontSize: 22,
+                color: C.green,
+                WebkitTextStroke: "0.4px " + C.green,
+              }}
+            >
               ₱ 12,324.21 ↗
             </div>
           </div>
           <div>
-            <div style={{ color: C.inkSoft, fontSize: 12.5, fontWeight: 600 }}>Estimated Profit</div>
-            <div style={{ fontFamily: "'Prata', serif", fontSize: 22, color: C.green, WebkitTextStroke: "0.4px " + C.green }}>
+            <div
+              style={{ color: C.inkSoft, fontSize: 12.5, fontWeight: 600 }}
+            >
+              Estimated Profit
+            </div>
+            <div
+              style={{
+                fontFamily: "'Prata', serif",
+                fontSize: 22,
+                color: C.green,
+                WebkitTextStroke: "0.4px " + C.green,
+              }}
+            >
               ₱ 3,862.37 ↗
             </div>
           </div>
@@ -522,7 +742,18 @@ function DashboardPage() {
             zIndex: 100,
           }}
         >
-          <span style={{ background: C.green, borderRadius: "50%", width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12 }}>
+          <span
+            style={{
+              background: C.green,
+              borderRadius: "50%",
+              width: 20,
+              height: 20,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 12,
+            }}
+          >
             ✓
           </span>
           Data exported successfully
@@ -531,7 +762,6 @@ function DashboardPage() {
     </div>
   );
 }
-
 
 function FrontDeskPage() {
   return <Reservations embedded />;
@@ -546,10 +776,26 @@ function CashierPage() {
 }
 
 const PAGES = {
-  dashboard: { title: "Sales Overview", subtitle: "Track revenue, orders and guest activity", Comp: DashboardPage },
-  frontdesk: { title: "Reservations", subtitle: "Manage today's tables and bookings", Comp: FrontDeskPage },
-  kitchen: { title: "Kitchen", subtitle: "Order queue and preparation status", Comp: KitchenPage },
-  cashier: { title: "Cashier", subtitle: "Review and validate payments", Comp: CashierPage },
+  dashboard: {
+    title: "Sales Overview",
+    subtitle: "Track revenue, orders and guest activity",
+    Comp: DashboardPage,
+  },
+  frontdesk: {
+    title: "Reservations",
+    subtitle: "Manage today's tables and bookings",
+    Comp: FrontDeskPage,
+  },
+  kitchen: {
+    title: "Kitchen",
+    subtitle: "Order queue and preparation status",
+    Comp: KitchenPage,
+  },
+  cashier: {
+    title: "Cashier",
+    subtitle: "Review and validate payments",
+    Comp: CashierPage,
+  },
 };
 
 export default function EurasiaAdmin() {
@@ -563,12 +809,16 @@ export default function EurasiaAdmin() {
         ${FONT_IMPORT}
         * { box-sizing: border-box; }
       `}</style>
-      <div style={{ display: "flex", minHeight: "100vh", background: C.canvas, textAlign: "left" }}>
-        <Sidebar active={active} setActive={setActive} />
-        <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-          <Topbar title={page.title} subtitle={page.subtitle} />
-          <div style={{ flex: 1, overflow: "auto" }}>
-            <Page />
+      <div
+        style={{ minHeight: "100vh", background: C.canvas, textAlign: "left" }}
+      >
+        <TopHeader />
+        <div style={{ display: "flex" }}>
+          <Sidebar active={active} setActive={setActive} />
+          <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+            <div style={{ flex: 1, overflow: "auto" }}>
+              <Page />
+            </div>
           </div>
         </div>
       </div>

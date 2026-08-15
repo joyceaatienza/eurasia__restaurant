@@ -51,12 +51,19 @@ const FONT_IMPORT =
   "@import url('https://fonts.googleapis.com/css2?family=Prata&display=swap');";
 
 const categoryBreakdown = [
-  { name: "Best Seller", value: 3800 },
-  { name: "Appetizer", value: 3150 },
-  { name: "Main Course", value: 2550 },
-  { name: "Pizza", value: 1900 },
-  { name: "Dessert", value: 1250 },
-  { name: "Drink", value: 3700 },
+  { name: "Appetizers", value: 2400 },
+  { name: "Main Courses", value: 3800 },
+  { name: "Soup", value: 1450 },
+  { name: "Salad", value: 1200 },
+  { name: "Pasta", value: 0 },
+  { name: "Noodles", value: 0 },
+  { name: "Veggies & Rice", value: 0 },
+  { name: "Sandwiches", value: 0 },
+  { name: "Pizza", value: 3700 },
+  { name: "Kids Menu", value: 0 },
+  { name: "Dessert", value: 0 },
+  { name: "Chef's Special", value: 0 },
+  { name: "Beverage", value: 0 },
 ];
 
 const salesTrend = [
@@ -528,20 +535,19 @@ function DashboardPage() {
       >
         <Card>
           <SectionTitle>Category Breakdown</SectionTitle>
-          <ResponsiveContainer width="100%" height={210}>
-            <BarChart data={categoryBreakdown}>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={categoryBreakdown} margin={{ bottom: 60 }}>
               <CartesianGrid vertical={false} stroke={C.hair} />
               <XAxis
                 dataKey="name"
-                tick={{ fontSize: 11, fill: C.inkSoft }}
+                tick={{ fontSize: 10, fill: C.inkSoft }}
                 axisLine={false}
                 tickLine={false}
+                angle={-40}
+                textAnchor="end"
+                interval={0}
               />
-              <YAxis
-                tick={{ fontSize: 11, fill: C.inkSoft }}
-                axisLine={false}
-                tickLine={false}
-              />
+              <YAxis tick={{ fontSize: 11, fill: C.inkSoft }} axisLine={false} tickLine={false} />
               <Tooltip />
               <Bar dataKey="value" fill={C.azure} radius={[6, 6, 0, 0]} />
             </BarChart>

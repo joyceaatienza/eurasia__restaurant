@@ -1,11 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { X, Check, Ban } from "lucide-react";
 import StaffHeader from "../components/StaffHeader";
 
 const INITIAL_TRANSACTIONS = [
-  { id: "01", customer: "John Doe", method: "GCash", amount: 1756, date: "June 8, 2026", time: "2:06pm", status: "Completed" },
-  { id: "02", customer: "Jane Smith", method: "GCash", amount: 1756, date: "June 8, 2026", time: "2:29pm", status: "Pending" },
-  { id: "03", customer: "Juan Dela Cruz", method: "Bank Transfer", amount: 1756, date: "June 8, 2026", time: "2:40pm", status: "Pending" },
+  { id: "01", customer: "John Doe", table: "T7", method: "GCash", amount: 1756, date: "June 8, 2026", time: "2:06pm", status: "Completed" },
+  { id: "02", customer: "Jane Smith", table: "T8", method: "GCash", amount: 1756, date: "June 8, 2026", time: "2:29pm", status: "Pending" },
+  { id: "03", customer: "Juan Dela Cruz", table: "T5", method: "Bank Transfer", amount: 1756, date: "June 8, 2026", time: "2:40pm", status: "Pending" },
 ];
 
 function StatCard({ label, value }) {
@@ -35,8 +35,20 @@ function StatusBadge({ status }) {
   );
 }
 
-function ValidateModal({ transaction, onClose, onConfirm, onFail }) {
+function ValidateModal({ transaction, onClose, onConfirm, onFail, onUpdateTable }) {
+  const [tableInput, setTableInput] = useState("");
+
+  useEffect(() => {
+    if (transaction) setTableInput(transaction.table || "");
+  }, [transaction]);
+
   if (!transaction) return null;
+
+  const handleTableChange = (e) => {
+    const value = e.target.value;
+    setTableInput(value);
+    onUpdateTable(transaction.id, value);
+  };
 
   return (
     <div
@@ -67,6 +79,16 @@ function ValidateModal({ transaction, onClose, onConfirm, onFail }) {
             <span className="text-gray-500">Customer</span>
             <span className="text-[#1d080f]">{transaction.customer}</span>
           </div>
+          <div className="flex justify-between items-center">
+            <span className="text-gray-500">Table</span>
+            <input
+              type="text"
+              value={tableInput}
+              onChange={handleTableChange}
+              placeholder="e.g. T7"
+              className="text-[#1d080f] text-right border border-gray-300 rounded-md px-2 py-1 text-sm w-24 focus:outline-none focus:ring-1 focus:ring-[#1d080f]"
+            />
+          </div>
           <div className="flex justify-between">
             <span className="text-gray-500">Order #</span>
             <span className="text-[#1d080f]">{transaction.id}</span>
@@ -87,11 +109,11 @@ function ValidateModal({ transaction, onClose, onConfirm, onFail }) {
 
         <div className="flex flex-col gap-2">
           <button
-  onClick={onClose}
-  className="w-full py-2.5 rounded-lg bg-white text-[#1d080f] text-sm border border-gray-300 hover:bg-gray-50 transition"
->
-  Cancel
-</button>
+            onClick={onClose}
+            className="w-full py-2.5 rounded-lg bg-white text-[#1d080f] text-sm border border-gray-300 hover:bg-gray-50 transition"
+          >
+            Cancel
+          </button>
           <button
             onClick={() => onFail(transaction.id)}
             className="w-full py-2.5 rounded-lg bg-[#f8d7da] text-[#842029] text-sm hover:bg-[#f1c1c6] transition flex items-center justify-center gap-2"
@@ -127,14 +149,19 @@ export default function PaymentTransactions({ embedded = false }) {
     setModalTx(null);
   };
 
+  const handleUpdateTable = (id, value) => {
+    setTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, table: value } : t)));
+    setModalTx((prev) => (prev && prev.id === id ? { ...prev, table: value } : prev));
+  };
+
   return (
     <div className="min-h-screen bg-[#f0eff3] font-[Prata] text-[#1d080f] text-left">
       {!embedded && <StaffHeader role="Cashier" />}
 
-      <main className="max-w-[1400px] mx-auto px-8" style={{ paddingTop: "16px", paddingBottom: "32px" }}>
+      <main className="max-w-[1400px] mx-auto" style={{ padding: 28 }}>
         <h1
-          className="text-sm text-[#1d080f] text-left"
-          style={{ marginTop: 0, marginBottom: "20px", WebkitTextStroke: "0.8px #1d080f" }}
+          className="text-[#1d080f] text-left"
+          style={{ marginTop: 0, marginBottom: "20px", fontSize: 39, WebkitTextStroke: "0.4px #1d080f" }}
         >
           Payment Transactions
         </h1>
@@ -145,47 +172,54 @@ export default function PaymentTransactions({ embedded = false }) {
           <StatCard label="Completed Payments" value={completedCount} />
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="text-xs text-gray-500 border-b border-gray-100">
-                {["Order #", "Customer", "Method", "Amount", "Status", "Date & Time", "Actions"].map((h) => (
-                  <th key={h} className="px-6 py-4 font-[Prata] font-normal">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {transactions.map((t) => (
-                <tr key={t.id} className="border-b border-gray-100 last:border-0 text-sm">
-                  <td className="px-6 py-4" style={{ WebkitTextStroke: "0.3px #1d080f" }}>{t.id}</td>
-                  <td className="px-6 py-4">{t.customer}</td>
-                  <td className="px-6 py-4">{t.method}</td>
-                  <td className="px-6 py-4">Php. {t.amount.toLocaleString()}</td>
-                  <td className="px-6 py-4"><StatusBadge status={t.status} /></td>
-                  <td className="px-6 py-4 text-gray-500">
-                    {t.date}<br />{t.time}
-                  </td>
-                  <td className="px-6 py-4">
-                    {t.status === "Pending" ? (
-                      <button
-                        onClick={() => setModalTx(t)}
-                        className="px-4 py-1.5 rounded-md bg-[#1d080f] text-white text-xs hover:bg-[#3a1420] transition"
-                      >
-                        Validate
-                      </button>
-                    ) : t.status === "Completed" ? (
-                      <button className="px-4 py-1.5 rounded-md bg-[#e0e0e0] text-[#555] text-xs hover:bg-gray-300 transition">
-                        Refund
-                      </button>
-                    ) : (
-                      <span className="text-xs text-gray-400">—</span>
-                    )}
-                  </td>
+        {transactions.length === 0 ? (
+          <div className="bg-white rounded-xl p-12 text-center text-gray-400 font-[Prata] text-sm shadow-sm border border-gray-100">
+            No payment transactions yet.
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="text-xs text-gray-500 border-b border-gray-100">
+                  {["Order #", "Customer", "Table", "Method", "Amount", "Status", "Date & Time", "Actions"].map((h) => (
+                    <th key={h} className="px-6 py-4 font-[Prata] font-normal">{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {transactions.map((t) => (
+                  <tr key={t.id} className="border-b border-gray-100 last:border-0 text-sm">
+                    <td className="px-6 py-4" style={{ WebkitTextStroke: "0.3px #1d080f" }}>{t.id}</td>
+                    <td className="px-6 py-4">{t.customer}</td>
+                    <td className="px-6 py-4">{t.table}</td>
+                    <td className="px-6 py-4">{t.method}</td>
+                    <td className="px-6 py-4">Php. {t.amount.toLocaleString()}</td>
+                    <td className="px-6 py-4"><StatusBadge status={t.status} /></td>
+                    <td className="px-6 py-4 text-gray-500">
+                      {t.date}<br />{t.time}
+                    </td>
+                    <td className="px-6 py-4">
+                      {t.status === "Pending" ? (
+                        <button
+                          onClick={() => setModalTx(t)}
+                          className="px-4 py-1.5 rounded-md bg-[#1d080f] text-white text-xs hover:bg-[#3a1420] transition"
+                        >
+                          Validate
+                        </button>
+                      ) : t.status === "Completed" ? (
+                        <button className="px-4 py-1.5 rounded-md bg-[#e0e0e0] text-[#555] text-xs hover:bg-gray-300 transition">
+                          Refund
+                        </button>
+                      ) : (
+                        <span className="text-xs text-gray-400">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </main>
 
       <ValidateModal
@@ -193,6 +227,7 @@ export default function PaymentTransactions({ embedded = false }) {
         onClose={() => setModalTx(null)}
         onConfirm={handleConfirm}
         onFail={handleFail}
+        onUpdateTable={handleUpdateTable}
       />
     </div>
   );

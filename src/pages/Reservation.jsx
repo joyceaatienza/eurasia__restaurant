@@ -1,9 +1,14 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { ChevronLeft, ChevronRight, ChevronDown, Check, X, Clock } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ChevronDown, Check, X, Clock, Upload } from 'lucide-react'
 import heroImage from '../assets/bgHero.jpg'
 
 const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"]
 const STORAGE_KEY = 'eurasia_reservations'
+
+const DOWNPAYMENT = {
+  table: 1000,
+  event: 5000,
+}
 
 function buildCalendar(year, month) {
   const firstDay = new Date(year, month, 1).getDay()
@@ -277,6 +282,8 @@ function Reservation() {
   const [showConfirm, setShowConfirm] = useState(false)
   const [historyQuery, setHistoryQuery] = useState("")
   const [selectedTable, setSelectedTable] = useState("")
+  const [paymentMethod, setPaymentMethod] = useState("")
+  const [themeImagePreview, setThemeImagePreview] = useState("")
 
   const [reservations, setReservations] = useState(() => {
     const saved = localStorage.getItem(STORAGE_KEY)
@@ -312,6 +319,14 @@ function Reservation() {
     setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + delta, 1))
   }
 
+  const handleThemeImageChange = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => setThemeImagePreview(reader.result)
+    reader.readAsDataURL(file)
+  }
+
   const handleConfirm = (e) => {
     e.preventDefault()
 
@@ -320,6 +335,11 @@ function Reservation() {
 
     if (!time) {
       alert("Please select a time.")
+      return
+    }
+
+    if (!paymentMethod) {
+      alert("Please select a downpayment method.")
       return
     }
 
@@ -335,6 +355,8 @@ function Reservation() {
       return
     }
 
+    const downpaymentAmount = tab === "event" ? DOWNPAYMENT.event : DOWNPAYMENT.table
+
     const newReservation = {
       id: Date.now(),
       date: currentDateString,
@@ -347,6 +369,10 @@ function Reservation() {
       preference: formData.get('preference') || selectedTable || '',
       note: formData.get('note') || '',
       type: tab,
+      downpayment: downpaymentAmount,
+      paymentMethod,
+      paymentStatus: "Pending",
+      themeImage: tab === "event" ? themeImagePreview : "",
     }
 
     const updated = [...reservations, newReservation]
@@ -356,6 +382,8 @@ function Reservation() {
     e.target.reset()
     setSelectedTable("")
     setSelectedTime("")
+    setPaymentMethod("")
+    setThemeImagePreview("")
     setShowConfirm(true)
   }
 
@@ -488,10 +516,16 @@ function Reservation() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="relative">
-                      <select name="occasion" defaultValue="" className={`${inputClass} appearance-none`}>
-                        <option value="" disabled>Occasion</option>
+                      <select
+                        name="occasion"
+                        defaultValue=""
+                        required={tab === "event"}
+                        className={`${inputClass} appearance-none`}
+                      >
+                        <option value="" disabled>Occasion{tab === "event" ? " *" : ""}</option>
                         <option>Birthday</option>
                         <option>Anniversary</option>
+                        <option>Wedding</option>
                         <option>Business</option>
                         <option>Casual</option>
                       </select>
@@ -515,9 +549,72 @@ function Reservation() {
                   ) : (
                     <>
                       <input name="preference" placeholder="Theme Preference *" required className={inputClass} />
+
+                      <div className="bg-white rounded-md p-4">
+                        <label className="font-[Prata] text-sm text-neutral-600 block mb-2">
+                          Theme Inspiration Photo (optional)
+                        </label>
+                        <label
+                          htmlFor="theme-image-upload"
+                          className="flex items-center justify-center gap-2 border-2 border-dashed border-neutral-300 rounded-md py-6 cursor-pointer hover:bg-neutral-50 transition"
+                        >
+                          <Upload size={16} className="text-neutral-400" />
+                          <span className="font-[Prata] text-xs text-neutral-500">
+                            {themeImagePreview ? "Change photo" : "Click to upload a photo"}
+                          </span>
+                        </label>
+                        <input
+                          id="theme-image-upload"
+                          type="file"
+                          accept="image/*"
+                          onChange={handleThemeImageChange}
+                          className="hidden"
+                        />
+                        {themeImagePreview && (
+                          <img
+                            src={themeImagePreview}
+                            alt="Theme preview"
+                            className="mt-3 w-full max-h-40 object-cover rounded-md"
+                          />
+                        )}
+                      </div>
+
                       <textarea name="note" placeholder="Note (optional)" className={`${inputClass} resize-none h-20`} />
                     </>
                   )}
+
+                  {/* Downpayment */}
+                  <div className="bg-white rounded-xl p-5">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="font-[Prata] text-sm text-neutral-600">Required Downpayment</span>
+                      <span className="font-[Prata] font-bold text-lg text-[#1d080f]">
+                        Php. {(tab === "event" ? DOWNPAYMENT.event : DOWNPAYMENT.table).toLocaleString()}
+                      </span>
+                    </div>
+                    <p className="text-xs text-neutral-500 font-[Prata] mb-4">
+                      This amount will be deducted from your final bill.
+                    </p>
+
+                    <div className="grid grid-cols-2 gap-2">
+  {["GCash", "Paymaya", "Bank Transfer", "Cash"].map((method) => (
+                        <button
+                          key={method}
+                          type="button"
+                          onClick={() => setPaymentMethod(method)}
+                          className={`py-2.5 rounded-lg text-xs font-[Prata] font-bold transition-colors ${
+                            paymentMethod === method
+                              ? 'bg-[#1d080f] text-white'
+                              : 'bg-neutral-200/70 text-[#1d080f] hover:bg-neutral-300/70'
+                          }`}
+                        >
+                          {method}
+                        </button>
+                      ))}
+                    </div>
+                    {!paymentMethod && (
+                      <p className="text-xs text-red-500 font-[Prata] mt-2">Please select a downpayment method.</p>
+                    )}
+                  </div>
                 </form>
               </div>
 
@@ -528,6 +625,8 @@ function Reservation() {
                     document.getElementById('reservation-form')?.reset()
                     setSelectedTable("")
                     setSelectedTime("")
+                    setPaymentMethod("")
+                    setThemeImagePreview("")
                   }}
                   className="flex-1 bg-[#c0392b] text-white font-[Prata] font-bold py-3.5 rounded-full hover:opacity-90 transition"
                 >
@@ -600,11 +699,25 @@ function Reservation() {
                         <span>{r.preference || '—'}</span>
                       </div>
                       <div>
+                        <span className="block text-xs text-neutral-400">Downpayment</span>
+                        <span>
+                          {r.downpayment ? `Php. ${r.downpayment.toLocaleString()} (${r.paymentStatus || 'Pending'})` : '—'}
+                        </span>
+                      </div>
+                      <div>
                         <span className="block text-xs text-neutral-400">Note</span>
                         <span>{r.note || '—'}</span>
                       </div>
                     </div>
                   </div>
+
+                  {r.themeImage && (
+                    <img
+                      src={r.themeImage}
+                      alt="Theme inspiration"
+                      className="mt-4 w-full max-h-48 object-cover rounded-md"
+                    />
+                  )}
 
                   <div className="flex gap-3 mt-6 max-w-md">
                     <button

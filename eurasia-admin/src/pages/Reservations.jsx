@@ -544,9 +544,9 @@ export default function Reservations({ embedded = false }) {
 
 {!embedded && <StaffHeader />}
       <div style={{ padding: 28, display: "flex", flexDirection: "column", gap: 14, width: "100%" }}>
-        <div style={{ fontFamily: FONT, fontSize: 40, fontWeight: 700, color: C.ink, WebkitTextStroke: "0.5px " + C.ink, textAlign: "left", width: "100%",}}>
-          Reservations
-        </div>
+        <div style={{ fontFamily: FONT, fontSize: 39, fontWeight: 700, color: C.ink, WebkitTextStroke: "0.5px " + C.ink, textAlign: "left", width: "100%" }}>
+  Reservations
+</div>
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>

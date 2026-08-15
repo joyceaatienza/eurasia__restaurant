@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import logo from "../assets/logopic2.png";
+import { Eye, EyeOff } from "lucide-react";
 
 /* Role → where they land after logging in */
 const ROLE_ROUTES = {
@@ -17,11 +18,20 @@ const ROLE_LABELS = {
   cashier: "Cashier",
 };
 
+function toTitleCase(str) {
+  return str
+    .toLowerCase()
+    .split(" ")
+    .map((word) => (word.length > 0 ? word.charAt(0).toUpperCase() + word.slice(1) : word))
+    .join(" ");
+}
+
 export default function Login() {
   const navigate = useNavigate();
   const [role, setRole] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
 
   const handleSubmit = (e) => {
@@ -79,40 +89,62 @@ export default function Login() {
           </select>
 
           <input
-            type="text"
-            placeholder="Name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full px-4 py-3 rounded-md mb-4 text-sm bg-white text-[#1d080f] placeholder-neutral-400"
-          />
+  type="text"
+  placeholder="Name"
+  value={name}
+  onChange={(e) => setName(toTitleCase(e.target.value))}
+  className="w-full px-4 py-3 rounded-md mb-4 text-sm bg-white text-[#1d080f] placeholder-neutral-400"
+/>
 
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-4 py-3 rounded-md mb-2 text-sm bg-white text-[#1d080f] placeholder-neutral-400"
-          />
+          <div className="relative w-full mb-2">
+  <input
+    type={showPassword ? "text" : "password"}
+    placeholder="Password"
+    value={password}
+    onChange={(e) => setPassword(e.target.value)}
+    className="w-full px-4 py-3 pr-11 rounded-md text-sm bg-white text-[#1d080f] placeholder-neutral-400"
+  />
+  <button
+    type="button"
+    onClick={() => setShowPassword((prev) => !prev)}
+    className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+  >
+    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+  </button>
+</div>
 
           {error && <p className="text-red-400 text-xs mb-2">{error}</p>}
 
-          <div className="flex flex-col items-center gap-3 mt-3">
-            <button
-              type="submit"
-              className="px-10 py-3 rounded-md bg-white text-[#1d080f] text-sm hover:bg-neutral-200 transition"
-              style={{ WebkitTextStroke: "0.4px #1d080f" }}
-            >
-              Log In
-            </button>
+          <div
+  style={{
+    display: "flex",
+    flexDirection: "column",
+    gap: "10px",
+    marginTop: "10px",
+    width: "100%",
+    maxWidth: "40%",
+    margin: "10px auto 0",
+    boxSizing: "border-box",
+  }}
+>
 
-            <button
-              type="button"
-              className="px-8 py-3 rounded-md bg-[#c0392b] text-white text-sm hover:bg-[#a5342a] transition"
-              style={{ WebkitTextStroke: "0.4px white" }}
-            >
-              Forgot Password
-            </button>
-          </div>
+  <button
+    type="submit"
+    className="w-full rounded-md bg-white text-[#1d080f] font-bold text-sm hover:bg-neutral-200 transition"
+    style={{ padding: "12px 16px" }}
+  >
+    Log In
+  </button>
+
+  <button
+    type="button"
+    onClick={() => navigate("/forgot-password")}
+    className="w-full rounded-md bg-[#c0392b] text-white font-bold text-sm hover:bg-[#a5342a] transition"
+    style={{ padding: "12px 16px" }}
+  >
+    Forgot Password
+  </button>
+</div>
         </form>
       </div>
     </div>

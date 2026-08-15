@@ -26,6 +26,8 @@ const PAYMENT_METHOD_KEY = 'eurasia_payment_method';
 
 function Payment() {
   const navigate = useNavigate();
+  // 🟢 ILINIPAT SA LOOB NG COMPONENT ANG useState NG TABLE NUMBER
+  const [tableNumber, setTableNumber] = useState(""); 
   const [method, setMethod] = useState('cash');
   const [discount, setDiscount] = useState(null); // 'pwd' | 'senior' | null
   const [receiptFile, setReceiptFile] = useState(null);
@@ -65,6 +67,11 @@ function Payment() {
   };
 
   const handlePayNow = () => {
+    if (!tableNumber.trim()) {
+      alert("Please enter your table number before proceeding.");
+      return;
+    }
+
     if (discount && !discountIdFile) {
       alert(`Please upload a photo of your ${discount.toUpperCase()} ID for verification.`);
       return;
@@ -87,7 +94,8 @@ function Payment() {
     <div className="min-h-screen bg-[#faf8f5] text-[#1d080f] font-sans">
       {/* Hero Header */}
       <div className="relative h-64 overflow-hidden shrink-0 md:h-60">
-        <img src={heroImage}
+        <img 
+          src={heroImage}
           alt=""
           className="absolute inset-0 h-full w-full object-cover"
         />
@@ -122,6 +130,27 @@ function Payment() {
         ) : (
           <div className="grid gap-6">
             
+            {/* Table Number Section */}
+            <div className="bg-white rounded-2xl shadow-sm p-8 mb-2 border border-neutral-200/80">
+              <h2 className="text-center font-[Prata] text-amber-700 tracking-wide text-sm mb-4">
+                ENTER YOUR TABLE NUMBER
+              </h2>
+              <div className="max-w-xs mx-auto">
+                <input
+                  type="text"
+                  value={tableNumber}
+                  onChange={(e) => setTableNumber(e.target.value)}
+                  placeholder="e.g. T7"
+                  className="w-full text-center bg-[#f7f5f0] rounded-md px-4 py-3.5 font-[Prata] text-[#1d080f] placeholder:text-neutral-400 focus:outline-none focus:ring-1 focus:ring-[#1d080f]"
+                />
+                {!tableNumber && (
+                  <p className="text-xs text-red-500 font-[Prata] text-center mt-2">
+                    Please enter your table number.
+                  </p>
+                )}
+              </div>
+            </div>
+
             {/* Step 1: Select Payment Method */}
             <div className="bg-white rounded-2xl border border-neutral-200/80 p-6 shadow-xs">
               <h4 className="text-[16px] font-bold text-[#b38548] uppercase tracking-wider mb-4">
@@ -275,28 +304,29 @@ function Payment() {
               </div>
                 
               <div className="mt-4 pt-4 border-t border-dashed border-neutral-300 space-y-2 text-xs">
-  <div className="flex justify-between text-neutral-600">
-    <span>Subtotal</span>
-    <span>₱ {subtotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-  </div>
+                <div className="flex justify-between text-neutral-600">
+                  <span>Subtotal</span>
+                  <span>₱ {subtotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                </div>
 
-  <div className="flex justify-between text-neutral-600">
-    <span>Service</span>
-    <span>₱ {serviceFee.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-  </div>
+                <div className="flex justify-between text-neutral-600">
+                  <span>Service</span>
+                  <span>₱ {serviceFee.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                </div>
 
-  {discount && (
-    <div className="flex justify-between text-red-600 font-semibold">
-      <span>DISCOUNT ({discount === 'pwd' ? 'PWD' : 'SENIOR'})</span>
-      <span>- ₱ {discountAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-    </div>
-  )}
+                {discount && (
+                  <div className="flex justify-between text-red-600 font-semibold">
+                    <span>DISCOUNT ({discount === 'pwd' ? 'PWD' : 'SENIOR'})</span>
+                    <span>- ₱ {discountAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                )}
 
-  <div className="flex justify-between items-baseline text-base font-bold text-[#1d080f] pt-3 border-t border-neutral-800">
-    <span>TOTAL</span>
-    <span>₱ {total.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-  </div>
-</div>
+                <div className="flex justify-between items-baseline text-base font-bold text-[#1d080f] pt-3 border-t border-neutral-800">
+                  <span>TOTAL</span>
+                  <span>₱ {total.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+
               <div className="flex gap-3 mt-8 font-sans">
                 <button
                   type="button"

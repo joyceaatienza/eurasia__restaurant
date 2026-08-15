@@ -1,229 +1,184 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { X, Wallet, Smartphone, CreditCard, Landmark, Trash2, ShoppingBag, ArrowRight } from 'lucide-react'
-import { useCart } from '../context/CartContext'
+import React, { useState } from "react";
+import { X, Minus, Plus, Trash2, ShoppingBag, ArrowRight } from "lucide-react";
+import { useCart } from "../context/CartContext";
+import { addOrder } from "../utils/ordersStore";
 
-const VAT_RATE = 0.12
+const FONT = "'Prata', serif";
+const INK = "#1d080f";
 
-const PAYMENT_METHODS = [
-  { id: 'cash', label: 'Cash', icon: Wallet },
-  { id: 'gcash', label: 'GCash', icon: Smartphone },
-  { id: 'paymaya', label: 'PayMaya', icon: CreditCard },
-  { id: 'bank', label: 'Bank Transfer', icon: Landmark },
-]
+export default function TrayPanel() {
+  const {
+    cart,
+    isTrayOpen,
+    closeTray,
+    updateQty,
+    updateNote,
+    removeItem,
+    clearCart,
+    trayIconRef,
+  } = useCart();
 
-function TrayPanel() {
-  const { cart, updateQty, updateNote, removeItem, isTrayOpen, closeTray } = useCart()
-  const [paymentMethod, setPaymentMethod] = useState('cash')
-  const navigate = useNavigate()
+  const [tableNumber, setTableNumber] = useState("");
+  const [placing, setPlacing] = useState(false);
 
-  const subtotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0)
-  const vat = Math.round(subtotal * VAT_RATE)
-  const total = subtotal + vat
+  if (!isTrayOpen) return null;
+
+  const subtotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const service = Math.round(subtotal * 0.05);
+  const total = subtotal + service;
 
   const handlePlaceOrder = () => {
-    localStorage.setItem('eurasia_payment_method', paymentMethod)
-    closeTray()
-    navigate('/payment')
-  }
+    if (!tableNumber) {
+      alert("Please enter your table number.");
+      return;
+    }
+    if (cart.length === 0) {
+      alert("Your tray is empty.");
+      return;
+    }
 
-  if (!isTrayOpen) return null
+    setPlacing(true);
+
+    addOrder({
+      customer: "Guest",
+      table: tableNumber,
+      total,
+      items: cart.map((item) => ({
+        name: item.name,
+        qty: item.qty,
+        price: item.price,
+        note: item.note || "",
+      })),
+    });
+
+    clearCart();
+    setTableNumber("");
+    setPlacing(false);
+    closeTray();
+
+    alert("Order placed! Your food is on its way to the kitchen. You can pay after your meal.");
+  };
 
   return (
-    <>
-      {/* Dimmed Backdrop (No Blur) */}
-      <div
-        onClick={closeTray}
-        className="fixed inset-0 bg-black/50 z-40 transition-opacity duration-300 animate-fade-in"
-      />
+    <div className="fixed inset-0 z-50 flex justify-end">
+      <div className="absolute inset-0 bg-black/40" onClick={closeTray} />
 
-      {/* Main Drawer Panel */}
-      <aside className="fixed top-0 right-0 h-full w-full sm:w-[450px] bg-[#faf8f5] z-50 shadow-2xl flex flex-col transform transition-transform duration-300 ease-out font-['Prata'],serif text-[#1d080f]">
-        
-        {/* Drawer Header */}
-        <div className="flex items-center justify-between px-6 py-5 bg-white border-b border-neutral-200/80 shadow-sm">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-[#1d080f] text-white rounded-lg">
-              <ShoppingBag size={18} />
+      <div className="relative bg-[#f0eff3] w-full max-w-md h-full flex flex-col shadow-xl" style={{ fontFamily: FONT }}>
+        {/* Header */}
+        <div className="bg-white flex items-center justify-between px-6 py-5 border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-md bg-[#1d080f] flex items-center justify-center">
+              <ShoppingBag size={18} color="#fff" />
             </div>
             <div>
-              <h2 className="text-xl font-bold tracking-wide">My Tray</h2>
-              <p className="text-xs text-neutral-500 font-sans">{cart.length} {cart.length === 1 ? 'item' : 'items'} selected</p>
+              <div className="text-lg" style={{ color: INK }}>My Tray</div>
+              <div className="text-xs text-gray-400">{cart.length} item{cart.length !== 1 ? "s" : ""} selected</div>
             </div>
           </div>
-          
-          <button 
-            onClick={closeTray} 
-            className="p-2 text-neutral-400 hover:text-[#1d080f] hover:bg-neutral-100 rounded-full transition-all"
-            aria-label="Close tray"
-          >
+          <button onClick={closeTray} className="text-gray-400 hover:text-gray-600">
             <X size={20} />
           </button>
         </div>
 
-        {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+        {/* Items */}
+        <div className="flex-1 overflow-y-auto px-6 py-5">
           {cart.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full py-20 text-center">
-              <div className="w-16 h-16 rounded-full bg-neutral-200/60 flex items-center justify-center text-neutral-400 mb-4">
-                <ShoppingBag size={28} />
-              </div>
-              <p className="text-neutral-500 font-medium text-base">Your tray is empty</p>
-              <p className="text-xs text-neutral-400 font-sans mt-1 max-w-[200px]">
-                Explore our menu to add delicious dishes to your order.
-              </p>
-            </div>
+            <p className="text-center text-gray-400 text-sm py-12">Your tray is empty.</p>
           ) : (
-            <>
-              {/* Order Items List */}
-              <div className="space-y-4">
-                <h3 className="text-xs font-bold text-[#b38548] uppercase tracking-wider font-sans">
-                  Order Items
-                </h3>
-
-                <div className="flex flex-col gap-3">
-                  {cart.map((item) => (
-                    <div 
-                      key={item.id} 
-                      className="group bg-white rounded-xl p-4 border border-neutral-200/80 shadow-sm hover:shadow-md transition-shadow"
-                    >
-                      <div className="flex gap-3.5">
-                        <img
-                          src={item.image}
-                          alt={item.name}
-                          className="w-20 h-20 rounded-lg object-cover flex-shrink-0 bg-neutral-100 border border-neutral-100"
-                        />
-                        
-                        <div className="flex-1 min-w-0 flex flex-col justify-between">
-                          <div className="flex justify-between items-start gap-2">
-                            <h4 className="font-bold text-sm leading-snug truncate flex items-center gap-1.5">
-                              <span>{item.name}</span>
-                              {item.flag && (
-                                <span
-                                  className={`fi fi-${item.flag} border border-neutral-300 rounded-xs shrink-0`}
-                                  style={{ width: '1.1em', height: '0.8em' }}
-                                />
-                              )}
-                              <span>{item.emoji}</span>
-                            </h4>
-                            <span className="font-bold text-sm text-[#1d080f] whitespace-nowrap">
-                              ₱{(item.price * item.qty).toLocaleString()}
-                            </span>
-                          </div>
-
-                          <p className="text-xs text-neutral-500 font-sans">₱{item.price.toLocaleString()} each</p>
-
-                          {/* Controls & Delete */}
-                          <div className="flex items-center justify-between mt-2">
-                            {/* Quantity Pill */}
-                            <div className="flex items-center bg-[#1d080f] text-white rounded-full px-2.5 py-1 text-xs font-sans shadow-xs">
-                              <button 
-                                onClick={() => updateQty(item.id, -1)} 
-                                className="w-5 h-5 flex items-center justify-center hover:bg-white/20 rounded-full transition"
-                              >
-                                −
-                              </button>
-                              <span className="w-6 text-center font-semibold">{item.qty}</span>
-                              <button 
-                                onClick={() => updateQty(item.id, 1)} 
-                                className="w-5 h-5 flex items-center justify-center hover:bg-white/20 rounded-full transition"
-                              >
-                                +
-                              </button>
-                            </div>
-
-                            {/* Remove Button */}
-                            <button
-                              onClick={() => removeItem(item.id)}
-                              className="text-neutral-400 hover:text-red-600 p-1 rounded-md transition-colors"
-                              title="Remove item"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        </div>
+            <div className="flex flex-col gap-5">
+              {cart.map((item) => (
+                <div key={item.id} className="bg-white rounded-xl p-4">
+                  <div className="flex gap-4">
+                    <img
+                      src={item.image}
+                      alt={item.name}
+                      className="w-20 h-20 rounded-lg object-cover shrink-0"
+                    />
+                    <div className="flex-1">
+                      <div className="flex justify-between items-start">
+                        <span className="text-sm" style={{ color: INK }}>{item.name}</span>
+                        <button onClick={() => removeItem(item.id)} className="text-gray-300 hover:text-red-500">
+                          <Trash2 size={15} />
+                        </button>
                       </div>
+                      <div className="text-xs text-gray-400 mb-3">Php. {item.price} each</div>
 
-                      {/* Customization Note Input */}
-                      <div className="mt-3 pt-3 border-t border-neutral-100">
-                        <input
-                          value={item.note || ''}
-                          onChange={(e) => updateNote(item.id, e.target.value)}
-                          placeholder="Special instructions (e.g. less spicy, no onions)..."
-                          className="w-full bg-[#faf8f5] border border-neutral-200/80 rounded-lg px-3 py-1.5 text-xs font-sans text-neutral-700 placeholder:text-neutral-400 focus:outline-none focus:border-[#1d080f] focus:bg-white transition"
-                        />
+                      <div className="inline-flex items-center gap-3 bg-[#1d080f] text-white rounded-full px-3 py-1.5">
+                        <button onClick={() => updateQty(item.id, -1)}>
+                          <Minus size={14} />
+                        </button>
+                        <span className="text-sm w-4 text-center">{item.qty}</span>
+                        <button onClick={() => updateQty(item.id, 1)}>
+                          <Plus size={14} />
+                        </button>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
+                  </div>
 
-              {/* Payment Method Selector */}
-              <div className="space-y-3">
-                <h3 className="text-xs font-bold text-[#b38548] uppercase tracking-wider font-sans">
-                  Payment Option
-                </h3>
-                
-                <div className="grid grid-cols-2 gap-2.5">
-                  {PAYMENT_METHODS.map(({ id, label, icon: Icon }) => {
-                    const isSelected = paymentMethod === id
-                    return (
-                      <button
-                        key={id}
-                        onClick={() => setPaymentMethod(id)}
-                        className={`relative flex items-center gap-3 rounded-xl p-3 text-xs font-sans font-medium transition-all text-left border ${
-                          isSelected
-                            ? 'bg-[#1d080f] text-white border-[#1d080f] shadow-sm'
-                            : 'bg-white text-neutral-700 border-neutral-200/80 hover:border-neutral-300 hover:bg-neutral-50/50'
-                        }`}
-                      >
-                        <div className={`p-1.5 rounded-lg ${isSelected ? 'bg-white/10 text-white' : 'bg-neutral-100 text-neutral-600'}`}>
-                          <Icon size={16} />
-                        </div>
-                        <span className="flex-1 truncate">{label}</span>
-                      </button>
-                    )
-                  })}
+                  <input
+                    type="text"
+                    placeholder="Special instructions (e.g. less spicy, no onions)..."
+                    value={item.note || ""}
+                    onChange={(e) => updateNote(item.id, e.target.value)}
+                    className="w-full mt-3 bg-[#f7f5f0] rounded-md px-3 py-2 text-xs placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-[#1d080f]"
+                    style={{ color: INK }}
+                  />
                 </div>
-              </div>
+              ))}
 
-              {/* Price Calculation Card */}
-              <div className="bg-white rounded-xl p-4 border border-neutral-200/80 shadow-sm space-y-2.5">
-                <div className="flex justify-between text-xs font-sans text-neutral-600">
-                  <span>Subtotal</span>
-                  <span className="font-medium text-neutral-800">₱{subtotal.toLocaleString()}</span>
+              {/* Table Number */}
+              <div className="bg-white rounded-xl p-5">
+                <div className="text-center text-amber-700 text-xs tracking-wide mb-4">
+                  ENTER YOUR TABLE NUMBER
                 </div>
-                <div className="flex justify-between text-xs font-sans text-neutral-600">
-                  <span>Service (5%)</span>
-                  <span className="font-medium text-neutral-800">₱{vat.toLocaleString()}</span>
-                </div>
-                
-                <div className="border-t border-dashed border-neutral-200 pt-2.5 flex justify-between items-baseline">
-                  <span className="font-bold text-sm">Total Amount</span>
-                  <span className="font-bold text-xl text-[#1d080f]">
-                    ₱{total.toLocaleString()}
-                  </span>
-                </div>
+                <input
+                  type="text"
+                  value={tableNumber}
+                  onChange={(e) => setTableNumber(e.target.value)}
+                  placeholder="e.g. T7"
+                  className="w-full text-center bg-[#f7f5f0] rounded-md px-4 py-3 focus:outline-none focus:ring-1 focus:ring-[#1d080f]"
+                  style={{ color: INK }}
+                />
+                {!tableNumber && (
+                  <p className="text-xs text-red-500 text-center mt-2">
+                    Please enter your table number.
+                  </p>
+                )}
               </div>
-            </>
+            </div>
           )}
         </div>
 
-        {/* Fixed Bottom Checkout CTA */}
+        {/* Summary + Place Order */}
         {cart.length > 0 && (
-          <div className="p-6 bg-white border-t border-neutral-200/80 shadow-lg">
+          <div className="bg-white px-6 py-5 border-t border-gray-100">
+            <div className="flex justify-between text-sm mb-1" style={{ color: INK }}>
+              <span>Subtotal</span>
+              <span>Php. {subtotal.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between text-sm mb-3 text-gray-500">
+              <span>Service (5%)</span>
+              <span>Php. {service.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between items-center border-t border-dashed border-gray-200 pt-3 mb-4">
+              <span className="text-sm" style={{ color: INK }}>Total Amount</span>
+              <span className="text-2xl font-bold" style={{ color: INK }}>Php. {total.toLocaleString()}</span>
+            </div>
+
+            <p className="text-xs text-gray-400 text-center mb-4">
+              Payment will be collected after your meal.
+            </p>
+
             <button
               onClick={handlePlaceOrder}
-              className="w-full bg-[#2e5a2e] hover:bg-[#244724] text-white font-bold text-base py-3.5 px-6 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 group"
+              disabled={placing || !tableNumber}
+              className="w-full bg-[#296c39] text-white py-4 rounded-full flex items-center justify-center gap-2 hover:bg-[#1f5129] transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <span>Proceed to Checkout</span>
-              <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+              Place Order <ArrowRight size={16} />
             </button>
           </div>
         )}
-      </aside>
-    </>
-  )
+      </div>
+    </div>
+  );
 }
-
-export default TrayPanel

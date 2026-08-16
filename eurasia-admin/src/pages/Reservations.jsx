@@ -11,7 +11,7 @@ const C = {
   ink: "#201417",
   inkSoft: "#6b5b60",
   hair: "#e7e3e6",
-  flame: "#fa293f",
+  flame: "#be0c1e",
   gold: "#c9a15a",
   green: "#296c39",
   orange: "#cd8a5d",
@@ -426,17 +426,17 @@ function FloorPlan({ tableStatus }) {
 /* Day view                                                           */
 /* ---------------------------------------------------------------- */
 function DayView({ selectedISO, reservations, markStatus }) {
-  const dayReservations = reservations.filter((r) => r.date === selectedISO);
+  const dayReservations = reservations.filter((r) => r.date === selectedISO && r.status !== "Completed");
   const tableRes = dayReservations.filter((r) => r.type === "table");
   const sortedAll = [...dayReservations].sort((a, b) => (a.time > b.time ? 1 : -1));
 
   const tableStatus = TABLES.map((table) => {
     const match = tableRes.find((r) => r.table === table);
     if (!match) return { table, status: "Available" };
-    if (match.status === "Arrived" || match.status === "Completed") return { table, status: "Occupied" };
+    if (match.status === "Arrived") return { table, status: "Occupied" };
     return { table, status: `Reserved - ${to12h(match.time)}` };
   });
-
+  
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1.7fr 0.65fr", gap: 16, alignItems: "start" }}>
       <Card style={{ padding: 0, overflow: "hidden" }}>

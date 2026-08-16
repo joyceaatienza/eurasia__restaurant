@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { UserRound, LogOut } from "lucide-react";
+import { UserRound, LogOut, Settings } from "lucide-react";
 import logo from "../assets/logopic3.png";
+import SettingsModal from "./SettingsModal";
 
 const FONT = "'Prata', serif";
 const INK = "#1d080f";
@@ -11,6 +12,8 @@ export default function StaffHeader({ name, role }) {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
+  const [showSettings, setShowSettings] = useState(false);
+const [avatarColor, setAvatarColor] = useState(localStorage.getItem("eurasia_avatar_color") || INK);
 
   const savedName = localStorage.getItem("eurasia_name");
   const savedRole = localStorage.getItem("eurasia_role");
@@ -49,30 +52,30 @@ export default function StaffHeader({ name, role }) {
 
       <div style={{ display: "flex", alignItems: "center", gap: 14, position: "relative" }} ref={menuRef}>
         <div style={{ textAlign: "right" }}>
-         <div style={{ fontFamily: FONT, fontSize: 18, color: INK, WebkitTextStroke: "0.5px " + INK }}>
-          {displayName}
-        </div>
+          <div style={{ fontFamily: FONT, fontSize: 18, color: INK, WebkitTextStroke: "0.5px " + INK }}>
+            {displayName}
+          </div>
           <div style={{ fontFamily: FONT, fontSize: 16, color: MUTED, textTransform: "capitalize" }}>
             {displayRole}
           </div>
         </div>
 
         <button
-          onClick={() => setMenuOpen((prev) => !prev)}
-          style={{
-            width: 42,
-            height: 42,
-            borderRadius: "50%",
-            background: INK,
-            border: "none",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <UserRound size={26} color="#fff" />
-        </button>
+  onClick={() => setMenuOpen((prev) => !prev)}
+  style={{
+    width: 42,
+    height: 42,
+    borderRadius: "50%",
+    background: avatarColor,
+    border: "none",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  }}
+>
+  <UserRound size={26} color="#fff" />
+</button>
 
         {menuOpen && (
           <div
@@ -88,6 +91,34 @@ export default function StaffHeader({ name, role }) {
               zIndex: 20,
             }}
           >
+            {/* Settings Button */}
+            <button
+              onClick={() => {
+                setShowSettings(true);
+                setMenuOpen(false);
+              }}
+              style={{
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "12px 16px",
+                border: "none",
+                background: "#fff",
+                cursor: "pointer",
+                fontFamily: FONT,
+                fontSize: 13,
+                color: INK,
+                textAlign: "left",
+                borderBottom: "1px solid #eee",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "#f7f5f6")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "#fff")}
+            >
+              <Settings size={15} /> Settings
+            </button>
+
+            {/* Logout Button */}
             <button
               onClick={handleLogout}
               style={{
@@ -112,6 +143,15 @@ export default function StaffHeader({ name, role }) {
           </div>
         )}
       </div>
+
+      {showSettings && (
+  <SettingsModal
+    onClose={() => {
+      setShowSettings(false);
+      setAvatarColor(localStorage.getItem("eurasia_avatar_color") || INK);
+    }}
+  />
+)}
     </div>
   );
 }

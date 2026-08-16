@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { X, Check, Ban } from "lucide-react";
 import StaffHeader from "../components/StaffHeader";
+import { getPayments, setPaymentStatus, updatePaymentTable } from "../utils/paymentsStore";
 
 const INITIAL_TRANSACTIONS = [
   { id: "01", customer: "John Doe", table: "T7", method: "GCash", amount: 1756, date: "June 8, 2026", time: "2:06pm", status: "Completed" },
@@ -133,7 +134,10 @@ function ValidateModal({ transaction, onClose, onConfirm, onFail, onUpdateTable 
 }
 
 export default function PaymentTransactions({ embedded = false }) {
-  const [transactions, setTransactions] = useState(INITIAL_TRANSACTIONS);
+  const [transactions, setTransactions] = useState([]);
+  useEffect(() => {
+    setTransactions(getPayments());
+  }, []);
   const [modalTx, setModalTx] = useState(null);
   const [toast, setToast] = useState("");
 
@@ -146,21 +150,21 @@ export default function PaymentTransactions({ embedded = false }) {
   const completedCount = transactions.filter((t) => t.status === "Completed").length;
 
   const handleConfirm = (id) => {
-    setTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, status: "Completed" } : t)));
-    setModalTx(null);
-    showToast(`Payment #${id} confirmed successfully`);
-  };
+  setTransactions(setPaymentStatus(id, "Completed"));
+  setModalTx(null);
+  showToast(`Payment #${id} confirmed successfully`);
+};
 
-  const handleFail = (id) => {
-    setTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, status: "Failed" } : t)));
-    setModalTx(null);
-    showToast(`Payment #${id} marked as failed`);
-  };
+const handleFail = (id) => {
+  setTransactions(setPaymentStatus(id, "Failed"));
+  setModalTx(null);
+  showToast(`Payment #${id} marked as failed`);
+};
 
   const handleUpdateTable = (id, value) => {
-    setTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, table: value } : t)));
-    setModalTx((prev) => (prev && prev.id === id ? { ...prev, table: value } : prev));
-  };
+  setTransactions(updatePaymentTable(id, value));
+  setModalTx((prev) => (prev && prev.id === id ? { ...prev, table: value } : prev));
+};
 
   return (
     <div className="min-h-screen bg-[#f0eff3] font-[Prata] text-[#1d080f] text-left">
@@ -180,22 +184,22 @@ export default function PaymentTransactions({ embedded = false }) {
           <StatCard label="Completed Payments" value={completedCount} />
         </div>
 
-        {transactions.length === 0 ? (
-          <div className="bg-white rounded-xl p-12 text-center text-gray-400 font-[Prata] text-sm shadow-sm border border-gray-100">
-            No payment transactions yet.
-          </div>
-        ) : (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="text-xs text-gray-500 border-b border-gray-100">
-                  {["Order #", "Customer", "Table", "Method", "Amount", "Status", "Date & Time", "Actions"].map((h) => (
-                    <th key={h} className="px-6 py-4 font-[Prata] font-normal">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {transactions.map((t) => (
+        {transactions.filter((t) => t.status === "Pending").length === 0 ? (
+  <div className="bg-white rounded-xl p-12 text-center text-gray-400 font-[Prata] text-sm shadow-sm border border-gray-100">
+    No payment transactions yet.
+  </div>
+) : (
+  <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
+    <table className="w-full text-left">
+      <thead>
+        <tr className="text-xs text-gray-500 border-b border-gray-100">
+          {["Order #", "Customer", "Table", "Method", "Amount", "Status", "Date & Time", "Actions"].map((h) => (
+            <th key={h} className="px-6 py-4 font-[Prata] font-normal">{h}</th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {transactions.filter((t) => t.status === "Pending").map((t) => (
                   <tr key={t.id} className="border-b border-gray-100 last:border-0 text-sm">
                     <td className="px-6 py-4" style={{ WebkitTextStroke: "0.3px #1d080f" }}>{t.id}</td>
                     <td className="px-6 py-4">{t.customer}</td>

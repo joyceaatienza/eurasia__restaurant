@@ -4,10 +4,16 @@ import { getOrders, toggleOrderItem, setOrderStatus } from "../utils/ordersStore
 
 export default function OrderQueue({ embedded = false }) {
   const [orders, setOrders] = useState([]);
+  const [toast, setToast] = useState("");
 
   useEffect(() => {
     setOrders(getOrders());
   }, []);
+
+  const showToast = (message) => {
+    setToast(message);
+    setTimeout(() => setToast(""), 2500);
+  };
 
   const handleToggleItem = (orderId, itemId) => {
     setOrders(toggleOrderItem(orderId, itemId));
@@ -18,6 +24,7 @@ export default function OrderQueue({ embedded = false }) {
       const order = prev.find((o) => o.id === orderId);
       if (!order) return prev;
       const nextStatus = order.status === 'Waiting' ? 'Preparing' : 'Ready';
+      showToast(nextStatus === 'Preparing' ? `Order ${orderId} is now preparing` : `Order ${orderId} marked as ready`);
       return setOrderStatus(orderId, nextStatus);
     });
   };
@@ -152,6 +159,32 @@ export default function OrderQueue({ embedded = false }) {
           </div>
         )}
       </main>
+
+      {toast && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: 28,
+            right: 28,
+            background: "#1d080f",
+            color: "#fff",
+            padding: "14px 20px",
+            borderRadius: 10,
+            boxShadow: "0 6px 20px rgba(0,0,0,0.2)",
+            fontSize: 13.5,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            zIndex: 100,
+          }}
+          className="font-[Prata]"
+        >
+          <span style={{ background: "#296c39", borderRadius: "50%", width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12 }}>
+            ✓
+          </span>
+          {toast}
+        </div>
+      )}
     </div>
   );
 }

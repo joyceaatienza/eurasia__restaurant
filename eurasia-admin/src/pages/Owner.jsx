@@ -7,6 +7,10 @@ import {
   Wallet,
   Download,
   LogOut,
+  Wallet2,     
+  ShoppingBag,  
+  Percent,      
+  Users,        
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -17,6 +21,8 @@ import {
   CartesianGrid,
   LineChart,
   Line,
+  AreaChart,
+  Area,
   PieChart,
   Pie,
   Cell,
@@ -130,9 +136,9 @@ function Card({ children, style }) {
     <div
       style={{
         background: C.card,
-        borderRadius: 16,
+        borderRadius: 22,
         padding: 22,
-        boxShadow: "0 1px 3px rgba(23,3,16,0.06)",
+        boxShadow: "0 2px 8px rgba(23,3,16,0.05)",
         ...style,
       }}
     >
@@ -180,11 +186,44 @@ function TopHeader() {
         src={logoWord}
         alt="Eurasia Restaurant Logo"
         style={{
-          height: 48, 
-          width: "auto", 
+          height: 48,
+          width: "auto",
           objectFit: "contain",
         }}
       />
+    </div>
+  );
+}
+
+function Topbar({ title, subtitle }) {
+  return (
+    <div
+      style={{
+        padding: "20px 28px 8px 28px",
+        background: "transparent",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+      }}
+    >
+      <div>
+        <h1
+          style={{
+            fontFamily: "'Prata', serif",
+            fontSize: 39,
+            margin: 0,
+            color: C.ink,
+            WebkitTextStroke: "0.5px " + C.ink,
+          }}
+        >
+          {title}
+        </h1>
+        {subtitle && (
+          <p style={{ margin: "4px 0 0 0", fontSize: 13, color: C.inkSoft }}>
+            {subtitle}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -362,29 +401,29 @@ function Sidebar({ active, setActive }) {
   );
 }
 
-function StatCard({ label, value }) {
+function StatCard({ label, value, icon: Icon }) {
   return (
-    <Card style={{ padding: "18px 20px" }}>
-      <div
-        style={{
-          color: C.inkSoft,
-          fontSize: 12.5,
-          fontWeight: 600,
-          marginBottom: 8,
-        }}
-      >
-        {label}
+    <Card style={{ padding: "20px 22px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+        <div style={{ color: C.inkSoft, fontSize: 12.5, fontWeight: 600 }}>{label}</div>
+        {Icon && (
+          <div
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 10,
+              background: "#f3e3e6",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <Icon size={16} color={C.void} />
+          </div>
+        )}
       </div>
-      <div
-        style={{
-          fontFamily: "'Prata', serif",
-          fontSize: 24,
-          color: C.ink,
-          WebkitTextStroke: "0.5px " + C.ink,
-        }}
-      >
-        {value}
-      </div>
+      <div style={{ fontFamily: "'Prata', serif", fontSize: 24, color: C.ink, WebkitTextStroke: "0.5px " + C.ink }}>{value}</div>
     </Card>
   );
 }
@@ -482,57 +521,47 @@ function DashboardPage() {
   };
 
   return (
-    <div
-      style={{
-        padding: 28,
-        display: "flex",
-        flexDirection: "column",
-        gap: 20,
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-
-  <div>
-    <h2 style={{ fontFamily: "'Prata', serif", fontSize: 39, margin: 0, color: C.ink, WebkitTextStroke: "0.4px " + C.ink }}>
-      Sales Overview
-    </h2>
-    <p style={{ margin: "2px 0 0 0", fontSize: 13, color: C.inkSoft }}>
-      Track revenue, orders and guest activity
-    </p>
-  </div>
-
-
-  <div style={{ display: "flex", gap: 10 }}>
-    <PeriodDropdown value={period} onChange={setPeriod} />
-    <Btn variant="dark" small onClick={handleExport}>
-      <Download size={14} /> Export
-    </Btn>
-  </div>
-</div>
-
+    <div style={{ padding: 28 }}>
       <div
         style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: 16,
+          fontFamily: "'Prata', serif",
+          fontSize: 39,
+          color: C.ink,
+          WebkitTextStroke: "0.4px " + C.ink,
+          marginBottom: 20,
         }}
       >
-        <StatCard label="Total Revenue" value="₱ 12,324.21" />
-        <StatCard label="Total Orders" value="173" />
-        <StatCard
-          label="Total Amount Deducted (Discounts)"
-          value="₱ 424.19"
-        />
-        <StatCard label="Total Guests" value="164" />
+        Sales Overview
       </div>
 
       <div
         style={{
-          display: "grid",
-          gridTemplateColumns: "1.4fr 1fr 1fr",
-          gap: 16,
+          padding: 24,
+          background: "#faf7f6",
+          borderRadius: 28,
+          display: "flex",
+          flexDirection: "column",
+          gap: 20,
+          boxShadow: "0 4px 24px rgba(23,3,16,0.06)",
         }}
       >
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+        <PeriodDropdown value={period} onChange={setPeriod} />
+        <Btn variant="dark" small onClick={handleExport}>
+          <Download size={14} /> Export
+        </Btn>
+      </div>
+
+      {/* Layer 1 — Revenue, Orders, Discounts, Guests */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
+        <StatCard label="Total Revenue" value="₱ 12,324.21" icon={Wallet2} />
+        <StatCard label="Total Orders" value="173" icon={ShoppingBag} />
+        <StatCard label="Total Amount Deducted (Discounts)" value="₱ 424.19" icon={Percent} />
+        <StatCard label="Total Guests" value="164" icon={Users} />
+      </div>
+
+      {/* Layer 2 — Category Breakdown, Top Selling Items */}
+      <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 16 }}>
         <Card>
           <SectionTitle>Category Breakdown</SectionTitle>
           <ResponsiveContainer width="100%" height={260}>
@@ -558,69 +587,80 @@ function DashboardPage() {
           <SectionTitle>Top Selling Items</SectionTitle>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {topSelling.map((it) => (
-              <div
-                key={it.name}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  fontSize: 14,
-                }}
-              >
-                <span style={{ color: C.ink, fontWeight: 600 }}>
-                  {it.name}
-                </span>
+              <div key={it.name} style={{ display: "flex", justifyContent: "space-between", fontSize: 14 }}>
+                <span style={{ color: C.ink, fontWeight: 600 }}>{it.name}</span>
                 <span style={{ color: C.inkSoft }}>{it.amount}</span>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        <Card>
-          <SectionTitle>Order &amp; Cancellation Stats</SectionTitle>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {orderStats.map((s) => (
-              <div
-                key={s.label}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <span
-                  style={{ fontSize: 13.5, color: C.ink, fontWeight: 600 }}
-                >
-                  {s.label}
-                </span>
-                <span
-                  style={{ fontSize: 15, fontWeight: 700, color: s.color }}
-                >
-                  {s.value}
-                </span>
               </div>
             ))}
           </div>
         </Card>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1.3fr 1fr",
-          gap: 16,
-        }}
-      >
+      {/* Layer 3 — Sales Trends & Order Stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 16 }}>
+        <Card>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
+            <div>
+              <div style={{ fontFamily: "'Prata', serif", fontSize: 16, color: C.ink, WebkitTextStroke: "0.3px " + C.ink }}>
+                Sales Trends
+              </div>
+              <div style={{ color: C.inkSoft, fontSize: 11.5, marginTop: 2 }}>Monthly performance overview</div>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontFamily: "'Prata', serif", fontSize: 22, color: C.ink, WebkitTextStroke: "0.4px " + C.ink }}>
+                {salesTrend[salesTrend.length - 1].value}K
+              </div>
+              <div style={{ color: C.green, fontSize: 11.5, fontWeight: 700, marginTop: 2 }}>
+                + {(((salesTrend[salesTrend.length - 1].value - salesTrend[salesTrend.length - 2].value) / salesTrend[salesTrend.length - 2].value) * 100).toFixed(1)}% than last period
+              </div>
+            </div>
+          </div>
+
+          <ResponsiveContainer width="100%" height={200}>
+            <AreaChart data={salesTrend} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+              <defs>
+                <linearGradient id="salesGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={C.void} stopOpacity={0.35} />
+                  <stop offset="95%" stopColor={C.void} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid vertical={false} stroke={C.hair} strokeDasharray="4 4" />
+              <XAxis dataKey="month" tick={{ fontSize: 10, fill: C.inkSoft }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: C.inkSoft }} axisLine={false} tickLine={false} />
+              <Tooltip />
+              <Area
+                type="monotone"
+                dataKey="value"
+                stroke={C.void}
+                strokeWidth={2.5}
+                fill="url(#salesGradient)"
+                dot={{ r: 3, fill: C.void, strokeWidth: 0 }}
+                activeDot={{ r: 5, fill: C.void }}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </Card>
+
+        <Card>
+          <SectionTitle>Order &amp; Cancellation Stats</SectionTitle>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {orderStats.map((s) => (
+              <div key={s.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 13.5, color: C.ink, fontWeight: 600 }}>{s.label}</span>
+                <span style={{ fontSize: 15, fontWeight: 700, color: s.color }}>{s.value}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      {/* Layer 4 — Payment Method Analysis, Revenue & Profit Summary */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <Card>
           <SectionTitle>Payment Method Analysis</SectionTitle>
           <ResponsiveContainer width="100%" height={190}>
             <PieChart>
-              <Pie
-                data={paymentMethods}
-                dataKey="value"
-                nameKey="name"
-                innerRadius={0}
-                outerRadius={80}
-              >
+              <Pie data={paymentMethods} dataKey="value" nameKey="name" innerRadius={0} outerRadius={80}>
                 {paymentMethods.map((entry, i) => (
                   <Cell key={i} fill={entry.color} />
                 ))}
@@ -628,34 +668,10 @@ function DashboardPage() {
               <Tooltip />
             </PieChart>
           </ResponsiveContainer>
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 10,
-              marginTop: 4,
-            }}
-          >
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 4 }}>
             {paymentMethods.map((p) => (
-              <div
-                key={p.name}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  fontSize: 11.5,
-                  color: C.inkSoft,
-                }}
-              >
-                <span
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: 2,
-                    background: p.color,
-                    display: "inline-block",
-                  }}
-                />
+              <div key={p.name} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: C.inkSoft }}>
+                <span style={{ width: 8, height: 8, borderRadius: 2, background: p.color, display: "inline-block" }} />
                 {p.name} {p.value}%
               </div>
             ))}
@@ -663,66 +679,16 @@ function DashboardPage() {
         </Card>
 
         <Card>
-          <SectionTitle>Sales Trends</SectionTitle>
-          <ResponsiveContainer width="100%" height={190}>
-            <LineChart data={salesTrend}>
-              <CartesianGrid vertical={false} stroke={C.hair} />
-              <XAxis
-                dataKey="month"
-                tick={{ fontSize: 10, fill: C.inkSoft }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis
-                tick={{ fontSize: 11, fill: C.inkSoft }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <Tooltip />
-              <Line
-                type="monotone"
-                dataKey="value"
-                stroke={C.azure}
-                strokeWidth={2.5}
-                dot={{ r: 3 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </Card>
-
-        <Card>
           <SectionTitle>Revenue &amp; Profit Summary</SectionTitle>
           <div style={{ marginBottom: 18 }}>
-            <div
-              style={{ color: C.inkSoft, fontSize: 12.5, fontWeight: 600 }}
-            >
-              Total Revenue
-            </div>
-            <div
-              style={{
-                fontFamily: "'Prata', serif",
-                fontSize: 22,
-                color: C.green,
-                WebkitTextStroke: "0.4px " + C.green,
-              }}
-            >
+            <div style={{ color: C.inkSoft, fontSize: 12.5, fontWeight: 600 }}>Total Revenue</div>
+            <div style={{ fontFamily: "'Prata', serif", fontSize: 22, color: C.green, WebkitTextStroke: "0.4px " + C.green }}>
               ₱ 12,324.21 ↗
             </div>
           </div>
           <div>
-            <div
-              style={{ color: C.inkSoft, fontSize: 12.5, fontWeight: 600 }}
-            >
-              Estimated Profit
-            </div>
-            <div
-              style={{
-                fontFamily: "'Prata', serif",
-                fontSize: 22,
-                color: C.green,
-                WebkitTextStroke: "0.4px " + C.green,
-              }}
-            >
+            <div style={{ color: C.inkSoft, fontSize: 12.5, fontWeight: 600 }}>Estimated Profit</div>
+            <div style={{ fontFamily: "'Prata', serif", fontSize: 22, color: C.green, WebkitTextStroke: "0.4px " + C.green }}>
               ₱ 3,862.37 ↗
             </div>
           </div>
@@ -748,23 +714,13 @@ function DashboardPage() {
             zIndex: 100,
           }}
         >
-          <span
-            style={{
-              background: C.green,
-              borderRadius: "50%",
-              width: 20,
-              height: 20,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 12,
-            }}
-          >
+          <span style={{ background: C.green, borderRadius: "50%", width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12 }}>
             ✓
           </span>
           Data exported successfully
         </div>
       )}
+      </div>
     </div>
   );
 }
@@ -782,26 +738,10 @@ function CashierPage() {
 }
 
 const PAGES = {
-  dashboard: {
-    title: "Sales Overview",
-    subtitle: "Track revenue, orders and guest activity",
-    Comp: DashboardPage,
-  },
-  frontdesk: {
-    title: "Reservations",
-    subtitle: "Manage today's tables and bookings",
-    Comp: FrontDeskPage,
-  },
-  kitchen: {
-    title: "Kitchen",
-    subtitle: "Order queue and preparation status",
-    Comp: KitchenPage,
-  },
-  cashier: {
-    title: "Cashier",
-    subtitle: "Review and validate payments",
-    Comp: CashierPage,
-  },
+  dashboard: { Comp: DashboardPage },
+  frontdesk: { Comp: FrontDeskPage },
+  kitchen: { Comp: KitchenPage },
+  cashier: { Comp: CashierPage },
 };
 
 export default function EurasiaAdmin() {
@@ -822,6 +762,7 @@ export default function EurasiaAdmin() {
         <div style={{ display: "flex" }}>
           <Sidebar active={active} setActive={setActive} />
           <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+            <Topbar setActive={setActive} />
             <div style={{ flex: 1, overflow: "auto" }}>
               <Page />
             </div>

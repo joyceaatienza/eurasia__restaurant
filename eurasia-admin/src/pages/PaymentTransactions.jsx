@@ -135,6 +135,12 @@ function ValidateModal({ transaction, onClose, onConfirm, onFail, onUpdateTable 
 export default function PaymentTransactions({ embedded = false }) {
   const [transactions, setTransactions] = useState(INITIAL_TRANSACTIONS);
   const [modalTx, setModalTx] = useState(null);
+  const [toast, setToast] = useState("");
+
+  const showToast = (message) => {
+    setToast(message);
+    setTimeout(() => setToast(""), 2500);
+  };
 
   const pendingCount = transactions.filter((t) => t.status === "Pending").length;
   const completedCount = transactions.filter((t) => t.status === "Completed").length;
@@ -142,11 +148,13 @@ export default function PaymentTransactions({ embedded = false }) {
   const handleConfirm = (id) => {
     setTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, status: "Completed" } : t)));
     setModalTx(null);
+    showToast(`Payment #${id} confirmed successfully`);
   };
 
   const handleFail = (id) => {
     setTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, status: "Failed" } : t)));
     setModalTx(null);
+    showToast(`Payment #${id} marked as failed`);
   };
 
   const handleUpdateTable = (id, value) => {
@@ -229,6 +237,32 @@ export default function PaymentTransactions({ embedded = false }) {
         onFail={handleFail}
         onUpdateTable={handleUpdateTable}
       />
+
+      {toast && (
+        <div
+          className="font-[Prata]"
+          style={{
+            position: "fixed",
+            bottom: 28,
+            right: 28,
+            background: "#1d080f",
+            color: "#fff",
+            padding: "14px 20px",
+            borderRadius: 10,
+            boxShadow: "0 6px 20px rgba(0,0,0,0.2)",
+            fontSize: 13.5,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            zIndex: 100,
+          }}
+        >
+          <span style={{ background: "#296c39", borderRadius: "50%", width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12 }}>
+            ✓
+          </span>
+          {toast}
+        </div>
+      )}
     </div>
   );
 }

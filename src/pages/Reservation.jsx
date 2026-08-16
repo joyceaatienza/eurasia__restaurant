@@ -10,6 +10,24 @@ const DOWNPAYMENT = {
   event: 5000,
 }
 
+const PAYMENT_ACCOUNTS = {
+  GCash: {
+    qrPlaceholder: true,
+    accountName: "EURASIA RESTAURANT",
+    accountNumber: "0917 012 4998",
+  },
+  Paymaya: {
+    qrPlaceholder: true,
+    accountName: "EURASIA RESTAURANT",
+    accountNumber: "0917 012 4998",
+  },
+  "Bank Transfer": {
+    qrPlaceholder: false,
+    accountName: "Eurasia Restaurant Corp.",
+    accountNumber: "BDO • 0012 3456 7890",
+  },
+};
+
 function buildCalendar(year, month) {
   const firstDay = new Date(year, month, 1).getDay()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
@@ -596,7 +614,7 @@ function Reservation() {
                     </p>
 
                     <div className="grid grid-cols-2 gap-2">
-  {["GCash", "Paymaya", "Bank Transfer", "Cash"].map((method) => (
+                      {["GCash", "Paymaya", "Bank Transfer", "Cash"].map((method) => (
                         <button
                           key={method}
                           type="button"
@@ -614,32 +632,67 @@ function Reservation() {
                     {!paymentMethod && (
                       <p className="text-xs text-red-500 font-[Prata] mt-2">Please select a downpayment method.</p>
                     )}
+
+                    {/* Payment details — appears after selecting GCash, Paymaya, or Bank Transfer */}
+                    {paymentMethod && PAYMENT_ACCOUNTS[paymentMethod] && (
+                      <div className="mt-4 bg-[#f7f5f0] rounded-lg p-4">
+                        <p className="text-xs font-[Prata] text-neutral-600 mb-3">
+                          Send your Php. {(tab === "event" ? DOWNPAYMENT.event : DOWNPAYMENT.table).toLocaleString()} downpayment to:
+                        </p>
+
+                        <div className="flex items-center gap-4">
+                          {PAYMENT_ACCOUNTS[paymentMethod].qrPlaceholder && (
+                            <div className="w-20 h-20 shrink-0 bg-white rounded-md border border-dashed border-neutral-300 flex items-center justify-center text-[9px] text-neutral-400 text-center font-[Prata] leading-tight">
+                              QR Code
+                            </div>
+                          )}
+                          <div className="text-xs font-[Prata]">
+                            <div className="text-neutral-500">Account Name</div>
+                            <div className="text-[#1d080f] font-bold mb-2">{PAYMENT_ACCOUNTS[paymentMethod].accountName}</div>
+                            <div className="text-neutral-500">{paymentMethod === "Bank Transfer" ? "Account Number" : "Number"}</div>
+                            <div className="text-[#1d080f] font-bold">{PAYMENT_ACCOUNTS[paymentMethod].accountNumber}</div>
+                          </div>
+                        </div>
+
+                        <p className="text-[11px] text-neutral-400 font-[Prata] mt-3 leading-relaxed">
+                          After sending, take a screenshot of your confirmation. The cashier will verify it once you arrive.
+                        </p>
+                      </div>
+                    )}
+
+                    {paymentMethod === "Cash" && (
+                      <div className="mt-4 bg-[#f7f5f0] rounded-lg p-4">
+                        <p className="text-xs font-[Prata] text-neutral-600 leading-relaxed">
+                          Please settle your downpayment in cash upon arrival at the restaurant.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex gap-4 mt-8 max-w-md">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        document.getElementById('reservation-form')?.reset()
+                        setSelectedTable("")
+                        setSelectedTime("")
+                        setPaymentMethod("")
+                        setThemeImagePreview("")
+                      }}
+                      className="flex-1 bg-[#c0392b] text-white font-[Prata] font-bold py-3.5 rounded-full hover:opacity-90 transition"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      form="reservation-form"
+                      disabled={tab === "table" && !selectedTable}
+                      className="flex-1 bg-[#1d080f] text-white font-[Prata] font-bold py-3.5 rounded-full hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Confirm Reservation
+                    </button>
                   </div>
                 </form>
-              </div>
-
-              <div className="flex gap-4 mt-8 max-w-md">
-                <button
-                  type="button"
-                  onClick={() => {
-                    document.getElementById('reservation-form')?.reset()
-                    setSelectedTable("")
-                    setSelectedTime("")
-                    setPaymentMethod("")
-                    setThemeImagePreview("")
-                  }}
-                  className="flex-1 bg-[#c0392b] text-white font-[Prata] font-bold py-3.5 rounded-full hover:opacity-90 transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  form="reservation-form"
-                  disabled={tab === "table" && !selectedTable}
-                  className="flex-1 bg-[#1d080f] text-white font-[Prata] font-bold py-3.5 rounded-full hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Confirm Reservation
-                </button>
               </div>
             </>
           )}

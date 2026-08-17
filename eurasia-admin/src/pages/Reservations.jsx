@@ -85,7 +85,7 @@ function hourLabel(h) {
 }
 function to12h(time24) {
   const [h, m] = time24.split(":").map(Number);
-  const period = h >= 12 ? "PM" : "AM";
+  const period = h >= 12 ? "pm" : "am";
   const hour12 = h % 12 === 0 ? 12 : h % 12;
   return `${hour12}:${String(m).padStart(2, "0")} ${period}`;
 }
@@ -349,6 +349,68 @@ function MonthView({ selectedDate, reservations }) {
 }
 
 /* ---------------------------------------------------------------- */
+/* History view — completed reservations, table & event              */
+/* ---------------------------------------------------------------- */
+function HistoryView({ reservations }) {
+  const completed = [...reservations]
+    .filter((r) => r.status === "Completed")
+    .sort((a, b) => (a.date + a.time < b.date + b.time ? 1 : -1));
+
+  return (
+    <Card style={{ padding: 0, overflow: "hidden" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "20px 22px 0" }}>
+        <SectionTitle>Completed Reservations</SectionTitle>
+        <span style={{ background: C.void, color: "#f5e9d8", fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, marginTop: -14, fontFamily: FONT }}>
+          {completed.length}
+        </span>
+      </div>
+
+      {completed.length === 0 ? (
+        <div style={{ color: C.inkSoft, fontSize: 13.5, textAlign: "center", padding: "30px 0", fontFamily: FONT }}>
+          No completed reservations yet.
+        </div>
+      ) : (
+        <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: FONT, tableLayout: "fixed" }}>
+          <colgroup>
+            <col style={{ width: "16%" }} />
+            <col style={{ width: "14%" }} />
+            <col style={{ width: "24%" }} />
+            <col style={{ width: "16%" }} />
+            <col style={{ width: "12%" }} />
+            <col style={{ width: "18%" }} />
+          </colgroup>
+          <thead>
+            <tr style={{ textAlign: "left", fontSize: 12, color: C.inkSoft }}>
+              {["Date", "Time", "Name", "Table", "Pax", "Type"].map((h) => (
+                <th key={h} style={{ padding: "10px 22px", borderBottom: `1px solid ${C.hair}`, fontWeight: 700, textAlign: "left" }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {completed.map((r) => (
+              <tr key={r.id} style={{ fontSize: 13.5 }}>
+                <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, textAlign: "left" }}>{r.date}</td>
+                <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, fontWeight: 700, textAlign: "left" }}>{to12h(r.time)}</td>
+                <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, textAlign: "left" }}>
+                  {r.type === "event" ? r.eventTitle : r.name}
+                </td>
+                <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, color: r.type === "event" ? C.eventBlue : C.ink, fontWeight: r.type === "event" ? 700 : 400, textAlign: "left" }}>
+                  {r.type === "event" ? "Event" : r.table}
+                </td>
+                <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, color: C.inkSoft, textAlign: "left" }}>{r.pax}</td>
+                <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, textAlign: "left" }}>
+                  <Badge tone="green">Completed</Badge>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </Card>
+  );
+}
+
+/* ---------------------------------------------------------------- */
 /* Floor Plan — same table coordinates as the customer-facing page,  */
 /* but colored by live status instead of being selectable            */
 /* ---------------------------------------------------------------- */
@@ -536,6 +598,8 @@ export default function Reservations({ embedded = false }) {
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekEnd.getDate() + 6);
 
+  const isHistory = range === "History";
+
   return (
     <div style={{ fontFamily: FONT, minHeight: "100vh", background: C.canvas }}>
       <style>{`${FONT_IMPORT}
@@ -549,20 +613,24 @@ export default function Reservations({ embedded = false }) {
 </div>
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span style={{ letterSpacing: 1, color: "#1d080f", fontSize: 13, fontFamily: FONT, WebkitTextStroke: "0.5px #1d080f" }}>{formatMonthLabel(selectedDate)}</span>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff", padding: "8px 14px", borderRadius: 10, fontSize: 13, fontWeight: 600, boxShadow: "0 1px 2px rgba(0,0,0,0.06)", fontFamily: FONT }}>
-              {range === "Week" ? `${formatDisplayDate(weekStart)} - ${formatDisplayDate(weekEnd)}` : formatDisplayDate(selectedDate)}
+          {!isHistory ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ letterSpacing: 1, color: "#1d080f", fontSize: 13, fontFamily: FONT, WebkitTextStroke: "0.5px #1d080f" }}>{formatMonthLabel(selectedDate)}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff", padding: "8px 14px", borderRadius: 10, fontSize: 13, fontWeight: 600, boxShadow: "0 1px 2px rgba(0,0,0,0.06)", fontFamily: FONT }}>
+                {range === "Week" ? `${formatDisplayDate(weekStart)} - ${formatDisplayDate(weekEnd)}` : formatDisplayDate(selectedDate)}
+              </div>
+              <button onClick={() => setSelectedDate(shiftDate(selectedDate, range, "prev"))} style={{ border: "none", background: "#fff", borderRadius: 8, width: 32, height: 32, boxShadow: "0 1px 2px rgba(0,0,0,0.08)", cursor: "pointer" }}>
+    <ChevronLeft size={15} style={{ margin: "auto" }} />
+  </button>
+  <button onClick={() => setSelectedDate(shiftDate(selectedDate, range, "next"))} style={{ border: "none", background: "#fff", borderRadius: 8, width: 32, height: 32, boxShadow: "0 1px 2px rgba(0,0,0,0.08)", cursor: "pointer" }}>
+    <ChevronRight size={15} style={{ margin: "auto" }} />
+  </button>
             </div>
-            <button onClick={() => setSelectedDate(shiftDate(selectedDate, range, "prev"))} style={{ border: "none", background: "#fff", borderRadius: 8, width: 32, height: 32, boxShadow: "0 1px 2px rgba(0,0,0,0.08)", cursor: "pointer" }}>
-  <ChevronLeft size={15} style={{ margin: "auto" }} />
-</button>
-<button onClick={() => setSelectedDate(shiftDate(selectedDate, range, "next"))} style={{ border: "none", background: "#fff", borderRadius: 8, width: 32, height: 32, boxShadow: "0 1px 2px rgba(0,0,0,0.08)", cursor: "pointer" }}>
-  <ChevronRight size={15} style={{ margin: "auto" }} />
-</button>
-          </div>
+          ) : (
+            <div />
+          )}
           <div style={{ display: "flex", gap: 6, background: "#fff", padding: 4, borderRadius: 10, boxShadow: "0 1px 2px rgba(0,0,0,0.06)" }}>
-            {["Day", "Week", "Month"].map((r) => (
+  {(embedded ? ["Day", "Week", "Month"] : ["Day", "Week", "Month", "History"]).map((r) => (
               <button
                 key={r}
                 onClick={() => setRange(r)}
@@ -587,6 +655,7 @@ export default function Reservations({ embedded = false }) {
         {range === "Day" && <DayView selectedISO={selectedISO} reservations={reservations} markStatus={markStatus} />}
         {range === "Week" && <WeekView selectedDate={selectedDate} reservations={reservations} onOpenDay={openDay} />}
         {range === "Month" && <MonthView selectedDate={selectedDate} reservations={reservations} />}
+        {range === "History" && <HistoryView reservations={reservations} />}
       </div>
     </div>
   );

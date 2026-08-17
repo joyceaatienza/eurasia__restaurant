@@ -3,12 +3,6 @@ import { X, Check, Ban } from "lucide-react";
 import StaffHeader from "../components/StaffHeader";
 import { getPayments, setPaymentStatus, updatePaymentTable } from "../utils/paymentsStore";
 
-const INITIAL_TRANSACTIONS = [
-  { id: "01", customer: "John Doe", table: "T7", method: "GCash", amount: 1756, date: "June 8, 2026", time: "2:06pm", status: "Completed" },
-  { id: "02", customer: "Jane Smith", table: "T8", method: "GCash", amount: 1756, date: "June 8, 2026", time: "2:29pm", status: "Pending" },
-  { id: "03", customer: "Juan Dela Cruz", table: "T5", method: "Bank Transfer", amount: 1756, date: "June 8, 2026", time: "2:40pm", status: "Pending" },
-];
-
 function StatCard({ label, value }) {
   return (
     <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
@@ -140,6 +134,7 @@ export default function PaymentTransactions({ embedded = false }) {
   }, []);
   const [modalTx, setModalTx] = useState(null);
   const [toast, setToast] = useState("");
+  const [view, setView] = useState("pending"); // pending | history
 
   const showToast = (message) => {
     setToast(message);
@@ -149,22 +144,26 @@ export default function PaymentTransactions({ embedded = false }) {
   const pendingCount = transactions.filter((t) => t.status === "Pending").length;
   const completedCount = transactions.filter((t) => t.status === "Completed").length;
 
-  const handleConfirm = (id) => {
-  setTransactions(setPaymentStatus(id, "Completed"));
-  setModalTx(null);
-  showToast(`Payment #${id} confirmed successfully`);
-};
+  const historyTransactions = [...transactions]
+    .filter((t) => t.status === "Completed" || t.status === "Failed")
+    .sort((a, b) => (a.date + a.time < b.date + b.time ? 1 : -1));
 
-const handleFail = (id) => {
-  setTransactions(setPaymentStatus(id, "Failed"));
-  setModalTx(null);
-  showToast(`Payment #${id} marked as failed`);
-};
+  const handleConfirm = (id) => {
+    setTransactions(setPaymentStatus(id, "Completed"));
+    setModalTx(null);
+    showToast(`Payment #${id} confirmed successfully`);
+  };
+
+  const handleFail = (id) => {
+    setTransactions(setPaymentStatus(id, "Failed"));
+    setModalTx(null);
+    showToast(`Payment #${id} marked as failed`);
+  };
 
   const handleUpdateTable = (id, value) => {
-  setTransactions(updatePaymentTable(id, value));
-  setModalTx((prev) => (prev && prev.id === id ? { ...prev, table: value } : prev));
-};
+    setTransactions(updatePaymentTable(id, value));
+    setModalTx((prev) => (prev && prev.id === id ? { ...prev, table: value } : prev));
+  };
 
   return (
     <div className="min-h-screen bg-[#f0eff3] font-[Prata] text-[#1d080f] text-left">
@@ -178,58 +177,105 @@ const handleFail = (id) => {
           Payment Transactions
         </h1>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-6">
           <StatCard label="Pending Payments" value={pendingCount} />
           <StatCard label="Today's Transactions" value={transactions.length} />
           <StatCard label="Completed Payments" value={completedCount} />
         </div>
 
-        {transactions.filter((t) => t.status === "Pending").length === 0 ? (
-  <div className="bg-white rounded-xl p-12 text-center text-gray-400 font-[Prata] text-sm shadow-sm border border-gray-100">
-    No payment transactions yet.
-  </div>
-) : (
-  <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
-    <table className="w-full text-left">
-      <thead>
-        <tr className="text-xs text-gray-500 border-b border-gray-100">
-          {["Order #", "Customer", "Table", "Method", "Amount", "Status", "Date & Time", "Actions"].map((h) => (
-            <th key={h} className="px-6 py-4 font-[Prata] font-normal">{h}</th>
+        {/* Tabs */}
+        <div className="flex gap-1.5 bg-white p-1 rounded-lg w-fit mb-6 shadow-sm border border-gray-100">
+          {[
+            { key: "pending", label: "Pending" },
+            { key: "history", label: "History" },
+          ].map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setView(t.key)}
+              className={`px-4 py-2 rounded-md text-sm font-[Prata] transition ${
+                view === t.key ? "bg-[#1d080f] text-white" : "text-[#1d080f] hover:bg-gray-50"
+              }`}
+            >
+              {t.label}
+            </button>
           ))}
-        </tr>
-      </thead>
-      <tbody>
-        {transactions.filter((t) => t.status === "Pending").map((t) => (
-                  <tr key={t.id} className="border-b border-gray-100 last:border-0 text-sm">
-                    <td className="px-6 py-4" style={{ WebkitTextStroke: "0.3px #1d080f" }}>{t.id}</td>
-                    <td className="px-6 py-4">{t.customer}</td>
-                    <td className="px-6 py-4">{t.table}</td>
-                    <td className="px-6 py-4">{t.method}</td>
-                    <td className="px-6 py-4">Php. {t.amount.toLocaleString()}</td>
-                    <td className="px-6 py-4"><StatusBadge status={t.status} /></td>
-                    <td className="px-6 py-4 text-gray-500">
-                      {t.date}<br />{t.time}
-                    </td>
-                    <td className="px-6 py-4">
-                      {t.status === "Pending" ? (
+        </div>
+
+        {view === "pending" && (
+          transactions.filter((t) => t.status === "Pending").length === 0 ? (
+            <div className="bg-white rounded-xl p-12 text-center text-gray-400 font-[Prata] text-sm shadow-sm border border-gray-100">
+              No payment transactions yet.
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="text-xs text-gray-500 border-b border-gray-100">
+                    {["Order #", "Customer", "Table", "Method", "Amount", "Status", "Date & Time", "Actions"].map((h) => (
+                      <th key={h} className="px-6 py-4 font-[Prata] font-normal">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {transactions.filter((t) => t.status === "Pending").map((t) => (
+                    <tr key={t.id} className="border-b border-gray-100 last:border-0 text-sm">
+                      <td className="px-6 py-4" style={{ WebkitTextStroke: "0.3px #1d080f" }}>{t.id}</td>
+                      <td className="px-6 py-4">{t.customer}</td>
+                      <td className="px-6 py-4">{t.table}</td>
+                      <td className="px-6 py-4">{t.method}</td>
+                      <td className="px-6 py-4">Php. {t.amount.toLocaleString()}</td>
+                      <td className="px-6 py-4"><StatusBadge status={t.status} /></td>
+                      <td className="px-6 py-4 text-gray-500">
+                        {t.date}<br />{t.time}
+                      </td>
+                      <td className="px-6 py-4">
                         <button
                           onClick={() => setModalTx(t)}
                           className="px-4 py-1.5 rounded-md bg-[#1d080f] text-white text-xs hover:bg-[#3a1420] transition"
                         >
                           Validate
                         </button>
-                      ) : t.status === "Completed" ? (
-                        <button className="px-4 py-1.5 rounded-md bg-[#e0e0e0] text-[#555] text-xs hover:bg-gray-300 transition">
-                          Refund
-                        </button>
-                      ) : (
-                        <span className="text-xs text-gray-400">—</span>
-                      )}
-                    </td>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        )}
+
+        {view === "history" && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
+            {historyTransactions.length === 0 ? (
+              <div className="p-12 text-center text-gray-400 font-[Prata] text-sm">
+                No payment history yet.
+              </div>
+            ) : (
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="text-xs text-gray-500 border-b border-gray-100">
+                    {["Order #", "Customer", "Table", "Method", "Amount", "Status", "Date & Time"].map((h) => (
+                      <th key={h} className="px-6 py-4 font-[Prata] font-normal">{h}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {historyTransactions.map((t) => (
+                    <tr key={t.id} className="border-b border-gray-100 last:border-0 text-sm">
+                      <td className="px-6 py-4" style={{ WebkitTextStroke: "0.3px #1d080f" }}>{t.id}</td>
+                      <td className="px-6 py-4">{t.customer}</td>
+                      <td className="px-6 py-4">{t.table}</td>
+                      <td className="px-6 py-4">{t.method}</td>
+                      <td className="px-6 py-4">Php. {t.amount.toLocaleString()}</td>
+                      <td className="px-6 py-4"><StatusBadge status={t.status} /></td>
+                      <td className="px-6 py-4 text-gray-500">
+                        {t.date}<br />{t.time}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         )}
       </main>

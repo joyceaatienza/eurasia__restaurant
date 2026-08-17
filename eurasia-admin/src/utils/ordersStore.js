@@ -7,6 +7,7 @@ function seedData() {
       customer: "John Doe",
       table: "Table 2",
       status: "Preparing",
+      date: "June 8, 2026",
       time: "12:47pm",
       total: 1756,
       items: [
@@ -21,6 +22,7 @@ function seedData() {
       customer: "Jane Smith",
       table: "Table 8",
       status: "Waiting",
+      date: "June 8, 2026",
       time: "1:34pm",
       total: 1178,
       items: [
@@ -33,6 +35,7 @@ function seedData() {
       customer: "Juan Dela Cruz",
       table: "Table 5",
       status: "Waiting",
+      date: "June 8, 2026",
       time: "1:45pm",
       total: 876,
       items: [
@@ -59,6 +62,7 @@ export function addOrder(order) {
   const newOrder = {
     id: String(current.length + 1).padStart(2, "0"),
     status: "Waiting",
+    date: new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
     time: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }).toLowerCase(),
     ...order,
     items: order.items.map((item, i) => ({ id: i + 1, checked: false, ...item })),

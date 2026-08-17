@@ -36,6 +36,15 @@ import PaymentTransactions from "./PaymentTransactions";
 import SettingsModal from "../components/SettingsModal";
 import { History as HistoryIcon } from "lucide-react";
 import { getPayments } from "../utils/paymentsStore";
+import { getReservations } from "../utils/reservationsStore";
+import { getOrders } from "../utils/ordersStore";
+
+function to12h(time24) {
+  const [h, m] = time24.split(":").map(Number);
+  const period = h >= 12 ? "pm" : "am";
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return `${hour12}:${String(m).padStart(2, "0")} ${period}`;
+}
 
 const C = {
   void: "#1d080f",
@@ -191,6 +200,29 @@ function SectionTitle({ children }) {
   );
 }
 
+function Badge({ tone = "green", children }) {
+  const tones = {
+    green: { background: "#e6f4ea", color: C.green },
+    red: { background: "#fbeaea", color: C.red },
+    amber: { background: "#fdf3dd", color: "#a06a00" },
+  };
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        padding: "4px 10px",
+        borderRadius: 999,
+        fontSize: 11.5,
+        fontWeight: 700,
+        ...tones[tone],
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
 const NAV = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { key: "frontdesk", label: "Front Desk", icon: CalendarCheck2 },
@@ -297,62 +329,93 @@ function Sidebar({ active, setActive, collapsed }) {
   };
 
   return (
-    <aside
-      style={{
-        width: collapsed ? 64 : 240,
-        minWidth: collapsed ? 64 : 240,
-        background: C.void,
-        display: "flex",
-        flexDirection: "column",
-        padding: collapsed ? "24px 12px" : "22px 16px",
-        borderTopRightRadius: 24,
-        transition:
-          "width 0.25s ease, min-width 0.25s ease, padding 0.25s ease",
-        overflow: "hidden",
-      }}
-    >
+   <aside
+  style={{
+    width: collapsed ? 64 : 240,
+    minWidth: collapsed ? 64 : 240,
+    height: "100vh",
+    position: "sticky",
+    top: 0,
+    alignSelf: "flex-start",
+    background: C.void,
+    display: "flex",
+    flexDirection: "column",
+    padding: collapsed ? "24px 12px" : "22px 16px",
+    borderTopRightRadius: 24,
+    transition:
+      "width 0.25s ease, min-width 0.25s ease, padding 0.25s ease",
+  }}
+>
       <nav style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {NAV.map((item) => {
-          const Icon = item.icon;
-          const isActive = active === item.key;
-          return (
-            <button
-              key={item.key}
-              onClick={() => setActive(item.key)}
-              title={collapsed ? item.label : undefined}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                padding: collapsed ? "12px 0" : "11px 14px",
-                justifyContent: collapsed ? "center" : "flex-start",
-                borderRadius: 10,
-                border: "none",
-                cursor: "pointer",
-                background: isActive ? C.flame : "transparent",
-                color: isActive ? "#ffffff" : "rgba(245,233,216,0.75)",
-                fontFamily: "'Prata', serif",
-                fontSize: 14,
-                fontWeight: 600,
-                textAlign: "left",
-                transition: "all 0.15s ease",
-                whiteSpace: "nowrap",
-              }}
-            >
-              <Icon size={17} style={{ flexShrink: 0 }} />
-              <span
-                style={{
-                  opacity: collapsed ? 0 : 1,
-                  width: collapsed ? 0 : "auto",
-                  overflow: "hidden",
-                  transition: "opacity 0.2s ease",
-                }}
-              >
-                {item.label}
-              </span>
-            </button>
-          );
-        })}
+  const Icon = item.icon;
+  const isActive = active === item.key;
+  return (
+    <div key={item.key} style={{ position: "relative" }} className="sidebar-nav-item">
+      <button
+        onClick={() => setActive(item.key)}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          padding: collapsed ? "12px 0" : "11px 14px",
+          justifyContent: collapsed ? "center" : "flex-start",
+          borderRadius: 10,
+          border: "none",
+          cursor: "pointer",
+          background: isActive ? C.flame : "transparent",
+          color: isActive ? "#ffffff" : "rgba(245,233,216,0.75)",
+          fontFamily: "'Prata', serif",
+          fontSize: 14,
+          fontWeight: 600,
+          textAlign: "left",
+          transition: "all 0.15s ease",
+          whiteSpace: "nowrap",
+          width: "100%",
+        }}
+      >
+        <Icon size={17} style={{ flexShrink: 0 }} />
+        <span
+          style={{
+            opacity: collapsed ? 0 : 1,
+            width: collapsed ? 0 : "auto",
+            overflow: "hidden",
+            transition: "opacity 0.2s ease",
+          }}
+        >
+          {item.label}
+        </span>
+      </button>
+
+      {collapsed && (
+        <span
+          className="sidebar-tooltip"
+          style={{
+            position: "absolute",
+            left: "calc(100% + 10px)",
+            top: "50%",
+            transform: "translateY(-50%)",
+            background: C.void,
+            color: "#f5e9d8",
+            fontFamily: "'Prata', serif",
+            fontSize: 12.5,
+            fontWeight: 600,
+            padding: "6px 12px",
+            borderRadius: 6,
+            whiteSpace: "nowrap",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+            opacity: 0,
+            pointerEvents: "none",
+            transition: "opacity 0.15s ease",
+            zIndex: 50,
+          }}
+        >
+          {item.label}
+        </span>
+      )}
+    </div>
+  );
+})}
       </nav>
 
       <div
@@ -415,21 +478,23 @@ function Sidebar({ active, setActive, collapsed }) {
           )}
         </button>
 
-        {menuOpen && !collapsed && (
-          <div
-            style={{
-              position: "absolute",
-              bottom: "100%",
-              left: 8,
-              right: 8,
-              marginBottom: 6,
-              background: "#fff",
-              borderRadius: 10,
-              boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
-              overflow: "hidden",
-              zIndex: 20,
-            }}
-          >
+        {menuOpen && (
+  <div
+    style={{
+      position: "absolute",
+      bottom: collapsed ? "auto" : "100%",
+      top: collapsed ? 0 : "auto",
+      left: collapsed ? "calc(100% + 10px)" : 8,
+      right: collapsed ? "auto" : 8,
+      marginBottom: collapsed ? 0 : 6,
+      width: collapsed ? 160 : "auto",
+      background: "#fff",
+      borderRadius: 10,
+      boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
+      overflow: "hidden",
+      zIndex: 20,
+    }}
+  >
             <button
               onClick={() => {
                 setShowSettings(true);
@@ -635,7 +700,6 @@ function DashboardPage() {
   const [period, setPeriod] = useState("Today");
   const [showExportToast, setShowExportToast] = useState(false);
 
-  // 🟢 INILIPAT SA LOOB NG COMPONENT ANG TREND DATA COMPUTATION
   const trendData = salesTrendByPeriod[period] || salesTrendByPeriod.Year;
 
   const handleExport = () => {
@@ -675,7 +739,6 @@ function DashboardPage() {
           </Btn>
         </div>
 
-        {/* Layer 1 — Revenue, Orders, Discounts, Guests */}
         <div
           style={{
             display: "grid",
@@ -693,7 +756,6 @@ function DashboardPage() {
           <StatCard label="Total Guests" value="164" icon={Users} />
         </div>
 
-        {/* Layer 2 — Category Breakdown, Top Selling Items */}
         <div
           style={{
             display: "grid",
@@ -748,7 +810,6 @@ function DashboardPage() {
           </Card>
         </div>
 
-        {/* Layer 3 — Sales Trends & Order Stats */}
         <div
           style={{
             display: "grid",
@@ -896,7 +957,6 @@ function DashboardPage() {
           </Card>
         </div>
 
-        {/* Layer 4 — Payment Method Analysis, Revenue & Profit Summary */}
         <div
           style={{
             display: "grid",
@@ -1110,7 +1170,7 @@ function HistoryPage() {
                 {completedReservations.map((r) => (
                   <tr key={r.id} style={{ fontSize: 13.5 }}>
                     <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{r.date}</td>
-                    <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{r.time}</td>
+                    <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{to12h(r.time)}</td>
                     <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{r.name}</td>
                     <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{r.table || r.eventTitle}</td>
                     <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{r.pax}</td>
@@ -1130,7 +1190,7 @@ function HistoryPage() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ textAlign: "left", fontSize: 12, color: C.inkSoft }}>
-                  {["Order #", "Customer", "Table", "Total", "Time"].map((h) => (
+                  {["Order #", "Customer", "Table", "Total", "Date & Time"].map((h) => (
                     <th key={h} style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{h}</th>
                   ))}
                 </tr>
@@ -1142,7 +1202,7 @@ function HistoryPage() {
                     <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{o.customer}</td>
                     <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{o.table}</td>
                     <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>Php. {o.total}</td>
-                    <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{o.time}</td>
+                    <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}`, color: C.inkSoft }}>{o.date} · {o.time}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1203,9 +1263,12 @@ export default function EurasiaAdmin() {
   return (
     <div style={{ fontFamily: "'Prata', serif", textAlign: "left" }}>
       <style>{`
-        ${FONT_IMPORT}
-        * { box-sizing: border-box; }
-      `}</style>
+  ${FONT_IMPORT}
+  * { box-sizing: border-box; }
+  .sidebar-nav-item:hover .sidebar-tooltip {
+    opacity: 1 !important;
+  }
+`}</style>
       <div
         style={{ minHeight: "100vh", background: C.canvas, textAlign: "left" }}
       >

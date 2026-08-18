@@ -47,12 +47,15 @@ export default function OrderQueue({ embedded = false }) {
           Order Queue
         </h1>
 
-        {/* Tabs */}
-        <div className="flex gap-1.5 bg-white p-1 rounded-lg w-fit mb-6 shadow-sm border border-gray-100">
-          {[
-            { key: "active", label: "Active Orders" },
-            { key: "history", label: "History" },
-          ].map((t) => (
+       {/* Tabs */}
+<div className="flex gap-1.5 bg-white p-1 rounded-lg w-fit mb-6 shadow-sm border border-gray-100">
+  {(embedded
+    ? [{ key: "active", label: "Active Orders" }]
+    : [
+        { key: "active", label: "Active Orders" },
+        { key: "history", label: "History" },
+      ]
+  ).map((t) => (
             <button
               key={t.key}
               onClick={() => setView(t.key)}

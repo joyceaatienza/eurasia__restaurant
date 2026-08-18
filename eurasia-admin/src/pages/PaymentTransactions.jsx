@@ -184,11 +184,14 @@ export default function PaymentTransactions({ embedded = false }) {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1.5 bg-white p-1 rounded-lg w-fit mb-6 shadow-sm border border-gray-100">
-          {[
-            { key: "pending", label: "Pending" },
-            { key: "history", label: "History" },
-          ].map((t) => (
+<div className="flex gap-1.5 bg-white p-1 rounded-lg w-fit mb-6 shadow-sm border border-gray-100">
+  {(embedded
+    ? [{ key: "pending", label: "Pending" }]
+    : [
+        { key: "pending", label: "Pending" },
+        { key: "history", label: "History" },
+      ]
+  ).map((t) => (
             <button
               key={t.key}
               onClick={() => setView(t.key)}

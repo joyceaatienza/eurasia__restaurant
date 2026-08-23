@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { X, Check, Ban } from "lucide-react";
 import StaffHeader from "../components/StaffHeader";
-import { getPayments, setPaymentStatus, updatePaymentTable } from "../utils/paymentsStore";
+import { ordersApi } from "../services/ordersApi";
 
 function StatCard({ label, value }) {
   return (
@@ -39,10 +39,10 @@ function ValidateModal({ transaction, onClose, onConfirm, onFail, onUpdateTable 
 
   if (!transaction) return null;
 
-  const handleTableChange = (e) => {
-    const value = e.target.value;
-    setTableInput(value);
-    onUpdateTable(transaction.id, value);
+  const handleTableBlur = () => {
+    if (tableInput !== transaction.table) {
+      onUpdateTable(transaction.id, tableInput);
+    }
   };
 
   return (
@@ -79,7 +79,8 @@ function ValidateModal({ transaction, onClose, onConfirm, onFail, onUpdateTable 
             <input
               type="text"
               value={tableInput}
-              onChange={handleTableChange}
+              onChange={(e) => setTableInput(e.target.value)}
+              onBlur={handleTableBlur}
               placeholder="e.g. T7"
               className="text-[#1d080f] text-right border border-gray-300 rounded-md px-2 py-1 text-sm w-24 focus:outline-none focus:ring-1 focus:ring-[#1d080f]"
             />
@@ -92,15 +93,43 @@ function ValidateModal({ transaction, onClose, onConfirm, onFail, onUpdateTable 
             <span className="text-gray-500">Payment Method</span>
             <span className="text-[#1d080f]">{transaction.method}</span>
           </div>
+          {transaction.discount && (
+            <div className="flex justify-between">
+              <span className="text-gray-500">Discount</span>
+              <span className="text-[#1d080f] capitalize">{transaction.discount}</span>
+            </div>
+          )}
           <div className="flex justify-between">
             <span className="text-gray-500">Amount</span>
             <span className="text-[#1d080f]">Php. {transaction.amount.toLocaleString()}</span>
           </div>
         </div>
 
-        <div className="border border-dashed border-gray-300 rounded-lg p-4 text-center text-xs text-gray-500 mb-6">
-          Proof of payment (uploaded by customer)
-        </div>
+        {transaction.receiptImage ? (
+          <a href={transaction.receiptImage} target="_blank" rel="noreferrer">
+            <img
+              src={transaction.receiptImage}
+              alt="Payment receipt"
+              className="w-full max-h-48 object-contain rounded-lg border border-gray-200 mb-4"
+            />
+          </a>
+        ) : (
+          <div className="border border-dashed border-gray-300 rounded-lg p-4 text-center text-xs text-gray-500 mb-4">
+            {transaction.method === "cash" || transaction.method === "Cash"
+              ? "Cash payment — no receipt required."
+              : "No proof of payment uploaded."}
+          </div>
+        )}
+
+        {transaction.discountIdImage && (
+          <a href={transaction.discountIdImage} target="_blank" rel="noreferrer">
+            <img
+              src={transaction.discountIdImage}
+              alt="Discount ID"
+              className="w-full max-h-40 object-contain rounded-lg border border-gray-200 mb-4"
+            />
+          </a>
+        )}
 
         <div className="flex flex-col gap-2">
           <button
@@ -127,14 +156,43 @@ function ValidateModal({ transaction, onClose, onConfirm, onFail, onUpdateTable 
   );
 }
 
+const STATUS_LABEL = { pending: "Pending", verified: "Completed", failed: "Failed" };
+
+function normalizeTransaction(o) {
+  const createdAt = new Date(o.created_at);
+  return {
+    id: o.id,
+    customer: "Guest",
+    table: o.table_number,
+    method: o.payment_method,
+    amount: Number(o.total),
+    status: STATUS_LABEL[o.payment_status] || "Pending",
+    discount: o.discount_type,
+    receiptImage: o.receipt_image,
+    discountIdImage: o.discount_id_image,
+    date: createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+    time: createdAt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
+  };
+}
+
 export default function PaymentTransactions({ embedded = false }) {
   const [transactions, setTransactions] = useState([]);
-  useEffect(() => {
-    setTransactions(getPayments());
-  }, []);
+  const [loading, setLoading] = useState(true);
   const [modalTx, setModalTx] = useState(null);
   const [toast, setToast] = useState("");
-  const [view, setView] = useState("pending"); // pending | history
+  const [view, setView] = useState("pending");
+
+  const loadTransactions = useCallback(() => {
+    setLoading(true);
+    ordersApi.getAll({ today_only: 'true' })
+  .then((data) => setTransactions(data.map(normalizeTransaction)))
+      .catch((err) => console.error("Failed to load transactions:", err))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    loadTransactions();
+  }, [loadTransactions]);
 
   const showToast = (message) => {
     setToast(message);
@@ -148,21 +206,39 @@ export default function PaymentTransactions({ embedded = false }) {
     .filter((t) => t.status === "Completed" || t.status === "Failed")
     .sort((a, b) => (a.date + a.time < b.date + b.time ? 1 : -1));
 
-  const handleConfirm = (id) => {
-    setTransactions(setPaymentStatus(id, "Completed"));
-    setModalTx(null);
-    showToast(`Payment #${id} confirmed successfully`);
+  const handleConfirm = async (id) => {
+    try {
+      await ordersApi.updatePaymentStatus(id, "verified");
+      setTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, status: "Completed" } : t)));
+      setModalTx(null);
+      showToast(`Payment #${id} confirmed successfully`);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to confirm payment. Please try again.");
+    }
   };
 
-  const handleFail = (id) => {
-    setTransactions(setPaymentStatus(id, "Failed"));
-    setModalTx(null);
-    showToast(`Payment #${id} marked as failed`);
+  const handleFail = async (id) => {
+    try {
+      await ordersApi.updatePaymentStatus(id, "failed");
+      setTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, status: "Failed" } : t)));
+      setModalTx(null);
+      showToast(`Payment #${id} marked as failed`);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to update payment. Please try again.");
+    }
   };
 
-  const handleUpdateTable = (id, value) => {
-    setTransactions(updatePaymentTable(id, value));
-    setModalTx((prev) => (prev && prev.id === id ? { ...prev, table: value } : prev));
+  const handleUpdateTable = async (id, value) => {
+    try {
+      await ordersApi.updateTable(id, value);
+      setTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, table: value } : t)));
+      setModalTx((prev) => (prev && prev.id === id ? { ...prev, table: value } : prev));
+    } catch (err) {
+      console.error(err);
+      alert("Failed to update table. Please try again.");
+    }
   };
 
   return (
@@ -183,15 +259,14 @@ export default function PaymentTransactions({ embedded = false }) {
           <StatCard label="Completed Payments" value={completedCount} />
         </div>
 
-        {/* Tabs */}
-<div className="flex gap-1.5 bg-white p-1 rounded-lg w-fit mb-6 shadow-sm border border-gray-100">
-  {(embedded
-    ? [{ key: "pending", label: "Pending" }]
-    : [
-        { key: "pending", label: "Pending" },
-        { key: "history", label: "History" },
-      ]
-  ).map((t) => (
+        <div className="flex gap-1.5 bg-white p-1 rounded-lg w-fit mb-6 shadow-sm border border-gray-100">
+          {(embedded
+            ? [{ key: "pending", label: "Pending" }]
+            : [
+                { key: "pending", label: "Pending" },
+                { key: "history", label: "History" },
+              ]
+          ).map((t) => (
             <button
               key={t.key}
               onClick={() => setView(t.key)}
@@ -204,82 +279,90 @@ export default function PaymentTransactions({ embedded = false }) {
           ))}
         </div>
 
-        {view === "pending" && (
-          transactions.filter((t) => t.status === "Pending").length === 0 ? (
-            <div className="bg-white rounded-xl p-12 text-center text-gray-400 font-[Prata] text-sm shadow-sm border border-gray-100">
-              No payment transactions yet.
-            </div>
-          ) : (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="text-xs text-gray-500 border-b border-gray-100">
-                    {["Order #", "Customer", "Table", "Method", "Amount", "Status", "Date & Time", "Actions"].map((h) => (
-                      <th key={h} className="px-6 py-4 font-[Prata] font-normal">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {transactions.filter((t) => t.status === "Pending").map((t) => (
-                    <tr key={t.id} className="border-b border-gray-100 last:border-0 text-sm">
-                      <td className="px-6 py-4" style={{ WebkitTextStroke: "0.3px #1d080f" }}>{t.id}</td>
-                      <td className="px-6 py-4">{t.customer}</td>
-                      <td className="px-6 py-4">{t.table}</td>
-                      <td className="px-6 py-4">{t.method}</td>
-                      <td className="px-6 py-4">Php. {t.amount.toLocaleString()}</td>
-                      <td className="px-6 py-4"><StatusBadge status={t.status} /></td>
-                      <td className="px-6 py-4 text-gray-500">
-                        {t.date}<br />{t.time}
-                      </td>
-                      <td className="px-6 py-4">
-                        <button
-                          onClick={() => setModalTx(t)}
-                          className="px-4 py-1.5 rounded-md bg-[#1d080f] text-white text-xs hover:bg-[#3a1420] transition"
-                        >
-                          Validate
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )
-        )}
-
-        {view === "history" && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
-            {historyTransactions.length === 0 ? (
-              <div className="p-12 text-center text-gray-400 font-[Prata] text-sm">
-                No payment history yet.
-              </div>
-            ) : (
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="text-xs text-gray-500 border-b border-gray-100">
-                    {["Order #", "Customer", "Table", "Method", "Amount", "Status", "Date & Time"].map((h) => (
-                      <th key={h} className="px-6 py-4 font-[Prata] font-normal">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {historyTransactions.map((t) => (
-                    <tr key={t.id} className="border-b border-gray-100 last:border-0 text-sm">
-                      <td className="px-6 py-4" style={{ WebkitTextStroke: "0.3px #1d080f" }}>{t.id}</td>
-                      <td className="px-6 py-4">{t.customer}</td>
-                      <td className="px-6 py-4">{t.table}</td>
-                      <td className="px-6 py-4">{t.method}</td>
-                      <td className="px-6 py-4">Php. {t.amount.toLocaleString()}</td>
-                      <td className="px-6 py-4"><StatusBadge status={t.status} /></td>
-                      <td className="px-6 py-4 text-gray-500">
-                        {t.date}<br />{t.time}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+        {loading ? (
+          <div className="bg-white rounded-xl p-12 text-center text-gray-400 font-[Prata] text-sm shadow-sm border border-gray-100">
+            Loading transactions...
           </div>
+        ) : (
+          <>
+            {view === "pending" && (
+              transactions.filter((t) => t.status === "Pending").length === 0 ? (
+                <div className="bg-white rounded-xl p-12 text-center text-gray-400 font-[Prata] text-sm shadow-sm border border-gray-100">
+                  No payment transactions yet.
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="text-xs text-gray-500 border-b border-gray-100">
+                        {["Order #", "Customer", "Table", "Method", "Amount", "Status", "Date & Time", "Actions"].map((h) => (
+                          <th key={h} className="px-6 py-4 font-[Prata] font-normal">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {transactions.filter((t) => t.status === "Pending").map((t) => (
+                        <tr key={t.id} className="border-b border-gray-100 last:border-0 text-sm">
+                          <td className="px-6 py-4" style={{ WebkitTextStroke: "0.3px #1d080f" }}>{t.id}</td>
+                          <td className="px-6 py-4">{t.customer}</td>
+                          <td className="px-6 py-4">{t.table}</td>
+                          <td className="px-6 py-4 capitalize">{t.method}</td>
+                          <td className="px-6 py-4">Php. {t.amount.toLocaleString()}</td>
+                          <td className="px-6 py-4"><StatusBadge status={t.status} /></td>
+                          <td className="px-6 py-4 text-gray-500">
+                            {t.date}<br />{t.time}
+                          </td>
+                          <td className="px-6 py-4">
+                            <button
+                              onClick={() => setModalTx(t)}
+                              className="px-4 py-1.5 rounded-md bg-[#1d080f] text-white text-xs hover:bg-[#3a1420] transition"
+                            >
+                              Validate
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            )}
+
+            {view === "history" && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
+                {historyTransactions.length === 0 ? (
+                  <div className="p-12 text-center text-gray-400 font-[Prata] text-sm">
+                    No payment history yet.
+                  </div>
+                ) : (
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="text-xs text-gray-500 border-b border-gray-100">
+                        {["Order #", "Customer", "Table", "Method", "Amount", "Status", "Date & Time"].map((h) => (
+                          <th key={h} className="px-6 py-4 font-[Prata] font-normal">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {historyTransactions.map((t) => (
+                        <tr key={t.id} className="border-b border-gray-100 last:border-0 text-sm">
+                          <td className="px-6 py-4" style={{ WebkitTextStroke: "0.3px #1d080f" }}>{t.id}</td>
+                          <td className="px-6 py-4">{t.customer}</td>
+                          <td className="px-6 py-4">{t.table}</td>
+                          <td className="px-6 py-4 capitalize">{t.method}</td>
+                          <td className="px-6 py-4">Php. {t.amount.toLocaleString()}</td>
+                          <td className="px-6 py-4"><StatusBadge status={t.status} /></td>
+                          <td className="px-6 py-4 text-gray-500">
+                            {t.date}<br />{t.time}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )}
+          </>
         )}
       </main>
 

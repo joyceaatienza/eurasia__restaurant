@@ -38,6 +38,8 @@ import { History as HistoryIcon } from "lucide-react";
 import { getPayments } from "../utils/paymentsStore";
 import { getReservations } from "../utils/reservationsStore";
 import { getOrders } from "../utils/ordersStore";
+import { ordersApi } from "../services/ordersApi";
+import { reservationsApi } from "../services/reservationsApi";
 
 function to12h(time24) {
   const [h, m] = time24.split(":").map(Number);
@@ -699,6 +701,43 @@ function PeriodDropdown({ value, onChange }) {
 function DashboardPage() {
   const [period, setPeriod] = useState("Today");
   const [showExportToast, setShowExportToast] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [orders, setOrders] = useState([]);
+  const [reservations, setReservations] = useState([]);
+
+  useEffect(() => {
+    Promise.all([ordersApi.getAll(), reservationsApi.getAll()])
+      .then(([ordersData, reservationsData]) => {
+        setOrders(ordersData);
+        setReservations(reservationsData);
+      })
+      .catch((err) => console.error("Failed to load dashboard data:", err))
+      .finally(() => setLoading(false));
+  }, []);
+
+  function getDateRangeStart(p) {
+    const now = new Date();
+    if (p === "Today") {
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    }
+    if (p === "Week") {
+      const d = new Date(now);
+      d.setDate(d.getDate() - 7);
+      return d;
+    }
+    if (p === "Month") {
+      const d = new Date(now);
+      d.setMonth(d.getMonth() - 1);
+      return d;
+    }
+    const d = new Date(now);
+    d.setFullYear(d.getFullYear() - 1);
+    return d;
+  }
+
+  const rangeStart = getDateRangeStart(period);
+  const filteredOrders = orders.filter((o) => new Date(o.created_at) >= rangeStart);
+  const filteredReservations = reservations.filter((r) => new Date(r.created_at) >= rangeStart);
 
   const trendData = salesTrendByPeriod[period] || salesTrendByPeriod.Year;
 
@@ -706,6 +745,58 @@ function DashboardPage() {
     setShowExportToast(true);
     setTimeout(() => setShowExportToast(false), 3000);
   };
+
+  // --- Real computed stats (filtered by selected period) ---
+  const totalRevenue = filteredOrders
+    .filter((o) => o.payment_status === "verified")
+    .reduce((sum, o) => sum + Number(o.total), 0);
+
+  const totalOrders = filteredOrders.length;
+
+  const totalDiscounts = filteredOrders.reduce((sum, o) => sum + Number(o.discount_amount || 0), 0);
+
+  const activeReservations = filteredReservations.filter((r) => r.status !== "cancelled");
+  const totalGuests = activeReservations.reduce((sum, r) => sum + Number(r.party_size || 0), 0);
+
+  const reservationStatusCounts = {
+    Completed: filteredReservations.filter((r) => r.status === "completed").length,
+    Pending: filteredReservations.filter((r) => ["pending", "confirmed", "seated"].includes(r.status)).length,
+    Cancelled: filteredReservations.filter((r) => r.status === "cancelled").length,
+    "No Shows": filteredReservations.filter((r) => r.status === "no_show").length,
+  };
+  const computedOrderStats = [
+    { label: "Completed", value: reservationStatusCounts.Completed, color: C.green },
+    { label: "Pending", value: reservationStatusCounts.Pending, color: C.amber },
+    { label: "Cancelled", value: reservationStatusCounts.Cancelled, color: C.red },
+    { label: "No Shows", value: reservationStatusCounts["No Shows"], color: C.inkSoft },
+  ];
+
+  const itemTotals = {};
+  filteredOrders.forEach((o) => {
+    (o.items || []).forEach((it) => {
+      const key = it.item_name;
+      itemTotals[key] = (itemTotals[key] || 0) + Number(it.price) * Number(it.quantity);
+    });
+  });
+  const computedTopSelling = Object.entries(itemTotals)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([name, amount]) => ({ name, amount: `Php. ${amount.toLocaleString()}` }));
+
+  const methodLabels = { cash: "Cash", gcash: "GCash", paymaya: "PayMaya", bank: "Bank Transfer", pay_later: "Pay Later" };
+  const methodColors = { cash: C.azure, gcash: C.amber, bank: C.violet, paymaya: "#f6df6d", pay_later: C.orange };
+  const nonCancelledOrders = filteredOrders.filter((o) => o.status !== "cancelled");
+  const methodCounts = {};
+  nonCancelledOrders.forEach((o) => {
+    methodCounts[o.payment_method] = (methodCounts[o.payment_method] || 0) + 1;
+  });
+  const computedPaymentMethods = Object.entries(methodCounts).map(([key, count]) => ({
+    name: methodLabels[key] || key,
+    value: nonCancelledOrders.length > 0 ? Math.round((count / nonCancelledOrders.length) * 1000) / 10 : 0,
+    color: methodColors[key] || C.inkSoft,
+  }));
+
+  const estimatedProfit = totalRevenue * 0.3;
 
   return (
     <div style={{ padding: 28 }}>
@@ -721,377 +812,397 @@ function DashboardPage() {
         Sales Overview
       </div>
 
-      <div
-        style={{
-          padding: 24,
-          background: "#faf7f6",
-          borderRadius: 28,
-          display: "flex",
-          flexDirection: "column",
-          gap: 20,
-          boxShadow: "0 4px 24px rgba(23,3,16,0.06)",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-          <PeriodDropdown value={period} onChange={setPeriod} />
-          <Btn variant="dark" small onClick={handleExport}>
-            <Download size={14} /> Export
-          </Btn>
+      {loading ? (
+        <div style={{ padding: 60, textAlign: "center", color: C.inkSoft, fontFamily: "'Prata', serif" }}>
+          Loading dashboard data...
         </div>
-
+      ) : (
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(4, 1fr)",
-            gap: 16,
+            padding: 24,
+            background: "#faf7f6",
+            borderRadius: 28,
+            display: "flex",
+            flexDirection: "column",
+            gap: 20,
+            boxShadow: "0 4px 24px rgba(23,3,16,0.06)",
           }}
         >
-          <StatCard label="Total Revenue" value="₱ 12,324.21" icon={Wallet2} />
-          <StatCard label="Total Orders" value="173" icon={ShoppingBag} />
-          <StatCard
-            label="Total Amount Deducted (Discounts)"
-            value="₱ 424.19"
-            icon={Percent}
-          />
-          <StatCard label="Total Guests" value="164" icon={Users} />
-        </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+            <PeriodDropdown value={period} onChange={setPeriod} />
+            <Btn variant="dark" small onClick={handleExport}>
+              <Download size={14} /> Export
+            </Btn>
+          </div>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1.6fr 1fr",
-            gap: 16,
-          }}
-        >
-          <Card>
-            <SectionTitle>Category Breakdown</SectionTitle>
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={categoryBreakdown} margin={{ bottom: 60 }}>
-                <CartesianGrid vertical={false} stroke={C.hair} />
-                <XAxis
-                  dataKey="name"
-                  tick={{ fontSize: 10, fill: C.inkSoft }}
-                  axisLine={false}
-                  tickLine={false}
-                  angle={-40}
-                  textAnchor="end"
-                  interval={0}
-                />
-                <YAxis
-                  tick={{ fontSize: 11, fill: C.inkSoft }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip />
-                <Bar dataKey="value" fill={C.azure} radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </Card>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(4, 1fr)",
+              gap: 16,
+            }}
+          >
+            <StatCard label="Total Revenue" value={`₱ ${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2 })}`} icon={Wallet2} />
+            <StatCard label="Total Orders" value={totalOrders} icon={ShoppingBag} />
+            <StatCard
+              label="Total Amount Deducted (Discounts)"
+              value={`₱ ${totalDiscounts.toLocaleString('en-US', { minimumFractionDigits: 2 })}`}
+              icon={Percent}
+            />
+            <StatCard label="Total Guests" value={totalGuests} icon={Users} />
+          </div>
 
-          <Card>
-            <SectionTitle>Top Selling Items</SectionTitle>
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              {topSelling.map((it) => (
-                <div
-                  key={it.name}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    fontSize: 14,
-                  }}
-                >
-                  <span style={{ color: C.ink, fontWeight: 600 }}>
-                    {it.name}
-                  </span>
-                  <span style={{ color: C.inkSoft }}>{it.amount}</span>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1.6fr 1fr",
+              gap: 16,
+            }}
+          >
+            <Card>
+              <SectionTitle>Category Breakdown</SectionTitle>
+              <p style={{ fontSize: 11.5, color: C.inkSoft, marginTop: -8, marginBottom: 12 }}>
+                (Estimate — menu categories aren't tracked in orders yet)
+              </p>
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={categoryBreakdown} margin={{ bottom: 60 }}>
+                  <CartesianGrid vertical={false} stroke={C.hair} />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fontSize: 10, fill: C.inkSoft }}
+                    axisLine={false}
+                    tickLine={false}
+                    angle={-40}
+                    textAnchor="end"
+                    interval={0}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: C.inkSoft }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip />
+                  <Bar dataKey="value" fill={C.azure} radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </Card>
+
+            <Card>
+              <SectionTitle>Top Selling Items</SectionTitle>
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                {computedTopSelling.length === 0 ? (
+                  <p style={{ fontSize: 13, color: C.inkSoft }}>No orders yet.</p>
+                ) : (
+                  computedTopSelling.map((it) => (
+                    <div
+                      key={it.name}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        fontSize: 14,
+                      }}
+                    >
+                      <span style={{ color: C.ink, fontWeight: 600 }}>
+                        {it.name}
+                      </span>
+                      <span style={{ color: C.inkSoft }}>{it.amount}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </Card>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1.6fr 1fr",
+              gap: 16,
+            }}
+          >
+            <Card>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "flex-start",
+                  marginBottom: 18,
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      fontFamily: "'Prata', serif",
+                      fontSize: 16,
+                      color: C.ink,
+                      WebkitTextStroke: "0.3px " + C.ink,
+                    }}
+                  >
+                    Sales Trends
+                  </div>
+                  <div style={{ color: C.inkSoft, fontSize: 11.5, marginTop: 2 }}>
+                    (Estimate — will reflect real trends as more orders come in)
+                  </div>
                 </div>
-              ))}
-            </div>
-          </Card>
-        </div>
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1.6fr 1fr",
-            gap: 16,
-          }}
-        >
-          <Card>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "flex-start",
-                marginBottom: 18,
-              }}
-            >
-              <div>
-                <div
-                  style={{
-                    fontFamily: "'Prata', serif",
-                    fontSize: 16,
-                    color: C.ink,
-                    WebkitTextStroke: "0.3px " + C.ink,
-                  }}
-                >
-                  Sales Trends
-                </div>
-                <div
-                  style={{ color: C.inkSoft, fontSize: 11.5, marginTop: 2 }}
-                >
-                  Performance overview
+                <div style={{ textAlign: "right" }}>
+                  <div
+                    style={{
+                      fontFamily: "'Prata', serif",
+                      fontSize: 22,
+                      color: C.ink,
+                      WebkitTextStroke: "0.4px " + C.ink,
+                    }}
+                  >
+                    {trendData[trendData.length - 1].value}K
+                  </div>
+                  <div
+                    style={{
+                      color: C.green,
+                      fontSize: 11.5,
+                      fontWeight: 700,
+                      marginTop: 2,
+                    }}
+                  >
+                    +{" "}
+                    {(
+                      ((trendData[trendData.length - 1].value -
+                        trendData[trendData.length - 2].value) /
+                        trendData[trendData.length - 2].value) *
+                      100
+                    ).toFixed(1)}
+                    % than last period
+                  </div>
                 </div>
               </div>
-              <div style={{ textAlign: "right" }}>
+
+              <ResponsiveContainer width="100%" height={200}>
+                <AreaChart
+                  data={trendData}
+                  margin={{ top: 5, right: 5, left: -20, bottom: 0 }}
+                >
+                  <defs>
+                    <linearGradient
+                      id="salesGradient"
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2="1"
+                    >
+                      <stop offset="5%" stopColor={C.azure} stopOpacity={0.35} />
+                      <stop offset="95%" stopColor={C.azure} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid
+                    vertical={false}
+                    stroke={C.hair}
+                    strokeDasharray="4 4"
+                  />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 10, fill: C.inkSoft }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: C.inkSoft }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip />
+                  <Area
+                    type="monotone"
+                    dataKey="value"
+                    stroke={C.azure}
+                    strokeWidth={2.5}
+                    fill="url(#salesGradient)"
+                    dot={{ r: 3, fill: C.azure, strokeWidth: 0 }}
+                    activeDot={{ r: 5, fill: C.azure }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </Card>
+
+            <Card>
+              <SectionTitle>Order &amp; Cancellation Stats</SectionTitle>
+              <p style={{ fontSize: 11.5, color: C.inkSoft, marginTop: -8, marginBottom: 12 }}>
+                (Based on reservations)
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {computedOrderStats.map((s) => (
+                  <div
+                    key={s.label}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 13.5,
+                        color: C.ink,
+                        fontWeight: 600,
+                      }}
+                    >
+                      {s.label}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 15,
+                        fontWeight: 700,
+                        color: s.color,
+                      }}
+                    >
+                      {s.value}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 16,
+            }}
+          >
+            <Card>
+              <SectionTitle>Payment Method Analysis</SectionTitle>
+              {computedPaymentMethods.length === 0 ? (
+                <p style={{ fontSize: 13, color: C.inkSoft }}>No orders yet.</p>
+              ) : (
+                <>
+                  <ResponsiveContainer width="100%" height={190}>
+                    <PieChart>
+                      <Pie
+                        data={computedPaymentMethods}
+                        dataKey="value"
+                        nameKey="name"
+                        innerRadius={0}
+                        outerRadius={80}
+                      >
+                        {computedPaymentMethods.map((entry, i) => (
+                          <Cell key={i} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 10,
+                      marginTop: 4,
+                    }}
+                  >
+                    {computedPaymentMethods.map((p) => (
+                      <div
+                        key={p.name}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                          fontSize: 11.5,
+                          color: C.inkSoft,
+                        }}
+                      >
+                        <span
+                          style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: 2,
+                            background: p.color,
+                            display: "inline-block",
+                          }}
+                        />
+                        {p.name} {p.value}%
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </Card>
+
+            <Card>
+              <SectionTitle>Revenue &amp; Profit Summary</SectionTitle>
+              <div style={{ marginBottom: 18 }}>
+                <div
+                  style={{ color: C.inkSoft, fontSize: 12.5, fontWeight: 600 }}
+                >
+                  Total Revenue
+                </div>
                 <div
                   style={{
                     fontFamily: "'Prata', serif",
                     fontSize: 22,
-                    color: C.ink,
-                    WebkitTextStroke: "0.4px " + C.ink,
-                  }}
-                >
-                  {trendData[trendData.length - 1].value}K
-                </div>
-                <div
-                  style={{
                     color: C.green,
-                    fontSize: 11.5,
-                    fontWeight: 700,
-                    marginTop: 2,
+                    WebkitTextStroke: "0.4px " + C.green,
                   }}
                 >
-                  +{" "}
-                  {(
-                    ((trendData[trendData.length - 1].value -
-                      trendData[trendData.length - 2].value) /
-                      trendData[trendData.length - 2].value) *
-                    100
-                  ).toFixed(1)}
-                  % than last period
+                  ₱ {totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </div>
               </div>
-            </div>
-
-            <ResponsiveContainer width="100%" height={200}>
-              <AreaChart
-                data={trendData}
-                margin={{ top: 5, right: 5, left: -20, bottom: 0 }}
-              >
-                <defs>
-                  <linearGradient
-                    id="salesGradient"
-                    x1="0"
-                    y1="0"
-                    x2="0"
-                    y2="1"
-                  >
-                    <stop offset="5%" stopColor={C.azure} stopOpacity={0.35} />
-                    <stop offset="95%" stopColor={C.azure} stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid
-                  vertical={false}
-                  stroke={C.hair}
-                  strokeDasharray="4 4"
-                />
-                <XAxis
-                  dataKey="label"
-                  tick={{ fontSize: 10, fill: C.inkSoft }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  tick={{ fontSize: 11, fill: C.inkSoft }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip />
-                <Area
-                  type="monotone"
-                  dataKey="value"
-                  stroke={C.azure}
-                  strokeWidth={2.5}
-                  fill="url(#salesGradient)"
-                  dot={{ r: 3, fill: C.azure, strokeWidth: 0 }}
-                  activeDot={{ r: 5, fill: C.azure }}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </Card>
-
-          <Card>
-            <SectionTitle>Order &amp; Cancellation Stats</SectionTitle>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {orderStats.map((s) => (
+              <div>
                 <div
-                  key={s.label}
+                  style={{ color: C.inkSoft, fontSize: 12.5, fontWeight: 600 }}
+                >
+                  Estimated Profit (30% margin)
+                </div>
+                <div
                   style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
+                    fontFamily: "'Prata', serif",
+                    fontSize: 22,
+                    color: C.green,
+                    WebkitTextStroke: "0.4px " + C.green,
                   }}
                 >
-                  <span
-                    style={{
-                      fontSize: 13.5,
-                      color: C.ink,
-                      fontWeight: 600,
-                    }}
-                  >
-                    {s.label}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 15,
-                      fontWeight: 700,
-                      color: s.color,
-                    }}
-                  >
-                    {s.value}
-                  </span>
+                  ₱ {estimatedProfit.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </div>
-              ))}
-            </div>
-          </Card>
-        </div>
+              </div>
+            </Card>
+          </div>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 16,
-          }}
-        >
-          <Card>
-            <SectionTitle>Payment Method Analysis</SectionTitle>
-            <ResponsiveContainer width="100%" height={190}>
-              <PieChart>
-                <Pie
-                  data={paymentMethods}
-                  dataKey="value"
-                  nameKey="name"
-                  innerRadius={0}
-                  outerRadius={80}
-                >
-                  {paymentMethods.map((entry, i) => (
-                    <Cell key={i} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+          {showExportToast && (
             <div
               style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 10,
-                marginTop: 4,
-              }}
-            >
-              {paymentMethods.map((p) => (
-                <div
-                  key={p.name}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    fontSize: 11.5,
-                    color: C.inkSoft,
-                  }}
-                >
-                  <span
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: 2,
-                      background: p.color,
-                      display: "inline-block",
-                    }}
-                  />
-                  {p.name} {p.value}%
-                </div>
-              ))}
-            </div>
-          </Card>
-
-          <Card>
-            <SectionTitle>Revenue &amp; Profit Summary</SectionTitle>
-            <div style={{ marginBottom: 18 }}>
-              <div
-                style={{ color: C.inkSoft, fontSize: 12.5, fontWeight: 600 }}
-              >
-                Total Revenue
-              </div>
-              <div
-                style={{
-                  fontFamily: "'Prata', serif",
-                  fontSize: 22,
-                  color: C.green,
-                  WebkitTextStroke: "0.4px " + C.green,
-                }}
-              >
-                ₱ 12,324.21 ↗
-              </div>
-            </div>
-            <div>
-              <div
-                style={{ color: C.inkSoft, fontSize: 12.5, fontWeight: 600 }}
-              >
-                Estimated Profit
-              </div>
-              <div
-                style={{
-                  fontFamily: "'Prata', serif",
-                  fontSize: 22,
-                  color: C.green,
-                  WebkitTextStroke: "0.4px " + C.green,
-                }}
-              >
-                ₱ 3,862.37 ↗
-              </div>
-            </div>
-          </Card>
-        </div>
-
-        {showExportToast && (
-          <div
-            style={{
-              position: "fixed",
-              bottom: 28,
-              right: 28,
-              background: C.void,
-              color: "#fff",
-              padding: "14px 20px",
-              borderRadius: 10,
-              boxShadow: "0 6px 20px rgba(0,0,0,0.2)",
-              fontFamily: "'Prata', serif",
-              fontSize: 13.5,
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              zIndex: 100,
-            }}
-          >
-            <span
-              style={{
-                background: C.green,
-                borderRadius: "50%",
-                width: 20,
-                height: 20,
+                position: "fixed",
+                bottom: 28,
+                right: 28,
+                background: C.void,
+                color: "#fff",
+                padding: "14px 20px",
+                borderRadius: 10,
+                boxShadow: "0 6px 20px rgba(0,0,0,0.2)",
+                fontFamily: "'Prata', serif",
+                fontSize: 13.5,
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "center",
-                fontSize: 12,
+                gap: 10,
+                zIndex: 100,
               }}
             >
-              ✓
-            </span>
-            Data exported successfully
-          </div>
-        )}
-      </div>
+              <span
+                style={{
+                  background: C.green,
+                  borderRadius: "50%",
+                  width: 20,
+                  height: 20,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 12,
+                }}
+              >
+                ✓
+              </span>
+              Data exported successfully
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1108,16 +1219,42 @@ function CashierPage() {
   return <PaymentTransactions embedded />;
 }
 
+function to12hFromDBTime(timeStr) {
+  if (!timeStr) return '';
+  const [h, m] = timeStr.split(':').map(Number);
+  const period = h >= 12 ? 'pm' : 'am';
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return `${hour12}:${String(m).padStart(2, '0')} ${period}`;
+}
+
+function formatDBDate(isoDate) {
+  if (!isoDate) return '';
+  const [y, m, d] = isoDate.split('-').map(Number);
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${months[m - 1]} ${d}, ${y}`;
+}
+
+function formatDBDateTime(isoString) {
+  const d = new Date(isoString);
+  return d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
 function HistoryPage() {
   const [tab, setTab] = useState("reservations");
   const [completedReservations, setCompletedReservations] = useState([]);
   const [completedOrders, setCompletedOrders] = useState([]);
   const [payments, setPayments] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setCompletedReservations(getReservations().filter((r) => r.status === "Completed"));
-    setCompletedOrders(getOrders().filter((o) => o.status === "Ready"));
-    setPayments(getPayments().filter((p) => p.status === "Completed" || p.status === "Failed"));
+    Promise.all([reservationsApi.getAll(), ordersApi.getAll()])
+      .then(([reservationsData, ordersData]) => {
+        setCompletedReservations(reservationsData.filter((r) => r.status === "completed"));
+        setCompletedOrders(ordersData.filter((o) => ["ready", "served", "completed"].includes(o.status)));
+        setPayments(ordersData.filter((o) => o.payment_status === "verified" || o.payment_status === "failed"));
+      })
+      .catch((err) => console.error("Failed to load history:", err))
+      .finally(() => setLoading(false));
   }, []);
 
   const tabs = [
@@ -1153,94 +1290,101 @@ function HistoryPage() {
         ))}
       </div>
 
-      {tab === "reservations" && (
-        <Card style={{ padding: 0 }}>
-          {completedReservations.length === 0 ? (
-            <div style={{ padding: 32, textAlign: "center", color: C.inkSoft, fontSize: 13 }}>No completed reservations yet.</div>
-          ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ textAlign: "left", fontSize: 12, color: C.inkSoft }}>
-                  {["Date", "Time", "Name", "Table", "Pax"].map((h) => (
-                    <th key={h} style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {completedReservations.map((r) => (
-                  <tr key={r.id} style={{ fontSize: 13.5 }}>
-                    <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{r.date}</td>
-                    <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{to12h(r.time)}</td>
-                    <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{r.name}</td>
-                    <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{r.table || r.eventTitle}</td>
-                    <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{r.pax}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {loading ? (
+        <div style={{ padding: 32, textAlign: "center", color: C.inkSoft, fontSize: 13 }}>Loading...</div>
+      ) : (
+        <>
+          {tab === "reservations" && (
+            <Card style={{ padding: 0 }}>
+              {completedReservations.length === 0 ? (
+                <div style={{ padding: 32, textAlign: "center", color: C.inkSoft, fontSize: 13 }}>No completed reservations yet.</div>
+              ) : (
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ textAlign: "left", fontSize: 12, color: C.inkSoft }}>
+                      {["Date", "Time", "Name", "Table", "Pax"].map((h) => (
+                        <th key={h} style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {completedReservations.map((r) => (
+                      <tr key={r.id} style={{ fontSize: 13.5 }}>
+                        <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{formatDBDate(r.reservation_date)}</td>
+                        <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{to12hFromDBTime(r.reservation_time)}</td>
+                        <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{r.guest_name}</td>
+                        <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{r.table_number || '—'}</td>
+                        <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{r.party_size}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </Card>
           )}
-        </Card>
-      )}
 
-      {tab === "orders" && (
-        <Card style={{ padding: 0 }}>
-          {completedOrders.length === 0 ? (
-            <div style={{ padding: 32, textAlign: "center", color: C.inkSoft, fontSize: 13 }}>No completed orders yet.</div>
-          ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ textAlign: "left", fontSize: 12, color: C.inkSoft }}>
-                  {["Order #", "Customer", "Table", "Total", "Date & Time"].map((h) => (
-                    <th key={h} style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {completedOrders.map((o) => (
-                  <tr key={o.id} style={{ fontSize: 13.5 }}>
-                    <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{o.id}</td>
-                    <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{o.customer}</td>
-                    <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{o.table}</td>
-                    <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>Php. {o.total}</td>
-                    <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}`, color: C.inkSoft }}>{o.date} · {o.time}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          {tab === "orders" && (
+            <Card style={{ padding: 0 }}>
+              {completedOrders.length === 0 ? (
+                <div style={{ padding: 32, textAlign: "center", color: C.inkSoft, fontSize: 13 }}>No completed orders yet.</div>
+              ) : (
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ textAlign: "left", fontSize: 12, color: C.inkSoft }}>
+                      {["Order #", "Table", "Total", "Date & Time"].map((h) => (
+                        <th key={h} style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {completedOrders.map((o) => (
+                      <tr key={o.id} style={{ fontSize: 13.5 }}>
+                        <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{o.id}</td>
+                        <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{o.table_number}</td>
+                        <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>Php. {Number(o.total).toLocaleString()}</td>
+                        <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}`, color: C.inkSoft }}>{formatDBDateTime(o.created_at)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </Card>
           )}
-        </Card>
-      )}
 
-      {tab === "payments" && (
-        <Card style={{ padding: 0 }}>
-          {payments.length === 0 ? (
-            <div style={{ padding: 32, textAlign: "center", color: C.inkSoft, fontSize: 13 }}>No payment history yet.</div>
-          ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ textAlign: "left", fontSize: 12, color: C.inkSoft }}>
-                  {["Order #", "Customer", "Table", "Amount", "Status", "Date & Time"].map((h) => (
-                    <th key={h} style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {payments.map((p) => (
-                  <tr key={p.id} style={{ fontSize: 13.5 }}>
-                    <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{p.id}</td>
-                    <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{p.customer}</td>
-                    <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{p.table}</td>
-                    <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>Php. {p.amount}</td>
-                    <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>
-                      <Badge tone={p.status === "Completed" ? "green" : "red"}>{p.status}</Badge>
-                    </td>
-                    <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}`, color: C.inkSoft }}>{p.date} · {p.time}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          {tab === "payments" && (
+            <Card style={{ padding: 0 }}>
+              {payments.length === 0 ? (
+                <div style={{ padding: 32, textAlign: "center", color: C.inkSoft, fontSize: 13 }}>No payment history yet.</div>
+              ) : (
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ textAlign: "left", fontSize: 12, color: C.inkSoft }}>
+                      {["Order #", "Table", "Method", "Amount", "Status", "Date & Time"].map((h) => (
+                        <th key={h} style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {payments.map((p) => (
+                      <tr key={p.id} style={{ fontSize: 13.5 }}>
+                        <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{p.id}</td>
+                        <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{p.table_number}</td>
+                        <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}`, textTransform: "capitalize" }}>{p.payment_method}</td>
+                        <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>Php. {Number(p.total).toLocaleString()}</td>
+                        <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>
+                          <Badge tone={p.payment_status === "verified" ? "green" : "red"}>
+                            {p.payment_status === "verified" ? "Completed" : "Failed"}
+                          </Badge>
+                        </td>
+                        <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}`, color: C.inkSoft }}>{formatDBDateTime(p.created_at)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </Card>
           )}
-        </Card>
+        </>
       )}
     </div>
   );
@@ -1255,7 +1399,13 @@ const PAGES = {
 };
 
 export default function EurasiaAdmin() {
-  const [active, setActive] = useState("dashboard");
+  const [active, setActiveState] = useState(
+    () => localStorage.getItem("eurasia_admin_active_tab") || "dashboard"
+  );
+  const setActive = (key) => {
+    setActiveState(key);
+    localStorage.setItem("eurasia_admin_active_tab", key);
+  };
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const page = PAGES[active];
   const Page = page.Comp;

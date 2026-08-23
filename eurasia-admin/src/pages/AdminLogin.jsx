@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import logo from "../assets/logopic2.png";
 import { Eye, EyeOff, X, Check } from "lucide-react";
+import { authApi } from "../services/authApi";
 
 /* Role → where they land after logging in */
 const ROLE_ROUTES = {
@@ -36,26 +37,36 @@ export default function Login() {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!role || !name || !password) {
-      setError("Please fill in all fields.");
-      return;
-    }
+  const [submitting, setSubmitting] = useState(false);
 
-    // Validation para sa Terms and Conditions
-    if (!agreedToTerms) {
-      setError("Please agree to the Terms and Conditions before logging in.");
-      return;
-    }
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  if (!role || !name || !password) {
+    setError("Please fill in all fields.");
+    return;
+  }
 
-    // Save user info
-    localStorage.setItem("eurasia_role", role);
-    localStorage.setItem("eurasia_name", name);
+  if (!agreedToTerms) {
+    setError("Please agree to the Terms and Conditions before logging in.");
+    return;
+  }
 
+  try {
+    setSubmitting(true);
     setError("");
+    const { token, user } = await authApi.login(role, name, password);
+
+    localStorage.setItem("eurasia_token", token);
+    localStorage.setItem("eurasia_role", user.role);
+    localStorage.setItem("eurasia_name", user.name);
+
     navigate(ROLE_ROUTES[role]);
-  };
+  } catch (err) {
+    setError(err.message || "Invalid role, name, or password.");
+  } finally {
+    setSubmitting(false);
+  }
+};
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row font-[Prata]">
@@ -123,7 +134,6 @@ export default function Login() {
             </button>
           </div>
 
-          {/* 🟢 NA-FIX: Terms and Conditions Link & Green Check Badge */}
           <div className="text-center mt-3 mb-3">
             <div className="flex items-center justify-center gap-2">
               <button
@@ -156,13 +166,13 @@ export default function Login() {
             }}
           >
             <button
-              type="submit"
-              className="w-full rounded-md bg-white text-[#1d080f] font-bold text-sm hover:bg-neutral-200 transition"
-              style={{ padding: "12px 16px" }}
-            >
-              Log In
-            </button>
-
+  type="submit"
+  disabled={submitting}
+  className="w-full rounded-md bg-white text-[#1d080f] font-bold text-sm hover:bg-neutral-200 transition disabled:opacity-60"
+  style={{ padding: "12px 16px" }}
+>
+  {submitting ? "Logging in..." : "Log In"}
+</button>
             <button
               type="button"
               onClick={() => navigate("/forgot-password")}

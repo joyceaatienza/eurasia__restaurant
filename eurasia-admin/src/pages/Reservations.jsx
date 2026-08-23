@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { getReservations, updateReservationStatus } from "../utils/reservationsStore";
+import { reservationsApi } from "../services/reservationsApi";
 import StaffHeader from "../components/StaffHeader";
 
 /* ---------------------------------------------------------------- */
@@ -32,7 +32,6 @@ const TABLES = ["T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10", "T11", "T
 const DAY_LABELS = ["SUN", "MON", "TUES", "WED", "THU", "FRI", "SAT"];
 const HOURS = [11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]; // 11am–10pm
 
-// Same coordinates as the customer-facing floor plan, so the layouts match exactly
 const FLOOR_TABLES = [
   { id: "T13", x: 20, y: 7.3, w: 15.5, h: 11 },
   { id: "T6", x: 67.3, y: 7.3, w: 15.7, h: 11 },
@@ -191,7 +190,6 @@ function StatusButtons({ status, onMark }) {
     </div>
   );
 }
-
 
 /* ---------------------------------------------------------------- */
 /* Legend                                                             */
@@ -411,8 +409,7 @@ function HistoryView({ reservations }) {
 }
 
 /* ---------------------------------------------------------------- */
-/* Floor Plan — same table coordinates as the customer-facing page,  */
-/* but colored by live status instead of being selectable            */
+/* Floor Plan                                                        */
 /* ---------------------------------------------------------------- */
 function FloorPlan({ tableStatus }) {
   const statusFor = (id) => tableStatus.find((t) => t.table === id)?.status || "Available";
@@ -420,7 +417,7 @@ function FloorPlan({ tableStatus }) {
   const colorsFor = (status) => {
     if (status === "Occupied") return { bg: C.orange, border: C.orange, text: "#fff" };
     if (status === "Available") return { bg: "#fff", border: "#cfe3d2", text: C.green };
-    return { bg: "#fbe7e7", border: C.red, text: C.red }; // Reserved - {time}
+    return { bg: "#fbe7e7", border: C.red, text: C.red };
   };
 
   return (
@@ -498,7 +495,7 @@ function DayView({ selectedISO, reservations, markStatus }) {
     if (match.status === "Arrived") return { table, status: "Occupied" };
     return { table, status: `Reserved - ${to12h(match.time)}` };
   });
-  
+
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1.7fr 0.65fr", gap: 16, alignItems: "start" }}>
       <Card style={{ padding: 0, overflow: "hidden" }}>
@@ -577,16 +574,54 @@ function DayView({ selectedISO, reservations, markStatus }) {
 /* ---------------------------------------------------------------- */
 /* Root                                                               */
 /* ---------------------------------------------------------------- */
+
+// Converts a raw MySQL reservation row into the shape the views above expect
+function normalizeReservation(r) {
+  return {
+    id: r.id,
+    date: r.reservation_date,
+    time: r.reservation_time ? r.reservation_time.slice(0, 5) : "",
+    type: r.reservation_type,
+    name: r.guest_name,
+    eventTitle: r.guest_name,
+    table: r.table_number,
+    pax: r.party_size,
+    location: r.special_requests || r.occasion || "—",
+    status: r.status === "seated" ? "Arrived" : r.status === "completed" ? "Completed" : "Reserved",
+  };
+}
+
 export default function Reservations({ embedded = false }) {
   const [range, setRange] = useState("Day");
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [reservations, setReservations] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    setReservations(getReservations());
+  const loadReservations = useCallback(() => {
+    setLoading(true);
+    reservationsApi.getAll()
+      .then((data) => {
+        const active = data.filter((r) => r.status !== "cancelled" && r.status !== "no_show");
+        setReservations(active.map(normalizeReservation));
+      })
+      .catch((err) => console.error("Failed to load reservations:", err))
+      .finally(() => setLoading(false));
   }, []);
 
-  const markStatus = (id, status) => setReservations(updateReservationStatus(id, status));
+  useEffect(() => {
+    loadReservations();
+  }, [loadReservations]);
+
+  const markStatus = async (id, status) => {
+    const backendStatus = status === "Arrived" ? "seated" : status === "Completed" ? "completed" : "pending";
+    try {
+      await reservationsApi.updateStatus(id, backendStatus);
+      setReservations((prev) => prev.map((r) => (r.id === id ? { ...r, status } : r)));
+    } catch (err) {
+      console.error("Failed to update status:", err);
+      alert("Failed to update reservation status. Please try again.");
+    }
+  };
 
   const openDay = (date) => {
     setSelectedDate(date);
@@ -606,11 +641,11 @@ export default function Reservations({ embedded = false }) {
         * { box-sizing: border-box; }
       `}</style>
 
-{!embedded && <StaffHeader />}
+      {!embedded && <StaffHeader />}
       <div style={{ padding: 28, display: "flex", flexDirection: "column", gap: 14, width: "100%" }}>
         <div style={{ fontFamily: FONT, fontSize: 39, fontWeight: 700, color: C.ink, WebkitTextStroke: "0.5px " + C.ink, textAlign: "left", width: "100%" }}>
-  Reservations
-</div>
+          Reservations
+        </div>
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
           {!isHistory ? (
@@ -620,17 +655,17 @@ export default function Reservations({ embedded = false }) {
                 {range === "Week" ? `${formatDisplayDate(weekStart)} - ${formatDisplayDate(weekEnd)}` : formatDisplayDate(selectedDate)}
               </div>
               <button onClick={() => setSelectedDate(shiftDate(selectedDate, range, "prev"))} style={{ border: "none", background: "#fff", borderRadius: 8, width: 32, height: 32, boxShadow: "0 1px 2px rgba(0,0,0,0.08)", cursor: "pointer" }}>
-    <ChevronLeft size={15} style={{ margin: "auto" }} />
-  </button>
-  <button onClick={() => setSelectedDate(shiftDate(selectedDate, range, "next"))} style={{ border: "none", background: "#fff", borderRadius: 8, width: 32, height: 32, boxShadow: "0 1px 2px rgba(0,0,0,0.08)", cursor: "pointer" }}>
-    <ChevronRight size={15} style={{ margin: "auto" }} />
-  </button>
+                <ChevronLeft size={15} style={{ margin: "auto" }} />
+              </button>
+              <button onClick={() => setSelectedDate(shiftDate(selectedDate, range, "next"))} style={{ border: "none", background: "#fff", borderRadius: 8, width: 32, height: 32, boxShadow: "0 1px 2px rgba(0,0,0,0.08)", cursor: "pointer" }}>
+                <ChevronRight size={15} style={{ margin: "auto" }} />
+              </button>
             </div>
           ) : (
             <div />
           )}
           <div style={{ display: "flex", gap: 6, background: "#fff", padding: 4, borderRadius: 10, boxShadow: "0 1px 2px rgba(0,0,0,0.06)" }}>
-  {(embedded ? ["Day", "Week", "Month"] : ["Day", "Week", "Month", "History"]).map((r) => (
+            {(embedded ? ["Day", "Week", "Month"] : ["Day", "Week", "Month", "History"]).map((r) => (
               <button
                 key={r}
                 onClick={() => setRange(r)}
@@ -652,10 +687,16 @@ export default function Reservations({ embedded = false }) {
           </div>
         </div>
 
-        {range === "Day" && <DayView selectedISO={selectedISO} reservations={reservations} markStatus={markStatus} />}
-        {range === "Week" && <WeekView selectedDate={selectedDate} reservations={reservations} onOpenDay={openDay} />}
-        {range === "Month" && <MonthView selectedDate={selectedDate} reservations={reservations} />}
-        {range === "History" && <HistoryView reservations={reservations} />}
+        {loading ? (
+          <Card style={{ textAlign: "center", padding: 40, color: C.inkSoft, fontFamily: FONT }}>Loading reservations...</Card>
+        ) : (
+          <>
+            {range === "Day" && <DayView selectedISO={selectedISO} reservations={reservations} markStatus={markStatus} />}
+            {range === "Week" && <WeekView selectedDate={selectedDate} reservations={reservations} onOpenDay={openDay} />}
+            {range === "Month" && <MonthView selectedDate={selectedDate} reservations={reservations} />}
+            {range === "History" && <HistoryView reservations={reservations} />}
+          </>
+        )}
       </div>
     </div>
   );

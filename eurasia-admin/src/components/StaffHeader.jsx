@@ -8,6 +8,14 @@ const FONT = "'Prata', serif";
 const INK = "#1d080f";
 const MUTED = "#7a756c";
 
+// Friendly labels for each role (the raw values stored in localStorage are lowercase)
+const ROLE_LABELS = {
+  owner: "Owner",
+  reception: "Receptionist",
+  kitchen: "Kitchen Staff",
+  cashier: "Cashier",
+};
+
 const NOTIFICATIONS_BY_ROLE = {
   Reception: [
     { id: 1, message: "New table reservation from John Doe", time: "5 min ago", read: false },
@@ -38,16 +46,16 @@ export default function StaffHeader({ name, role }) {
 
   const [notifOpen, setNotifOpen] = useState(false);
   const notifRef = useRef(null);
-  const resolvedRole = savedRole || role || "Reception";
-const normalizedRole =
-  resolvedRole.charAt(0).toUpperCase() + resolvedRole.slice(1).toLowerCase();
+  const resolvedRole = savedRole || role || "reception";
+  const normalizedRole =
+    resolvedRole.charAt(0).toUpperCase() + resolvedRole.slice(1).toLowerCase();
 
-const [notifications, setNotifications] = useState(
-  NOTIFICATIONS_BY_ROLE[normalizedRole] || NOTIFICATIONS_BY_ROLE.Reception
-);
+  const [notifications, setNotifications] = useState(
+    NOTIFICATIONS_BY_ROLE[normalizedRole] || NOTIFICATIONS_BY_ROLE.Reception
+  );
 
   const displayName = savedName || name || "Staff Member";
-  const displayRole = savedRole || role || "Staff";
+  const displayRole = ROLE_LABELS[resolvedRole.toLowerCase()] || normalizedRole;
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -234,7 +242,7 @@ const [notifications, setNotifications] = useState(
             <div style={{ fontFamily: FONT, fontSize: 18, color: INK, WebkitTextStroke: "0.5px " + INK }}>
               {displayName}
             </div>
-            <div style={{ fontFamily: FONT, fontSize: 16, color: MUTED, textTransform: "capitalize" }}>
+            <div style={{ fontFamily: FONT, fontSize: 16, color: MUTED }}>
               {displayRole}
             </div>
           </div>

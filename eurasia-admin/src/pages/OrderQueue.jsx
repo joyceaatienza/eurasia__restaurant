@@ -20,6 +20,8 @@ function normalizeOrder(o) {
   const createdAt = new Date(o.created_at);
   return {
     id: o.id,
+    dailyNumber: o.daily_number,
+    createdAt,
     customer: o.customer || 'Guest',
     table: o.table_number,
     total: Number(o.total),
@@ -37,6 +39,25 @@ function normalizeOrder(o) {
   };
 }
 
+// Uses the daily_number stored in the database (consistent across Kitchen, Payment, Cashier).
+// Falls back to a computed per-day number for older orders that have no daily_number yet.
+function assignDailyNumbers(orders) {
+  const needsFallback = orders.some((o) => o.dailyNumber == null);
+  if (!needsFallback) {
+    return orders.map((o) => ({ ...o, displayNo: o.dailyNumber }));
+  }
+
+  const byTime = [...orders].sort((a, b) => a.createdAt - b.createdAt);
+  const numberMap = {};
+  byTime.forEach((o, index) => {
+    numberMap[o.id] = index + 1;
+  });
+  return orders.map((o) => ({
+    ...o,
+    displayNo: o.dailyNumber != null ? o.dailyNumber : numberMap[o.id],
+  }));
+}
+
 export default function OrderQueue({ embedded = false }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -46,7 +67,7 @@ export default function OrderQueue({ embedded = false }) {
   const loadOrders = useCallback(() => {
     setLoading(true);
     ordersApi.getAll({ today_only: 'true' })
-  .then((data) => setOrders(data.map(normalizeOrder)))
+      .then((data) => setOrders(assignDailyNumbers(data.map(normalizeOrder))))
       .catch((err) => console.error('Failed to load orders:', err))
       .finally(() => setLoading(false));
   }, []);
@@ -83,7 +104,7 @@ export default function OrderQueue({ embedded = false }) {
     try {
       await ordersApi.updateStatus(orderId, REVERSE_STATUS_MAP[nextStatus]);
       setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: nextStatus } : o)));
-      showToast(nextStatus === 'Preparing' ? `Order ${orderId} is now preparing` : `Order ${orderId} marked as ready`);
+      showToast(nextStatus === 'Preparing' ? `Order ${order.displayNo} is now preparing` : `Order ${order.displayNo} marked as ready`);
     } catch (err) {
       console.error(err);
       alert("Failed to update order status. Please try again.");
@@ -152,7 +173,7 @@ export default function OrderQueue({ embedded = false }) {
                               className="font-[Prata] text-2xl text-[#1d080f]"
                               style={{ WebkitTextStroke: "0.7px #1d080f" }}
                             >
-                              Order {order.id}
+                              Order {order.displayNo}
                             </h2>
                             {order.status === 'Preparing' && (
                               <span className="bg-[#f5e79e] text-[#5e5113] text-xs font-[Prata] px-3 py-1 rounded-md">
@@ -256,7 +277,7 @@ export default function OrderQueue({ embedded = false }) {
                     <tbody>
                       {completedOrders.map((o) => (
                         <tr key={o.id} className="border-b border-gray-100 last:border-0 text-sm">
-                          <td className="px-6 py-4" style={{ WebkitTextStroke: "0.3px #1d080f" }}>{o.id}</td>
+                          <td className="px-6 py-4" style={{ WebkitTextStroke: "0.3px #1d080f" }}>{o.displayNo}</td>
                           <td className="px-6 py-4">{o.customer}</td>
                           <td className="px-6 py-4">{o.table}</td>
                           <td className="px-6 py-4">Php. {o.total?.toLocaleString?.() ?? o.total}</td>

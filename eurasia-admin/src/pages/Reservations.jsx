@@ -57,6 +57,27 @@ const FLOOR_TABLES = [
 function toISO(date) {
   return date.toISOString().slice(0, 10);
 }
+// Normalizes any incoming date value (Date object OR string) to a "YYYY-MM-DD" string
+function toISOString(value) {
+  if (!value) return "";
+  if (value instanceof Date) {
+    // Use local date parts to avoid UTC shifting the day
+    const y = value.getFullYear();
+    const m = String(value.getMonth() + 1).padStart(2, "0");
+    const d = String(value.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+  // Already a string like "2026-08-15" or "2026-08-15T00:00:00.000Z" — take first 10 chars
+  return String(value).slice(0, 10);
+}
+// Turns a "YYYY-MM-DD" string into a friendly display like "Aug 15, 2026"
+function displayDateFromISO(iso) {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d) return iso;
+  const dt = new Date(y, m - 1, d);
+  return dt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
 function formatDisplayDate(date) {
   return date.toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" });
 }
@@ -83,6 +104,7 @@ function hourLabel(h) {
   return `${h} AM`;
 }
 function to12h(time24) {
+  if (!time24) return "";
   const [h, m] = time24.split(":").map(Number);
   const period = h >= 12 ? "pm" : "am";
   const hour12 = h % 12 === 0 ? 12 : h % 12;
@@ -387,7 +409,7 @@ function HistoryView({ reservations }) {
           <tbody>
             {completed.map((r) => (
               <tr key={r.id} style={{ fontSize: 13.5 }}>
-                <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, textAlign: "left" }}>{r.date}</td>
+                <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, textAlign: "left" }}>{displayDateFromISO(r.date)}</td>
                 <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, fontWeight: 700, textAlign: "left" }}>{to12h(r.time)}</td>
                 <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, textAlign: "left" }}>
                   {r.type === "event" ? r.eventTitle : r.name}
@@ -579,8 +601,12 @@ function DayView({ selectedISO, reservations, markStatus }) {
 function normalizeReservation(r) {
   return {
     id: r.id,
-    date: r.reservation_date,
-    time: r.reservation_time ? r.reservation_time.slice(0, 5) : "",
+    date: toISOString(r.reservation_date),
+    time: r.reservation_time
+      ? (r.reservation_time instanceof Date
+          ? r.reservation_time.toTimeString().slice(0, 5)
+          : String(r.reservation_time).slice(0, 5))
+      : "",
     type: r.reservation_type,
     name: r.guest_name,
     eventTitle: r.guest_name,
@@ -597,10 +623,11 @@ export default function Reservations({ embedded = false }) {
   const [reservations, setReservations] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const loadReservations = useCallback(() => {
+    const loadReservations = useCallback(() => {
     setLoading(true);
     reservationsApi.getAll()
       .then((data) => {
+        console.log('RAW reservation data:', data[0]);
         const active = data.filter((r) => r.status !== "cancelled" && r.status !== "no_show");
         setReservations(active.map(normalizeReservation));
       })

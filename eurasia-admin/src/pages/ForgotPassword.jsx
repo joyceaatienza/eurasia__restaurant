@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import logo from "../assets/logopic3.png";
+import { passwordResetApi } from "../services/passwordResetApi";
 
 const FONT = "'Prata', serif";
 
@@ -9,19 +10,25 @@ export default function ForgotPassword() {
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
+  const [sending, setSending] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!email) {
       setError("Please enter your email address.");
       return;
     }
-    setError("");
 
-    // TODO: replace with a real API call once the backend exists, e.g.
-    // await fetch("/api/forgot-password", { method: "POST", body: JSON.stringify({ email }) })
-
-    setSubmitted(true);
+    try {
+      setSending(true);
+      setError("");
+      await passwordResetApi.requestReset(email.trim());
+      setSubmitted(true);
+    } catch (err) {
+      setError(err.message || "Something went wrong. Please try again.");
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -55,15 +62,17 @@ export default function ForgotPassword() {
                   placeholder="Email address"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-4 py-3 rounded-md mb-2 text-sm bg-white text-[#1d080f] placeholder-neutral-400"
+                  disabled={sending}
+                  className="w-full px-4 py-3 rounded-md mb-2 text-sm bg-white text-[#1d080f] placeholder-neutral-400 disabled:opacity-70"
                 />
                 {error && <p className="text-red-400 text-xs mb-2">{error}</p>}
 
                 <button
                   type="submit"
-                  className="w-full mt-3 py-3 rounded-md bg-[#c0392b] text-white font-bold text-sm hover:bg-[#a5342a] transition"
+                  disabled={sending}
+                  className="w-full mt-3 py-3 rounded-md bg-[#c0392b] text-white font-bold text-sm hover:bg-[#a5342a] transition disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  Send Reset Link
+                  {sending ? "Sending..." : "Send Reset Link"}
                 </button>
               </form>
 
@@ -82,8 +91,11 @@ export default function ForgotPassword() {
               >
                 Check Your Email
               </h1>
-              <p className="text-[#f1ece7]/70 text-sm mb-8 leading-relaxed">
+              <p className="text-[#f1ece7]/70 text-sm mb-4 leading-relaxed">
                 If an account exists for <b>{email}</b>, you'll receive a password reset link shortly.
+              </p>
+              <p className="text-[#f1ece7]/50 text-xs mb-8 leading-relaxed">
+                The link expires in 60 minutes. Check your spam folder if you don't see it.
               </p>
               <button
                 onClick={() => navigate("/login")}

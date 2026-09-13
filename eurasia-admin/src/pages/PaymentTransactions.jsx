@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { X, Check, Ban } from "lucide-react";
 import StaffHeader from "../components/StaffHeader";
 import { ordersApi } from "../services/ordersApi";
+import PaymentVerificationForm from "../components/PaymentVerificationForm";
 
 function StatCard({ label, value }) {
   return (
@@ -87,7 +88,7 @@ function ValidateModal({ transaction, onClose, onConfirm, onFail, onUpdateTable 
           </div>
           <div className="flex justify-between">
             <span className="text-gray-500">Order #</span>
-            <span className="text-[#1d080f]">{transaction.id}</span>
+            <span className="text-[#1d080f]">{transaction.displayNo}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-gray-500">Payment Method</span>
@@ -162,6 +163,8 @@ function normalizeTransaction(o) {
   const createdAt = new Date(o.created_at);
   return {
     id: o.id,
+    dailyNumber: o.daily_number,
+    createdAt,
     customer: "Guest",
     table: o.table_number,
     method: o.payment_method,
@@ -175,6 +178,25 @@ function normalizeTransaction(o) {
   };
 }
 
+// Uses the daily_number stored in the database (matches Kitchen and customer History).
+// Falls back to a computed per-day number for older orders that have no daily_number yet.
+function assignDailyNumbers(list) {
+  const needsFallback = list.some((t) => t.dailyNumber == null);
+  if (!needsFallback) {
+    return list.map((t) => ({ ...t, displayNo: t.dailyNumber }));
+  }
+
+  const byTime = [...list].sort((a, b) => a.createdAt - b.createdAt);
+  const numberMap = {};
+  byTime.forEach((t, index) => {
+    numberMap[t.id] = index + 1;
+  });
+  return list.map((t) => ({
+    ...t,
+    displayNo: t.dailyNumber != null ? t.dailyNumber : numberMap[t.id],
+  }));
+}
+
 export default function PaymentTransactions({ embedded = false }) {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -185,7 +207,7 @@ export default function PaymentTransactions({ embedded = false }) {
   const loadTransactions = useCallback(() => {
     setLoading(true);
     ordersApi.getAll({ today_only: 'true' })
-  .then((data) => setTransactions(data.map(normalizeTransaction)))
+      .then((data) => setTransactions(assignDailyNumbers(data.map(normalizeTransaction))))
       .catch((err) => console.error("Failed to load transactions:", err))
       .finally(() => setLoading(false));
   }, []);
@@ -207,11 +229,12 @@ export default function PaymentTransactions({ embedded = false }) {
     .sort((a, b) => (a.date + a.time < b.date + b.time ? 1 : -1));
 
   const handleConfirm = async (id) => {
+    const tx = transactions.find((t) => t.id === id);
     try {
       await ordersApi.updatePaymentStatus(id, "verified");
       setTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, status: "Completed" } : t)));
       setModalTx(null);
-      showToast(`Payment #${id} confirmed successfully`);
+      showToast(`Payment #${tx?.displayNo ?? id} confirmed successfully`);
     } catch (err) {
       console.error(err);
       alert("Failed to confirm payment. Please try again.");
@@ -219,11 +242,12 @@ export default function PaymentTransactions({ embedded = false }) {
   };
 
   const handleFail = async (id) => {
+    const tx = transactions.find((t) => t.id === id);
     try {
       await ordersApi.updatePaymentStatus(id, "failed");
       setTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, status: "Failed" } : t)));
       setModalTx(null);
-      showToast(`Payment #${id} marked as failed`);
+      showToast(`Payment #${tx?.displayNo ?? id} marked as failed`);
     } catch (err) {
       console.error(err);
       alert("Failed to update payment. Please try again.");
@@ -303,7 +327,7 @@ export default function PaymentTransactions({ embedded = false }) {
                     <tbody>
                       {transactions.filter((t) => t.status === "Pending").map((t) => (
                         <tr key={t.id} className="border-b border-gray-100 last:border-0 text-sm">
-                          <td className="px-6 py-4" style={{ WebkitTextStroke: "0.3px #1d080f" }}>{t.id}</td>
+                          <td className="px-6 py-4" style={{ WebkitTextStroke: "0.3px #1d080f" }}>{t.displayNo}</td>
                           <td className="px-6 py-4">{t.customer}</td>
                           <td className="px-6 py-4">{t.table}</td>
                           <td className="px-6 py-4 capitalize">{t.method}</td>
@@ -317,7 +341,7 @@ export default function PaymentTransactions({ embedded = false }) {
                               onClick={() => setModalTx(t)}
                               className="px-4 py-1.5 rounded-md bg-[#1d080f] text-white text-xs hover:bg-[#3a1420] transition"
                             >
-                              Validate
+                              Verify
                             </button>
                           </td>
                         </tr>
@@ -346,7 +370,7 @@ export default function PaymentTransactions({ embedded = false }) {
                     <tbody>
                       {historyTransactions.map((t) => (
                         <tr key={t.id} className="border-b border-gray-100 last:border-0 text-sm">
-                          <td className="px-6 py-4" style={{ WebkitTextStroke: "0.3px #1d080f" }}>{t.id}</td>
+                          <td className="px-6 py-4" style={{ WebkitTextStroke: "0.3px #1d080f" }}>{t.displayNo}</td>
                           <td className="px-6 py-4">{t.customer}</td>
                           <td className="px-6 py-4">{t.table}</td>
                           <td className="px-6 py-4 capitalize">{t.method}</td>

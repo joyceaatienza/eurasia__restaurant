@@ -1068,63 +1068,6 @@ function DashboardPage() {
               gap: 16,
             }}
           >
-            <Card>
-              <SectionTitle>Payment Method Analysis</SectionTitle>
-              {computedPaymentMethods.length === 0 ? (
-                <p style={{ fontSize: 13, color: C.inkSoft }}>No orders yet.</p>
-              ) : (
-                <>
-                  <ResponsiveContainer width="100%" height={190}>
-                    <PieChart>
-                      <Pie
-                        data={computedPaymentMethods}
-                        dataKey="value"
-                        nameKey="name"
-                        innerRadius={0}
-                        outerRadius={80}
-                      >
-                        {computedPaymentMethods.map((entry, i) => (
-                          <Cell key={i} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: 10,
-                      marginTop: 4,
-                    }}
-                  >
-                    {computedPaymentMethods.map((p) => (
-                      <div
-                        key={p.name}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 6,
-                          fontSize: 11.5,
-                          color: C.inkSoft,
-                        }}
-                      >
-                        <span
-                          style={{
-                            width: 8,
-                            height: 8,
-                            borderRadius: 2,
-                            background: p.color,
-                            display: "inline-block",
-                          }}
-                        />
-                        {p.name} {p.value}%
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </Card>
 
             <Card>
               <SectionTitle>Revenue &amp; Profit Summary</SectionTitle>
@@ -1221,7 +1164,12 @@ function CashierPage() {
 
 function to12hFromDBTime(timeStr) {
   if (!timeStr) return '';
-  const [h, m] = timeStr.split(':').map(Number);
+  // Handle Date object (from db.js without dateStrings) or "HH:MM:SS" string
+  if (timeStr instanceof Date) {
+    timeStr = timeStr.toTimeString().slice(0, 8);
+  }
+  const [h, m] = String(timeStr).split(':').map(Number);
+  if (isNaN(h)) return '';
   const period = h >= 12 ? 'pm' : 'am';
   const hour12 = h % 12 === 0 ? 12 : h % 12;
   return `${hour12}:${String(m).padStart(2, '0')} ${period}`;
@@ -1229,13 +1177,24 @@ function to12hFromDBTime(timeStr) {
 
 function formatDBDate(isoDate) {
   if (!isoDate) return '';
-  const [y, m, d] = isoDate.split('-').map(Number);
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  let y, m, d;
+  // Handle Date object (from db.js without dateStrings) or "YYYY-MM-DD" string
+  if (isoDate instanceof Date) {
+    y = isoDate.getFullYear();
+    m = isoDate.getMonth() + 1;
+    d = isoDate.getDate();
+  } else {
+    [y, m, d] = String(isoDate).slice(0, 10).split('-').map(Number);
+  }
+  if (!y || !m || !d) return String(isoDate);
   return `${months[m - 1]} ${d}, ${y}`;
 }
 
 function formatDBDateTime(isoString) {
+  if (!isoString) return '';
   const d = new Date(isoString);
+  if (isNaN(d.getTime())) return String(isoString);
   return d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 

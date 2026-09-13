@@ -115,10 +115,8 @@ function ValidateModal({ transaction, onClose, onConfirm, onFail, onUpdateTable 
             />
           </a>
         ) : (
-          <div className="border border-dashed border-gray-300 rounded-lg p-4 text-center text-xs text-gray-500 mb-4">
-            {transaction.method === "cash" || transaction.method === "Cash"
-              ? "Cash payment — no receipt required."
-              : "No proof of payment uploaded."}
+             <div className="border border-dashed border-gray-300 rounded-lg p-4 text-center text-xs text-gray-500 mb-4">
+            No proof of payment uploaded.
           </div>
         )}
 
@@ -172,6 +170,7 @@ function normalizeTransaction(o) {
     status: STATUS_LABEL[o.payment_status] || "Pending",
     discount: o.discount_type,
     receiptImage: o.receipt_image,
+    hasReceipt: Boolean(o.has_receipt ?? o.receipt_image),
     discountIdImage: o.discount_id_image,
     date: createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
     time: createdAt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
@@ -336,13 +335,19 @@ export default function PaymentTransactions({ embedded = false }) {
                           <td className="px-6 py-4 text-gray-500">
                             {t.date}<br />{t.time}
                           </td>
-                          <td className="px-6 py-4">
-                            <button
-                              onClick={() => setModalTx(t)}
-                              className="px-4 py-1.5 rounded-md bg-[#1d080f] text-white text-xs hover:bg-[#3a1420] transition"
-                            >
-                              Verify
-                            </button>
+                                                    <td className="px-6 py-4">
+                            {t.receiptImage ? (
+                              <button
+                                onClick={() => setModalTx(t)}
+                                className="px-4 py-1.5 rounded-md bg-[#1d080f] text-white text-xs hover:bg-[#3a1420] transition"
+                              >
+                                Verify
+                              </button>
+                            ) : (
+                              <span className="text-xs text-gray-400 italic">
+                                Awaiting payment
+                              </span>
+                            )}
                           </td>
                         </tr>
                       ))}

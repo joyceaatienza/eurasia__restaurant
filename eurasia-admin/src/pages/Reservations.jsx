@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { reservationsApi } from "../services/reservationsApi";
 import StaffHeader from "../components/StaffHeader";
@@ -22,11 +23,14 @@ const C = {
   eventYellowBg: "#fdf6df",
   eventBlue: "#9db6e8",
   eventBlueBg: "#e9eefb",
+  highlight: "#fff8e1",
 };
 
 const FONT_IMPORT =
   "@import url('https://fonts.googleapis.com/css2?family=Prata&display=swap');";
 const FONT = "'Prata', serif";
+
+const HIGHLIGHT_MS = 3000;
 
 const TABLES = ["T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10", "T11", "T12", "T13", "T14", "T15", "T16", "T17"];
 const DAY_LABELS = ["SUN", "MON", "TUES", "WED", "THU", "FRI", "SAT"];
@@ -506,7 +510,7 @@ function FloorPlan({ tableStatus }) {
 /* ---------------------------------------------------------------- */
 /* Day view                                                           */
 /* ---------------------------------------------------------------- */
-function DayView({ selectedISO, reservations, markStatus }) {
+function DayView({ selectedISO, reservations, markStatus, highlightId, highlightRef }) {
   const dayReservations = reservations.filter((r) => r.date === selectedISO && r.status !== "Completed");
   const tableRes = dayReservations.filter((r) => r.type === "table");
   const sortedAll = [...dayReservations].sort((a, b) => (a.time > b.time ? 1 : -1));
@@ -547,26 +551,37 @@ function DayView({ selectedISO, reservations, markStatus }) {
               </tr>
             </thead>
             <tbody>
-              {sortedAll.map((r) => (
-                <tr key={r.id} style={{ fontSize: 13.5 }}>
-                  <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, fontWeight: 700 }}>
-                    {to12h(r.time)}
-                  </td>
-                  <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}` }}>
-                    {r.type === "event" ? r.eventTitle : r.name}
-                  </td>
-                  <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, color: r.type === "event" ? C.eventBlue : C.ink, fontWeight: r.type === "event" ? 700 : 400 }}>
-                    {r.type === "event" ? "Event" : r.table}
-                  </td>
-                  <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, color: C.inkSoft }}>{r.pax}</td>
-                  <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}` }}>
-                    <Badge tone={r.status === "Completed" ? "gray" : r.status === "Arrived" ? "orange" : "amber"}>{r.status}</Badge>
-                  </td>
-                  <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}` }}>
-                    <StatusButtons status={r.status} onMark={(status) => markStatus(r.id, status)} />
-                  </td>
-                </tr>
-              ))}
+              {sortedAll.map((r) => {
+                const isHighlighted = r.id === highlightId;
+                return (
+                  <tr
+                    key={r.id}
+                    ref={isHighlighted ? highlightRef : null}
+                    style={{
+                      fontSize: 13.5,
+                      background: isHighlighted ? C.highlight : "transparent",
+                      transition: "background 0.4s ease",
+                    }}
+                  >
+                    <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, fontWeight: 700 }}>
+                      {to12h(r.time)}
+                    </td>
+                    <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}` }}>
+                      {r.type === "event" ? r.eventTitle : r.name}
+                    </td>
+                    <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, color: r.type === "event" ? C.eventBlue : C.ink, fontWeight: r.type === "event" ? 700 : 400 }}>
+                      {r.type === "event" ? "Event" : r.table}
+                    </td>
+                    <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, color: C.inkSoft }}>{r.pax}</td>
+                    <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}` }}>
+                      <Badge tone={r.status === "Completed" ? "gray" : r.status === "Arrived" ? "orange" : "amber"}>{r.status}</Badge>
+                    </td>
+                    <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}` }}>
+                      <StatusButtons status={r.status} onMark={(status) => markStatus(r.id, status)} />
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -617,17 +632,19 @@ function normalizeReservation(r) {
   };
 }
 
-export default function Reservations({ embedded = false }) {
+export default function Reservations({ embedded = false, highlightTarget = null }) {
+  const location = useLocation();
   const [range, setRange] = useState("Day");
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [reservations, setReservations] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [highlightId, setHighlightId] = useState(null);
+  const highlightRef = useRef(null);
 
-    const loadReservations = useCallback(() => {
+  const loadReservations = useCallback(() => {
     setLoading(true);
     reservationsApi.getAll()
       .then((data) => {
-        console.log('RAW reservation data:', data[0]);
         const active = data.filter((r) => r.status !== "cancelled" && r.status !== "no_show");
         setReservations(active.map(normalizeReservation));
       })
@@ -638,6 +655,30 @@ export default function Reservations({ embedded = false }) {
   useEffect(() => {
     loadReservations();
   }, [loadReservations]);
+
+  // Jump to and highlight a reservation when arriving from a notification
+  useEffect(() => {
+    const target = highlightTarget || location.state?.highlight;
+    if (!target || target.type !== "reservation") return;
+
+    setRange("Day");
+    if (target.date) {
+      const iso = toISOString(target.date);
+      const [y, m, d] = iso.split("-").map(Number);
+      if (y && m && d) setSelectedDate(new Date(y, m - 1, d));
+    }
+    setHighlightId(target.id);
+
+    const timer = setTimeout(() => setHighlightId(null), HIGHLIGHT_MS);
+    return () => clearTimeout(timer);
+  }, [highlightTarget, location.state]);
+
+  // Scroll the highlighted row into view once it renders
+  useEffect(() => {
+    if (highlightId && highlightRef.current) {
+      highlightRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [highlightId, reservations]);
 
   const markStatus = async (id, status) => {
     const backendStatus = status === "Arrived" ? "seated" : status === "Completed" ? "completed" : "pending";
@@ -718,7 +759,15 @@ export default function Reservations({ embedded = false }) {
           <Card style={{ textAlign: "center", padding: 40, color: C.inkSoft, fontFamily: FONT }}>Loading reservations...</Card>
         ) : (
           <>
-            {range === "Day" && <DayView selectedISO={selectedISO} reservations={reservations} markStatus={markStatus} />}
+            {range === "Day" && (
+              <DayView
+                selectedISO={selectedISO}
+                reservations={reservations}
+                markStatus={markStatus}
+                highlightId={highlightId}
+                highlightRef={highlightRef}
+              />
+            )}
             {range === "Week" && <WeekView selectedDate={selectedDate} reservations={reservations} onOpenDay={openDay} />}
             {range === "Month" && <MonthView selectedDate={selectedDate} reservations={reservations} />}
             {range === "History" && <HistoryView reservations={reservations} />}

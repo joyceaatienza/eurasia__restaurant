@@ -1,7 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import heroImage from "../assets/bgHero.jpg";
 import logo from "../assets/logoword.png";
 import { addReview } from "../utils/reviewsStore";
+import { ordersApi } from "../services/ordersApi";
+
+const MY_ORDER_HISTORY_KEY = "eurasia_my_order_history";
 
 const C = {
   bg: "#EFEAE2",
@@ -20,6 +23,32 @@ const C = {
 
 const FONT = "'Prata', serif";
 
+// Small reusable star row (used for per-dish ratings)
+function StarRow({ value, onChange, size = 26 }) {
+  const [hover, setHover] = useState(0);
+  return (
+    <div style={{ display: "flex", gap: 4 }}>
+      {[1, 2, 3, 4, 5].map((val) => (
+        <span
+          key={val}
+          onClick={() => onChange(val === value ? 0 : val)}
+          onMouseEnter={() => setHover(val)}
+          onMouseLeave={() => setHover(0)}
+          style={{
+            fontSize: size,
+            lineHeight: 1,
+            cursor: "pointer",
+            transition: "color .1s",
+            color: val <= (hover || value) ? C.gold : "#d9d0c0",
+          }}
+        >
+          ★
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export default function Feedback() {
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
@@ -27,21 +56,65 @@ export default function Feedback() {
   const [message, setMessage] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
-  const isValid = rating > 0 && name.trim().length > 0 && message.trim().length > 0;
+  const [dishes, setDishes] = useState([]);
+  const [dishRatings, setDishRatings] = useState({});
+
+  // Load the dishes the customer actually ordered, so they can rate each one
+  useEffect(() => {
+    const loadDishes = async () => {
+      try {
+        const ids = JSON.parse(localStorage.getItem(MY_ORDER_HISTORY_KEY) || "[]");
+        if (ids.length === 0) return;
+
+        const results = await Promise.all(
+          ids.map((id) => ordersApi.getById(id).catch(() => null))
+        );
+
+        const names = [];
+        results.filter(Boolean).forEach((order) => {
+          (order.items || []).forEach((it) => {
+            const dishName = (it.item_name || it.name || "").toString().trim();
+            if (dishName && !names.includes(dishName)) names.push(dishName);
+          });
+        });
+
+        setDishes(names);
+      } catch (e) {
+        console.error("Failed to load ordered dishes:", e);
+      }
+    };
+
+    loadDishes();
+  }, []);
+
+  const isValid = rating > 0 && name.trim().length > 0;
+
+  const setDishRating = (dish, value) => {
+    setDishRatings((prev) => ({ ...prev, [dish]: value }));
+  };
 
   const handleCancel = () => {
     setRating(0);
     setName("");
     setMessage("");
+    setDishRatings({});
   };
 
-const handleSubmit = () => {
-  if (!isValid) return;
+  const handleSubmit = () => {
+    if (!isValid) return;
 
-  addReview({ name: name.trim(), message: message.trim(), rating });
+    addReview({
+      name: name.trim(),
+      message: message.trim(),
+      rating,
+      dishRatings: dishes.map((dish) => ({
+        dish,
+        rating: dishRatings[dish] || 0,
+      })),
+    });
 
-  setSubmitted(true);
-};
+    setSubmitted(true);
+  };
 
   return (
     <div style={{ fontFamily: FONT, color: C.ink, background: C.bg }}>
@@ -119,6 +192,53 @@ const handleSubmit = () => {
                   ))}
                 </div>
 
+                {/* Per-dish ratings — only shown if the customer has ordered dishes */}
+                {dishes.length > 0 && (
+                  <div
+                    style={{
+                      background: "#fff",
+                      borderRadius: 10,
+                      padding: "20px 22px",
+                      marginBottom: 24,
+                    }}
+                  >
+                    <p
+                      style={{
+                        fontFamily: FONT,
+                        fontSize: 16,
+                        margin: "0 0 4px",
+                        textAlign: "center",
+                      }}
+                    >
+                      Rate the dishes you ordered
+                    </p>
+
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      {dishes.map((dish) => (
+                        <div
+                          key={dish}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 12,
+                            paddingBottom: 12,
+                            borderBottom: `1px solid ${C.line}`,
+                          }}
+                        >
+                          <span style={{ fontSize: 14.5, fontFamily: FONT, color: C.ink }}>
+                            {dish}
+                          </span>
+                          <StarRow
+                            value={dishRatings[dish] || 0}
+                            onChange={(v) => setDishRating(dish, v)}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div style={{ marginBottom: 16 }}>
                   <input
                     type="text"
@@ -140,7 +260,7 @@ const handleSubmit = () => {
 
                 <div style={{ marginBottom: 16 }}>
                   <textarea
-                    placeholder="Tell us what you enjoyed, or what we can improve *"
+                    placeholder="Tell us what you enjoyed, or what we can improve"
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     style={{

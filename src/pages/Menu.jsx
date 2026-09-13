@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import 'flag-icons/css/flag-icons.min.css'
 import heroImage from '../assets/bgHero.jpg'
@@ -31,6 +31,7 @@ import greekSalad from '../assets/greek-salad.png'
 import caesar from '../assets/insalata-caesar.png'
 import affumicato from '../assets/affumicato.png'
 import { useCart } from '../context/CartContext'
+import { getDishRatings } from '../utils/reviewsStore'
 
 const categories = [
   'Best Sellers',
@@ -319,11 +320,43 @@ const menuItems = [
   },
 ]
 
+// Renders a compact star row with the numeric average and review count
+function DishRating({ average, count }) {
+  const rounded = Math.round(average * 2) / 2; // nearest half
+  return (
+    <div className="mt-1 flex items-center justify-start gap-1">
+      <div className="flex" aria-label={`${average.toFixed(1)} out of 5`}>
+        {[1, 2, 3, 4, 5].map((val) => {
+          const filled = val <= Math.floor(rounded);
+          const half = !filled && val - 0.5 === rounded;
+          return (
+            <span
+              key={val}
+              className="text-sm leading-none"
+              style={{ color: filled || half ? '#c9a15a' : '#d9d0c0' }}
+            >
+              {half ? '⯨' : '★'}
+            </span>
+          );
+        })}
+      </div>
+      <span className="text-xs font-normal text-neutral-500">
+        {average.toFixed(1)} ({count})
+      </span>
+    </div>
+  );
+}
+
 function Menu() {
   const [activeCategory, setActiveCategory] = useState(categories[0]) // Appetizers
+  const [dishRatings, setDishRatings] = useState({})
   const filteredItems = menuItems.filter((item) => item.category.includes(activeCategory))
   const { addToCart, flyToCart } = useCart()
   const navigate = useNavigate()
+
+  useEffect(() => {
+    setDishRatings(getDishRatings())
+  }, [])
 
   const handleAddToTray = (item, event) => {
     const rect = event.currentTarget.getBoundingClientRect()
@@ -338,17 +371,22 @@ function Menu() {
     })
   }
 
-  const handleBuyNow = (item) => {
-    addToCart({
-      id: item.id,
-      name: item.name,
-      price: item.price,
-      image: item.image,
-      flag: item.flag,
-      emoji: item.emoji,
-    })
-    navigate('/payment')
+  const BUY_NOW_KEY = 'eurasia_buy_now'
+
+const handleBuyNow = (item) => {
+  const buyNowItem = {
+    id: item.id,
+    name: item.name,
+    price: item.price,
+    image: item.image,
+    flag: item.flag,
+    emoji: item.emoji,
+    qty: 1,
+    note: '',
   }
+  localStorage.setItem(BUY_NOW_KEY, JSON.stringify(buyNowItem))
+  navigate('/payment')
+}
 
   return (
     <div className="flex min-h-screen flex-col bg-white text-[#1d080f] font-['Prata'],serif">
@@ -395,7 +433,9 @@ function Menu() {
         <main className="flex-1">
           {filteredItems.length > 0 ? (
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-              {filteredItems.map((item) => (
+              {filteredItems.map((item) => {
+                const rating = dishRatings[item.name]
+                return (
                 <div
                   key={item.id}
                   className="flex h-full flex-col justify-between overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm transition-shadow hover:shadow-md"
@@ -421,6 +461,7 @@ function Menu() {
                       <p className="mt-1 text-sm md:text-base font-bold text-neutral-800 [text-shadow:_0.3px_0_0_#1d080f]">
                         Php. {item.price}
                       </p>
+                      {rating && <DishRating average={rating.average} count={rating.count} />}
                     </div>
 
                     {/* 2. MIDDLE: Food Image */}
@@ -463,7 +504,8 @@ function Menu() {
                     </button>
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
           ) : (
             <p className="col-span-full py-12 text-center text-neutral-400 font-['Prata']">

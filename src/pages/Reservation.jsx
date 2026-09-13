@@ -1,9 +1,9 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { ChevronLeft, ChevronRight, ChevronDown, Check, X, Clock, Upload } from 'lucide-react'
 import heroImage from '../assets/bgHero.jpg'
+import { reservationsApi } from '../services/reservationsApi'
 
 const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"]
-const STORAGE_KEY = 'eurasia_reservations'
 
 const DOWNPAYMENT = {
   table: 1000,
@@ -72,7 +72,20 @@ const FLOOR_TABLES = [
   { id: 'T2',  x: 81,   y: 70,   w: 16.2, h: 8.6 },
 ]
 
-/* --- WHEEL TIME PICKER COMPONENT --- */
+function formatDateDisplay(isoDate) {
+  if (!isoDate) return ''
+  const [y, m, d] = isoDate.split('-').map(Number)
+  return `${MONTH_NAMES[m - 1]} ${d}, ${y}`
+}
+
+function formatTimeDisplay(timeStr) {
+  if (!timeStr) return ''
+  const [h, m] = timeStr.split(':').map(Number)
+  const ampm = h >= 12 ? 'pm' : 'am'
+  const hour12 = h % 12 === 0 ? 12 : h % 12
+  return `${hour12}:${m.toString().padStart(2, '0')} ${ampm}`
+}
+
 function WheelColumn({ options, selected, onSelect }) {
   const containerRef = useRef(null)
   const isScrollingRef = useRef(false)
@@ -291,8 +304,7 @@ function FloorPlan({ selected, onSelect, unavailableTables = [] }) {
 
 function Reservation() {
   const [tab, setTab] = useState("table")
-  
-  // Set initial state to the user's actual present date
+
   const [viewDate, setViewDate] = useState(() => new Date())
   const [selectedDay, setSelectedDay] = useState(() => new Date().getDate())
 
@@ -302,20 +314,34 @@ function Reservation() {
   const [selectedTable, setSelectedTable] = useState("")
   const [paymentMethod, setPaymentMethod] = useState("")
   const [themeImagePreview, setThemeImagePreview] = useState("")
+  const [submitting, setSubmitting] = useState(false)
 
-  const [reservations, setReservations] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEY)
-    return saved ? JSON.parse(saved) : []
-  })
+  const [reservations, setReservations] = useState([])
+  const [loadingReservations, setLoadingReservations] = useState(true)
 
-  const currentDateString = `${MONTH_NAMES[viewDate.getMonth()]} ${selectedDay}, ${viewDate.getFullYear()}`
+  const isoDate = `${viewDate.getFullYear()}-${String(viewDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDay).padStart(2, '0')}`
+
+  useEffect(() => {
+    let cancelled = false
+    setLoadingReservations(true)
+    reservationsApi.getAll()
+      .then((data) => { if (!cancelled) setReservations(data) })
+      .catch((err) => console.error('Failed to load reservations:', err))
+      .finally(() => { if (!cancelled) setLoadingReservations(false) })
+    return () => { cancelled = true }
+  }, [])
 
   const unavailableTables = useMemo(() => {
     if (!selectedTime) return []
     return reservations
-      .filter((r) => r.date === currentDateString && r.time === selectedTime && r.preference)
-      .map((r) => r.preference)
-  }, [reservations, currentDateString, selectedTime])
+      .filter((r) =>
+        r.reservation_date === isoDate &&
+        r.reservation_time?.slice(0, 5) === selectedTime &&
+        r.table_number &&
+        r.status !== 'cancelled'
+      )
+      .map((r) => r.table_number)
+  }, [reservations, isoDate, selectedTime])
 
   useEffect(() => {
     if (selectedTable && unavailableTables.includes(selectedTable)) {
@@ -345,7 +371,7 @@ function Reservation() {
     reader.readAsDataURL(file)
   }
 
-  const handleConfirm = (e) => {
+  const handleConfirm = async (e) => {
     e.preventDefault()
 
     const formData = new FormData(e.target)
@@ -375,46 +401,56 @@ function Reservation() {
 
     const downpaymentAmount = tab === "event" ? DOWNPAYMENT.event : DOWNPAYMENT.table
 
-    const newReservation = {
-      id: Date.now(),
-      date: currentDateString,
-      name: formData.get('name'),
-      contact: formData.get('contact'),
+    const payload = {
+      reservation_type: tab,
+      guest_name: formData.get('name'),
+      contact_number: formData.get('contact'),
       email: formData.get('email'),
-      time,
-      occasion: formData.get('occasion'),
-      persons: formData.get('persons'),
-      preference: formData.get('preference') || selectedTable || '',
-      note: formData.get('note') || '',
-      type: tab,
-      downpayment: downpaymentAmount,
-      paymentMethod,
-      paymentStatus: "Pending",
-      themeImage: tab === "event" ? themeImagePreview : "",
+      party_size: formData.get('persons'),
+      occasion: formData.get('occasion') || null,
+      reservation_date: isoDate,
+      reservation_time: `${time}:00`,
+      table_number: tab === 'table' ? (formData.get('preference') || selectedTable || null) : null,
+      special_requests: tab === 'event' ? (formData.get('note') || null) : (formData.get('preference') || null),
+      theme_image: tab === 'event' ? (themeImagePreview || null) : null,
+      downpayment_amount: downpaymentAmount,
+      payment_method: paymentMethod,
     }
 
-    const updated = [...reservations, newReservation]
-    setReservations(updated)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+    try {
+      setSubmitting(true)
+      const created = await reservationsApi.create(payload)
+      setReservations((prev) => [...prev, created])
 
-    e.target.reset()
-    setSelectedTable("")
-    setSelectedTime("")
-    setPaymentMethod("")
-    setThemeImagePreview("")
-    setShowConfirm(true)
+      e.target.reset()
+      setSelectedTable("")
+      setSelectedTime("")
+      setPaymentMethod("")
+      setThemeImagePreview("")
+      setShowConfirm(true)
+    } catch (err) {
+      console.error(err)
+      alert("Sorry, something went wrong while submitting your reservation. Please try again.")
+    } finally {
+      setSubmitting(false)
+    }
   }
 
-  const handleCancelReservation = (id) => {
-    const updated = reservations.filter((r) => r.id !== id)
-    setReservations(updated)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+  const handleCancelReservation = async (id) => {
+    try {
+      await reservationsApi.updateStatus(id, 'cancelled')
+      setReservations((prev) => prev.filter((r) => r.id !== id))
+    } catch (err) {
+      console.error(err)
+      alert("Failed to cancel reservation. Please try again.")
+    }
   }
 
   const filteredReservations = reservations.filter(
     (r) =>
-      r.contact?.includes(historyQuery) ||
-      r.email?.toLowerCase().includes(historyQuery.toLowerCase())
+      r.status !== 'cancelled' &&
+      (r.contact_number?.includes(historyQuery) ||
+        r.email?.toLowerCase().includes(historyQuery.toLowerCase()))
   )
 
   const inputClass =
@@ -422,7 +458,6 @@ function Reservation() {
 
   return (
     <div className="bg-white text-[#1d080f]">
-      {/* Hero Header */}
       <div className="relative h-64 overflow-hidden shrink-0 md:h-60">
         <img src={heroImage}
           alt=""
@@ -439,11 +474,9 @@ function Reservation() {
         </div>
       </div>
 
-      {/* Main Container */}
       <div style={{ marginTop: '4rem' }}> </div>
       <div className="max-w-5xl mx-auto px-4 md:px-3 -mt-24 md:-mt-32 relative z-10 pb-16">
         <div className="bg-[#e6e1d8] rounded-xl shadow-xl p-6 md:p-10">
-          {/* Tabs */}
           <div className="flex gap-3 mb-8">
             <button
               onClick={() => setTab("table")}
@@ -480,7 +513,6 @@ function Reservation() {
           {tab !== "history" && (
             <>
               <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-6">
-                {/* Calendar */}
                 <div>
                   <div className="font-[Prata] text-lg mb-4">Select a date</div>
                   <div className="bg-white rounded-xl shadow-sm p-4">
@@ -516,7 +548,6 @@ function Reservation() {
                   </div>
                 </div>
 
-                {/* Form */}
                 <form id="reservation-form" onSubmit={handleConfirm} className="flex flex-col gap-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <input name="name" placeholder="Name *" required className={inputClass} />
@@ -601,7 +632,6 @@ function Reservation() {
                     </>
                   )}
 
-                  {/* Downpayment */}
                   <div className="bg-white rounded-xl p-5">
                     <div className="flex items-center justify-between mb-3">
                       <span className="font-[Prata] text-sm text-neutral-600">Required Downpayment</span>
@@ -614,7 +644,7 @@ function Reservation() {
                     </p>
 
                     <div className="grid grid-cols-2 gap-2">
-                      {["GCash", "Paymaya", "Bank Transfer", "Cash"].map((method) => (
+                      {["GCash", "Paymaya", "Bank Transfer"].map((method) => (
                         <button
                           key={method}
                           type="button"
@@ -633,7 +663,6 @@ function Reservation() {
                       <p className="text-xs text-red-500 font-[Prata] mt-2">Please select a downpayment method.</p>
                     )}
 
-                    {/* Payment details — appears after selecting GCash, Paymaya, or Bank Transfer */}
                     {paymentMethod && PAYMENT_ACCOUNTS[paymentMethod] && (
                       <div className="mt-4 bg-[#f7f5f0] rounded-lg p-4">
                         <p className="text-xs font-[Prata] text-neutral-600 mb-3">
@@ -659,14 +688,6 @@ function Reservation() {
                         </p>
                       </div>
                     )}
-
-                    {paymentMethod === "Cash" && (
-                      <div className="mt-4 bg-[#f7f5f0] rounded-lg p-4">
-                        <p className="text-xs font-[Prata] text-neutral-600 leading-relaxed">
-                          Please settle your downpayment in cash upon arrival at the restaurant.
-                        </p>
-                      </div>
-                    )}
                   </div>
 
                   <div className="flex gap-4 mt-8 max-w-md">
@@ -686,10 +707,10 @@ function Reservation() {
                     <button
                       type="submit"
                       form="reservation-form"
-                      disabled={tab === "table" && !selectedTable}
+                      disabled={submitting || (tab === "table" && !selectedTable)}
                       className="flex-1 bg-[#1d080f] text-white font-[Prata] font-bold py-3.5 rounded-full hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Confirm Reservation
+                      {submitting ? "Submitting..." : "Confirm Reservation"}
                     </button>
                   </div>
                 </form>
@@ -707,7 +728,11 @@ function Reservation() {
                 className={`${inputClass} mb-6`}
               />
 
-              {filteredReservations.length === 0 && (
+              {loadingReservations && (
+                <p className="text-neutral-500 text-center py-8 text-sm font-[Prata]">Loading...</p>
+              )}
+
+              {!loadingReservations && filteredReservations.length === 0 && (
                 <p className="text-neutral-500 text-center py-8 text-sm font-[Prata]">
                   {historyQuery ? "No matching reservations found." : "No reservations yet."}
                 </p>
@@ -719,15 +744,15 @@ function Reservation() {
                     <div className="flex flex-col gap-3">
                       <div>
                         <span className="block text-xs text-neutral-400">Date</span>
-                        <span>{r.date}</span>
+                        <span>{formatDateDisplay(r.reservation_date)}</span>
                       </div>
                       <div>
                         <span className="block text-xs text-neutral-400">Name</span>
-                        <span>{r.name}</span>
+                        <span>{r.guest_name}</span>
                       </div>
                       <div>
                         <span className="block text-xs text-neutral-400">Contact No.</span>
-                        <span>{r.contact}</span>
+                        <span>{r.contact_number}</span>
                       </div>
                       <div>
                         <span className="block text-xs text-neutral-400">Email Address</span>
@@ -735,38 +760,38 @@ function Reservation() {
                       </div>
                       <div>
                         <span className="block text-xs text-neutral-400">Occasion</span>
-                        <span>{r.occasion}</span>
+                        <span>{r.occasion || '—'}</span>
                       </div>
                     </div>
                     <div className="flex flex-col gap-3">
                       <div>
                         <span className="block text-xs text-neutral-400">Time</span>
-                        <span>{r.time}</span>
+                        <span>{formatTimeDisplay(r.reservation_time)}</span>
                       </div>
                       <div>
                         <span className="block text-xs text-neutral-400">Number of persons</span>
-                        <span>{r.persons}</span>
+                        <span>{r.party_size}</span>
                       </div>
                       <div>
                         <span className="block text-xs text-neutral-400">Table / Preference</span>
-                        <span>{r.preference || '—'}</span>
+                        <span>{r.table_number || r.special_requests || '—'}</span>
                       </div>
                       <div>
                         <span className="block text-xs text-neutral-400">Downpayment</span>
                         <span>
-                          {r.downpayment ? `Php. ${r.downpayment.toLocaleString()} (${r.paymentStatus || 'Pending'})` : '—'}
+                          {r.downpayment_amount ? `Php. ${Number(r.downpayment_amount).toLocaleString()} (${r.payment_status || 'Pending'})` : '—'}
                         </span>
                       </div>
                       <div>
-                        <span className="block text-xs text-neutral-400">Note</span>
-                        <span>{r.note || '—'}</span>
+                        <span className="block text-xs text-neutral-400">Status</span>
+                        <span className="capitalize">{r.status}</span>
                       </div>
                     </div>
                   </div>
 
-                  {r.themeImage && (
+                  {r.theme_image && (
                     <img
-                      src={r.themeImage}
+                      src={r.theme_image}
                       alt="Theme inspiration"
                       className="mt-4 w-full max-h-48 object-cover rounded-md"
                     />
@@ -775,7 +800,8 @@ function Reservation() {
                   <div className="flex gap-3 mt-6 max-w-md">
                     <button
                       onClick={() => handleCancelReservation(r.id)}
-                      className="flex-1 bg-[#c0392b] text-white font-[Prata] font-bold py-3 rounded-full hover:opacity-90 transition"
+                      disabled={r.status === 'cancelled'}
+                      className="flex-1 bg-[#c0392b] text-white font-[Prata] font-bold py-3 rounded-full hover:opacity-90 transition disabled:opacity-50"
                     >
                       Cancel Reservation
                     </button>
@@ -790,7 +816,6 @@ function Reservation() {
         </div>
       </div>
 
-      {/* Confirmation Modal */}
       {showConfirm && (
         <div
           onClick={() => setShowConfirm(false)}

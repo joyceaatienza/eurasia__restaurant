@@ -1,5 +1,6 @@
 import logo from '../assets/logopic2.png'
-import bg from '../assets/bg.jpg'
+import heroVideo from '../assets/eurasia-bg.mp4'
+import bgPoster from '../assets/bg.jpg'
 import bakedSalmon from '../assets/bakedSalmon2.png'
 import bbqRibs from '../assets/texas-bbq-ribs2.png'
 import norwegianSalmon from '../assets/norwegian-salmon2.png'
@@ -14,6 +15,7 @@ import quatroFormaggi from '../assets/quatro-formaggi2.png'
 import { getReviews } from "../utils/reviewsStore";
 import { Link } from "react-router-dom";
 import { useRef, useState, useEffect } from "react";
+import { Clock } from 'lucide-react'
 
 function FindUs() {
   const address = "5th Floor ARADA VIRTUCIO Building, Banay-Banay, San Jose, Batangas";
@@ -215,18 +217,26 @@ function Homepage() {
     <div className="bg-white">
       {/* Hero Section */}
       <div className="relative h-[500px] flex flex-col items-center justify-center text-center overflow-hidden">
-        <img src={bg} alt="Restaurant interior" className="absolute inset-0 w-full h-full object-cover"
+        <video
+          src={heroVideo}
+          poster={bgPoster}
+          autoPlay
+          muted
+          loop
+          playsInline
+          className="absolute inset-0 w-full h-full object-cover"
         />
-        <div className="absolute inset-0 bg-white/60" />
+        <div className="absolute inset-0 bg-white/40" />
 
         <div className="relative z-10 flex flex-col items-center">
          <img src={logo} alt="Eurasia Restaurant" className="w-64 md:w-96 h-auto mb-6 md:mb-8" />
          <p className="mt-4 md:mt-6 text-xs md:text-base text-[#1d080f] font-[Prata] px-6">
           5th Floor ARADA VIRTUCIO Building, Banay-Banay, San Jose, Batangas
           </p>
-          <p className="text-xs md:text-base text-[#1d080f] font-serif px-6">
-            [Weekdays] 11:00am-10:00pm &nbsp;|&nbsp; [Weekends] 10:00am-10:00pm
-            </p>
+            <p className="flex items-center justify-center gap-2 text-xs md:text-base text-[#1d080f] font-serif px-6">
+            <Clock size={16} className="shrink-0" />
+            [Weekends to Weekdays] 11:00am-10:00pm
+          </p>
               <Link
             to="/reservation"
             className="mt-5 px-5 py-2 bg-[#1d080f] text-[#f1ece7] font-[Prata] tracking-wide rounded-sm hover:bg-[#6a2420] transition-colors shadow-sm"

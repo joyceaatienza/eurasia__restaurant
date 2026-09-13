@@ -6,17 +6,8 @@ import { useCart } from '../context/CartContext'
 
 function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [scrolled, setScrolled] = useState(false)
   const { itemCount, openTray, trayIconRef } = useCart()
   const location = useLocation()
-
-  useEffect(() => {
-    function handleScroll() {
-      setScrolled(window.scrollY > 20)
-    }
-    window.addEventListener('scroll', handleScroll)
-    return () => window.removeEventListener('scroll', handleScroll)
-  }, [])
 
   const linkClass = ({ isActive }) =>
     isActive
@@ -24,7 +15,7 @@ function Navbar() {
       : 'hover:text-[#1d080f]'
 
   return (
-    <nav className={`fixed top-0 left-0 w-full z-50 transition-all duration-300 ${scrolled ? 'bg-white/50 shadow-none' : 'bg-white shadow-xl'}`}>
+    <nav className="fixed top-0 left-0 w-full z-50 bg-white shadow-xl">
       <div className="flex items-center justify-between px-6 md:px-10 py-4">
         <NavLink to="/">
           <img src={logo} alt="Eurasia Restaurant" className="h-12 w-auto" />
@@ -37,13 +28,13 @@ function Navbar() {
           <NavLink to="/payment" className={linkClass}>Payment</NavLink>
           <NavLink to="/about" className={linkClass}>About Us</NavLink>
           <button ref={trayIconRef} onClick={openTray} className="hover:opacity-70 relative">
-  <img src={trayIcon} alt="Tray" className="h-11 w-auto" />
-  {itemCount > 0 && (
-    <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-      {itemCount}
-    </span>
-  )}
-</button>
+            <img src={trayIcon} alt="Tray" className="h-11 w-auto" />
+            {itemCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                {itemCount}
+              </span>
+            )}
+          </button>
         </div>
 
         <div className="flex items-center gap-4 md:hidden">

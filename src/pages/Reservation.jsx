@@ -4,6 +4,12 @@ import heroImage from '../assets/bgHero.jpg'
 import { reservationsApi } from '../services/reservationsApi'
 
 const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"]
+const ITEM_H = 40
+
+const OPEN_HOUR = 11   // 11:00 AM
+const CLOSE_HOUR = 22  // 10:00 PM
+
+const CANCEL_CUTOFF_DAYS = 3
 
 const DOWNPAYMENT = {
   table: 1000,
@@ -27,6 +33,42 @@ const PAYMENT_ACCOUNTS = {
     accountNumber: "BDO • 0012 3456 7890",
   },
 };
+
+// I-convert ang 12-hour parts papuntang 24-hour na oras
+function to24Hour(hour12, ampm) {
+  let h = parseInt(hour12, 10)
+  if (ampm === 'PM' && h < 12) h += 12
+  if (ampm === 'AM' && h === 12) h = 0
+  return h
+}
+
+// Available ba ang oras? (11:00 AM - 10:00 PM lang)
+function isTimeAllowed(h, m) {
+  const mins = h * 60 + m
+  return mins >= OPEN_HOUR * 60 && mins <= CLOSE_HOUR * 60
+}
+
+// Kasalukuyang oras bilang default, pero laging nasa loob ng operating hours
+function getDefaultTime() {
+  const now = new Date()
+  const h = now.getHours()
+  const m = now.getMinutes()
+  if (!isTimeAllowed(h, m)) {
+    return h < OPEN_HOUR ? `${String(OPEN_HOUR).padStart(2, '0')}:00` : `${String(CLOSE_HOUR).padStart(2, '0')}:00`
+  }
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+
+// Ilang araw pa bago ang reservation date
+function daysUntil(isoDate) {
+  if (!isoDate) return null
+  const [y, m, d] = String(isoDate).slice(0, 10).split('-').map(Number)
+  if (!y || !m || !d) return null
+  const target = new Date(y, m - 1, d)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return Math.round((target - today) / (1000 * 60 * 60 * 24))
+}
 
 function buildCalendar(year, month) {
   const firstDay = new Date(year, month, 1).getDay()
@@ -53,28 +95,9 @@ const MONTH_NAMES = [
   "July", "August", "September", "October", "November", "December",
 ]
 
-const FLOOR_TABLES = [
-  { id: 'T13', x: 20,   y: 7.3,  w: 15.5, h: 11 },
-  { id: 'T6',  x: 67.3, y: 7.3,  w: 15.7, h: 11 },
-  { id: 'T14', x: 3.7,  y: 22.6, w: 16.2, h: 8   },
-  { id: 'T5',  x: 81,   y: 22.6, w: 16.2, h: 8   },
-  { id: 'T12', x: 33.7, y: 23,   w: 7,    h: 20  },
-  { id: 'T7',  x: 58,   y: 23,   w: 7.2,  h: 20  },
-  { id: 'T15', x: 3.7,  y: 38.4, w: 16.2, h: 7.7 },
-  { id: 'T4',  x: 81,   y: 38.4, w: 16.2, h: 7.7 },
-  { id: 'T11', x: 29.2, y: 49,   w: 16.5, h: 8.6 },
-  { id: 'T8',  x: 54.1, y: 49,   w: 16.5, h: 8.6 },
-  { id: 'T16', x: 2.5,  y: 55.3, w: 16.2, h: 9   },
-  { id: 'T3',  x: 81,   y: 55.3, w: 16.2, h: 9   },
-  { id: 'T10', x: 33.7, y: 61.8, w: 7,    h: 19.8 },
-  { id: 'T9',  x: 58,   y: 61.8, w: 7.2,  h: 19.8 },
-  { id: 'T17', x: 2.5,  y: 70,   w: 16.2, h: 8.6 },
-  { id: 'T2',  x: 81,   y: 70,   w: 16.2, h: 8.6 },
-]
-
 function formatDateDisplay(isoDate) {
   if (!isoDate) return ''
-  const [y, m, d] = isoDate.split('-').map(Number)
+  const [y, m, d] = String(isoDate).slice(0, 10).split('-').map(Number)
   return `${MONTH_NAMES[m - 1]} ${d}, ${y}`
 }
 
@@ -86,30 +109,84 @@ function formatTimeDisplay(timeStr) {
   return `${hour12}:${m.toString().padStart(2, '0')} ${ampm}`
 }
 
-function WheelColumn({ options, selected, onSelect }) {
+function StatusBadge({ status }) {
+  const map = {
+    pending: 'bg-amber-50 text-amber-700',
+    confirmed: 'bg-green-50 text-green-700',
+    seated: 'bg-orange-50 text-orange-700',
+    completed: 'bg-neutral-100 text-neutral-600',
+    cancelled: 'bg-red-50 text-red-600',
+    no_show: 'bg-red-50 text-red-600',
+  }
+  const tone = map[status] || 'bg-neutral-100 text-neutral-600'
+  const label = status === 'no_show' ? 'No Show' : status
+
+  return (
+    <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold font-[Prata] capitalize ${tone}`}>
+      {label || '—'}
+    </span>
+  )
+}
+
+function WheelColumn({ options, selected, onSelect, loop = true, isDisabled }) {
   const containerRef = useRef(null)
-  const isScrollingRef = useRef(false)
+  const scrollTimer = useRef(null)
+  const fromScroll = useRef(false)
+
+  // Tinriple ang listahan para sa infinite loop (kopya - original - kopya)
+  const looped = useMemo(
+    () => (loop ? [...options, ...options, ...options] : options),
+    [options, loop]
+  )
+  const baseOffset = loop ? options.length : 0
+
+  const jumpTo = (el, top) => {
+    const prev = el.style.scrollBehavior
+    el.style.scrollBehavior = 'auto'
+    el.scrollTop = top
+    el.style.scrollBehavior = prev
+  }
 
   useEffect(() => {
-    if (!containerRef.current) return
-    const index = options.indexOf(selected)
-    if (index !== -1) {
-      containerRef.current.scrollTop = index * 40
+    const el = containerRef.current
+    if (!el) return
+    if (fromScroll.current) {
+      fromScroll.current = false
+      return
     }
-  }, [selected, options])
+    const idx = options.indexOf(selected)
+    if (idx === -1) return
+    jumpTo(el, (baseOffset + idx) * ITEM_H)
+  }, [selected, options, baseOffset])
 
   const handleScroll = () => {
-    if (!containerRef.current) return
-    if (isScrollingRef.current) clearTimeout(isScrollingRef.current)
+    const el = containerRef.current
+    if (!el) return
+    if (scrollTimer.current) clearTimeout(scrollTimer.current)
 
-    isScrollingRef.current = setTimeout(() => {
-      const scrollTop = containerRef.current.scrollTop
-      const index = Math.round(scrollTop / 40)
+    scrollTimer.current = setTimeout(() => {
+      const node = containerRef.current
+      if (!node) return
 
-      if (options[index] !== undefined && options[index] !== selected) {
-        onSelect(options[index])
+      let index = Math.round(node.scrollTop / ITEM_H)
+
+      if (loop) {
+        const setLen = options.length
+        if (index < setLen * 0.5) {
+          jumpTo(node, node.scrollTop + setLen * ITEM_H)
+          index += setLen
+        } else if (index >= setLen * 2.5) {
+          jumpTo(node, node.scrollTop - setLen * ITEM_H)
+          index -= setLen
+        }
       }
-    }, 50)
+
+      const option = looped[index]
+      if (option !== undefined && option !== selected) {
+        fromScroll.current = true
+        onSelect(option)
+      }
+    }, 100)
   }
 
   return (
@@ -121,38 +198,46 @@ function WheelColumn({ options, selected, onSelect }) {
     >
       <div style={{ height: '60px' }} className="shrink-0 pointer-events-none" />
 
-      {options.map((option) => (
-        <div
-          key={option}
-          onClick={() => {
-            onSelect(option)
-            const idx = options.indexOf(option)
-            if (containerRef.current && idx !== -1) {
-              containerRef.current.scrollTop = idx * 40
-            }
-          }}
-          style={{ height: '40px', scrollSnapAlign: 'center' }}
-          className="flex items-center justify-center transition-all font-[Prata]"
-        >
-          <span
-            className={`transition-all ${
-              selected === option
-                ? 'text-[#1d080f] font-bold text-base opacity-100 scale-105'
-                : 'text-neutral-400 opacity-40 hover:opacity-80 text-xs'
-            }`}
+      {looped.map((option, i) => {
+        const disabled = isDisabled ? isDisabled(option) : false
+        return (
+          <div
+            key={`${option}-${i}`}
+            onClick={() => {
+              fromScroll.current = true
+              onSelect(option)
+              if (containerRef.current) {
+                jumpTo(containerRef.current, i * ITEM_H)
+              }
+            }}
+            style={{ height: '40px', scrollSnapAlign: 'center' }}
+            className="flex items-center justify-center transition-all font-[Prata]"
           >
-            {option}
-          </span>
-        </div>
-      ))}
+            <span
+              className={`transition-all ${
+                selected === option
+                  ? disabled
+                    ? 'text-neutral-400 font-bold text-base opacity-60'
+                    : 'text-[#1d080f] font-bold text-base opacity-100 scale-105'
+                  : disabled
+                  ? 'text-neutral-300 opacity-30 text-xs'
+                  : 'text-neutral-400 opacity-40 hover:opacity-80 text-xs'
+              }`}
+            >
+              {option}
+            </span>
+          </div>
+        )
+      })}
 
       <div style={{ height: '60px' }} className="shrink-0 pointer-events-none" />
     </div>
   )
 }
 
-function WheelTimePicker({ isWeekend, value, onChange }) {
+function WheelTimePicker({ value, onChange }) {
   const [isOpen, setIsOpen] = useState(false)
+  const [touched, setTouched] = useState(false)
   const containerRef = useRef(null)
 
   const parseCurrent = () => {
@@ -169,16 +254,32 @@ function WheelTimePicker({ isWeekend, value, onChange }) {
 
   const current = parseCurrent()
 
-  const hours = Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0'))
-  const minutes = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'))
-  const period = ['AM', 'PM']
+  const hours = useMemo(() => Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0')), [])
+  const minutes = useMemo(() => Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0')), [])
+  const period = useMemo(() => ['AM', 'PM'], [])
+
+  const isHourDisabled = (hr) => {
+    const h24 = to24Hour(hr, current.ampm)
+    return !isTimeAllowed(h24, 0) && !isTimeAllowed(h24, 59)
+  }
+
+  const isMinuteDisabled = (min) => {
+    const h24 = to24Hour(current.hour, current.ampm)
+    return !isTimeAllowed(h24, parseInt(min, 10))
+  }
+
+  const isPeriodDisabled = (ap) => {
+    const h24 = to24Hour(current.hour, ap)
+    return !isTimeAllowed(h24, 0) && !isTimeAllowed(h24, 59)
+  }
+
+  const currentIsAllowed = isTimeAllowed(to24Hour(current.hour, current.ampm), parseInt(current.minute, 10))
 
   const updateTime = (newHour, newMin, newAmpm) => {
-    let h = parseInt(newHour, 10)
-    if (newAmpm === 'PM' && h < 12) h += 12
-    if (newAmpm === 'AM' && h === 12) h = 0
+    const h = to24Hour(newHour, newAmpm)
     const time24 = `${h.toString().padStart(2, '0')}:${newMin}`
     onChange(time24)
+    setTouched(true)
   }
 
   useEffect(() => {
@@ -191,9 +292,7 @@ function WheelTimePicker({ isWeekend, value, onChange }) {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  const displayString = value
-    ? `${current.hour}:${current.minute} ${current.ampm}`
-    : ''
+  const displayString = `${current.hour}:${current.minute} ${current.ampm}`
 
   return (
     <div className="relative w-full" ref={containerRef}>
@@ -201,11 +300,15 @@ function WheelTimePicker({ isWeekend, value, onChange }) {
 
       <button
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          setIsOpen(!isOpen)
+          setTouched(true)
+        }}
         className="w-full bg-white rounded-md px-4 py-3.5 flex items-center justify-between text-left font-[Prata] focus:outline-none focus:ring-1 focus:ring-[#1d080f]"
       >
-        <span className={value ? 'text-neutral-700 font-medium' : 'text-neutral-400'}>
-          {displayString || 'Time *'}
+        <span className="flex items-baseline gap-2">
+          <span className="text-neutral-400">Time *</span>
+          {touched && <span className={currentIsAllowed ? 'text-[#1d080f] font-medium' : 'text-neutral-400 font-medium'}>{displayString}</span>}
         </span>
         <Clock size={16} className="text-neutral-400 opacity-60" />
       </button>
@@ -213,7 +316,7 @@ function WheelTimePicker({ isWeekend, value, onChange }) {
       {isOpen && (
         <div className="absolute left-0 right-0 z-30 mt-2 bg-[#e6e1d8] rounded-xl shadow-xl border border-neutral-300/60 p-4">
           <div className="text-center font-[Prata] text-xs text-neutral-500 mb-2">
-            Hours: {isWeekend ? '10:00 AM – 10:00 PM' : '11:00 AM – 10:00 PM'}
+            Open daily: 11:00 AM – 10:00 PM
           </div>
 
           <div className="relative flex items-center justify-center bg-white/60 rounded-lg px-2 h-[160px] overflow-hidden">
@@ -223,6 +326,7 @@ function WheelTimePicker({ isWeekend, value, onChange }) {
               options={hours}
               selected={current.hour}
               onSelect={(val) => updateTime(val, current.minute, current.ampm)}
+              isDisabled={isHourDisabled}
             />
 
             <span className="font-[Prata] text-[#1d080f] font-bold text-lg px-1 pointer-events-none z-10">:</span>
@@ -231,71 +335,32 @@ function WheelTimePicker({ isWeekend, value, onChange }) {
               options={minutes}
               selected={current.minute}
               onSelect={(val) => updateTime(current.hour, val, current.ampm)}
+              isDisabled={isMinuteDisabled}
             />
 
             <WheelColumn
               options={period}
               selected={current.ampm}
               onSelect={(val) => updateTime(current.hour, current.minute, val)}
+              loop={false}
+              isDisabled={isPeriodDisabled}
             />
           </div>
 
+          {!currentIsAllowed && (
+            <p className="text-center text-[11px] text-neutral-500 font-[Prata] mt-3">
+              This time is outside our operating hours.
+            </p>
+          )}
+
           <button
             type="button"
-            onClick={() => {
-              if (!value) updateTime('12', '00', 'PM')
-              setIsOpen(false)
-            }}
-            className="w-full mt-3 bg-[#1d080f] text-white font-[Prata] text-xs py-2.5 rounded-md hover:opacity-90 transition font-bold"
+            onClick={() => setIsOpen(false)}
+            disabled={!currentIsAllowed}
+            className="w-full mt-3 bg-[#1d080f] text-white font-[Prata] text-xs py-2.5 rounded-md hover:opacity-90 transition font-bold disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Done
           </button>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function FloorPlan({ selected, onSelect, unavailableTables = [] }) {
-  return (
-    <div className="bg-white rounded-xl shadow-sm p-4">
-      <div className="font-[Prata] font-bold text-sm mb-3 text-center">
-        Tap a table to select it
-      </div>
-      <div className="relative w-full aspect-[401/521] bg-neutral-100 rounded-lg overflow-hidden border border-neutral-200">
-        {FLOOR_TABLES.map((t) => {
-          const isUnavailable = unavailableTables.includes(t.id)
-
-          return (
-            <button
-              key={t.id}
-              type="button"
-              disabled={isUnavailable}
-              onClick={() => onSelect(t.id)}
-              title={isUnavailable ? `${t.id} (Reserved)` : t.id}
-              style={{
-                position: 'absolute',
-                left: `${t.x}%`,
-                top: `${t.y}%`,
-                width: `${t.w}%`,
-                height: `${t.h}%`,
-              }}
-              className={`rounded-md border-2 flex items-center justify-center text-xs font-[Prata] font-bold transition-colors ${
-                isUnavailable
-                  ? 'bg-neutral-200 border-neutral-300 text-neutral-400 cursor-not-allowed opacity-70'
-                  : selected === t.id
-                  ? 'bg-[#1d080f] border-[#1d080f] text-white'
-                  : 'bg-white border-neutral-300 text-[#1d080f] hover:bg-neutral-50'
-              }`}
-            >
-              {t.id}
-            </button>
-          )
-        })}
-      </div>
-      {selected && (
-        <div className="text-center text-sm font-[Prata] mt-3">
-          Selected: <b>{selected}</b>
         </div>
       )}
     </div>
@@ -308,11 +373,12 @@ function Reservation() {
   const [viewDate, setViewDate] = useState(() => new Date())
   const [selectedDay, setSelectedDay] = useState(() => new Date().getDate())
 
-  const [selectedTime, setSelectedTime] = useState("")
+  const [selectedTime, setSelectedTime] = useState(getDefaultTime)
   const [showConfirm, setShowConfirm] = useState(false)
   const [historyQuery, setHistoryQuery] = useState("")
-  const [selectedTable, setSelectedTable] = useState("")
+  const [occasion, setOccasion] = useState("")
   const [paymentMethod, setPaymentMethod] = useState("")
+  const [paymentProofPreview, setPaymentProofPreview] = useState("")
   const [themeImagePreview, setThemeImagePreview] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
@@ -320,6 +386,12 @@ function Reservation() {
   const [loadingReservations, setLoadingReservations] = useState(true)
 
   const isoDate = `${viewDate.getFullYear()}-${String(viewDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDay).padStart(2, '0')}`
+
+  const today = useMemo(() => {
+    const t = new Date()
+    t.setHours(0, 0, 0, 0)
+    return t
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -331,33 +403,10 @@ function Reservation() {
     return () => { cancelled = true }
   }, [])
 
-  const unavailableTables = useMemo(() => {
-    if (!selectedTime) return []
-    return reservations
-      .filter((r) =>
-        r.reservation_date === isoDate &&
-        r.reservation_time?.slice(0, 5) === selectedTime &&
-        r.table_number &&
-        r.status !== 'cancelled'
-      )
-      .map((r) => r.table_number)
-  }, [reservations, isoDate, selectedTime])
-
-  useEffect(() => {
-    if (selectedTable && unavailableTables.includes(selectedTable)) {
-      setSelectedTable("")
-    }
-  }, [unavailableTables, selectedTable])
-
   const cells = useMemo(
     () => buildCalendar(viewDate.getFullYear(), viewDate.getMonth()),
     [viewDate]
   )
-
-  const isWeekend = useMemo(() => {
-    const d = new Date(viewDate.getFullYear(), viewDate.getMonth(), selectedDay).getDay()
-    return d === 0 || d === 6
-  }, [viewDate, selectedDay])
 
   const changeMonth = (delta) => {
     setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + delta, 1))
@@ -368,6 +417,14 @@ function Reservation() {
     if (!file) return
     const reader = new FileReader()
     reader.onload = () => setThemeImagePreview(reader.result)
+    reader.readAsDataURL(file)
+  }
+
+  const handlePaymentProofChange = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => setPaymentProofPreview(reader.result)
     reader.readAsDataURL(file)
   }
 
@@ -383,19 +440,18 @@ function Reservation() {
     }
 
     if (!paymentMethod) {
-      alert("Please select a downpayment method.")
+      alert("Please select a mode of payment.")
+      return
+    }
+
+    if (!paymentProofPreview) {
+      alert("Please upload your proof of payment.")
       return
     }
 
     const [hh, mm] = time.split(':').map(Number)
-    const minutesSinceMidnight = hh * 60 + mm
-    const minAllowed = (isWeekend ? 10 : 11) * 60
-    const maxAllowed = 22 * 60
-
-    if (minutesSinceMidnight < minAllowed || minutesSinceMidnight > maxAllowed) {
-      alert(
-        `Please choose a time between ${isWeekend ? '10:00 AM' : '11:00 AM'} and 10:00 PM.`
-      )
+    if (!isTimeAllowed(hh, mm)) {
+      alert("Please choose a time between 11:00 AM and 10:00 PM.")
       return
     }
 
@@ -410,11 +466,12 @@ function Reservation() {
       occasion: formData.get('occasion') || null,
       reservation_date: isoDate,
       reservation_time: `${time}:00`,
-      table_number: tab === 'table' ? (formData.get('preference') || selectedTable || null) : null,
-      special_requests: tab === 'event' ? (formData.get('note') || null) : (formData.get('preference') || null),
+      table_number: null,
+      special_requests: tab === 'event' ? (formData.get('note') || null) : null,
       theme_image: tab === 'event' ? (themeImagePreview || null) : null,
       downpayment_amount: downpaymentAmount,
       payment_method: paymentMethod,
+      payment_proof: paymentProofPreview,
     }
 
     try {
@@ -423,9 +480,10 @@ function Reservation() {
       setReservations((prev) => [...prev, created])
 
       e.target.reset()
-      setSelectedTable("")
-      setSelectedTime("")
+      setSelectedTime(getDefaultTime())
+      setOccasion("")
       setPaymentMethod("")
+      setPaymentProofPreview("")
       setThemeImagePreview("")
       setShowConfirm(true)
     } catch (err) {
@@ -437,9 +495,10 @@ function Reservation() {
   }
 
   const handleCancelReservation = async (id) => {
+    if (!window.confirm("Are you sure you want to cancel this reservation?")) return
     try {
       await reservationsApi.updateStatus(id, 'cancelled')
-      setReservations((prev) => prev.filter((r) => r.id !== id))
+      setReservations((prev) => prev.map((r) => (r.id === id ? { ...r, status: 'cancelled' } : r)))
     } catch (err) {
       console.error(err)
       alert("Failed to cancel reservation. Please try again.")
@@ -448,13 +507,12 @@ function Reservation() {
 
   const filteredReservations = reservations.filter(
     (r) =>
-      r.status !== 'cancelled' &&
-      (r.contact_number?.includes(historyQuery) ||
-        r.email?.toLowerCase().includes(historyQuery.toLowerCase()))
+      r.contact_number?.includes(historyQuery) ||
+      r.email?.toLowerCase().includes(historyQuery.toLowerCase())
   )
 
   const inputClass =
-    "w-full bg-white rounded-md px-4 py-3.5 text-neutral-500 placeholder:text-neutral-400 font-[Prata] focus:outline-none focus:ring-1 focus:ring-[#1d080f]"
+    "w-full bg-white rounded-md px-4 py-3.5 text-[#1d080f] placeholder:text-neutral-400 font-[Prata] focus:outline-none focus:ring-1 focus:ring-[#1d080f]"
 
   return (
     <div className="bg-white text-[#1d080f]">
@@ -529,21 +587,26 @@ function Reservation() {
                       {WEEKDAYS.map((w, i) => (
                         <div key={i} className="font-bold text-[#1d080f] py-1">{w}</div>
                       ))}
-                      {cells.map((c, i) => (
-                        <div
-                          key={i}
-                          onClick={() => !c.muted && setSelectedDay(c.day)}
-                          className={`py-1.5 rounded cursor-pointer ${
-                            c.muted
-                              ? 'text-neutral-300 cursor-default'
-                              : c.day === selectedDay
-                              ? 'bg-[#1d080f] text-white'
-                              : 'hover:bg-neutral-100'
-                          }`}
-                        >
-                          {c.day}
-                        </div>
-                      ))}
+                      {cells.map((c, i) => {
+                        const cellDate = c.muted ? null : new Date(viewDate.getFullYear(), viewDate.getMonth(), c.day)
+                        const isPast = cellDate && cellDate < today
+                        const disabled = c.muted || isPast
+                        return (
+                          <div
+                            key={i}
+                            onClick={() => !disabled && setSelectedDay(c.day)}
+                            className={`py-1.5 rounded ${
+                              disabled
+                                ? 'text-neutral-300 cursor-not-allowed'
+                                : c.day === selectedDay
+                                ? 'bg-[#1d080f] text-white cursor-pointer'
+                                : 'text-[#1d080f] hover:bg-neutral-100 cursor-pointer'
+                            }`}
+                          >
+                            {c.day}
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
                 </div>
@@ -556,46 +619,25 @@ function Reservation() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <input name="email" type="email" placeholder="Email Address *" required className={inputClass} />
-                    <WheelTimePicker
-                      isWeekend={isWeekend}
-                      value={selectedTime}
-                      onChange={setSelectedTime}
-                    />
+                    <WheelTimePicker value={selectedTime} onChange={setSelectedTime} />
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="relative">
-                      <select
-                        name="occasion"
-                        defaultValue=""
-                        required={tab === "event"}
-                        className={`${inputClass} appearance-none`}
-                      >
-                        <option value="" disabled>Occasion{tab === "event" ? " *" : ""}</option>
-                        <option>Birthday</option>
-                        <option>Anniversary</option>
-                        <option>Wedding</option>
-                        <option>Business</option>
-                        <option>Casual</option>
+                      <select name="occasion" value={occasion} onChange={(e) => setOccasion(e.target.value)} required={tab === "event"} className={`${inputClass} appearance-none ${occasion ? 'text-[#1d080f]' : 'text-neutral-400'}`}>
+                        <option value="" disabled className="text-neutral-400">Occasion{tab === "event" ? " *" : ""}</option>
+                        <option className="text-[#1d080f]">Birthday</option>
+                        <option className="text-[#1d080f]">Anniversary</option>
+                        <option className="text-[#1d080f]">Wedding</option>
+                        <option className="text-[#1d080f]">Business</option>
+                        <option className="text-[#1d080f]">Casual</option>
                       </select>
                       <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-400" />
                     </div>
-                    <input name="persons" type="number" min="1" placeholder="Number of persons *" required className={inputClass} />
+                    <input name="persons" type="number" min="1" placeholder="Number of Pax *" required className={inputClass} />
                   </div>
 
-                  {tab === "table" ? (
-                    <>
-                      <input type="hidden" name="preference" value={selectedTable} />
-                      <FloorPlan
-                        selected={selectedTable}
-                        onSelect={setSelectedTable}
-                        unavailableTables={unavailableTables}
-                      />
-                      {!selectedTable && (
-                        <p className="text-xs text-red-500 font-[Prata]">Please select an available table above.</p>
-                      )}
-                    </>
-                  ) : (
+                  {tab === "event" && (
                     <>
                       <input name="preference" placeholder="Theme Preference *" required className={inputClass} />
 
@@ -643,24 +685,26 @@ function Reservation() {
                       This amount will be deducted from your final bill.
                     </p>
 
-                    <div className="grid grid-cols-2 gap-2">
-                      {["GCash", "Paymaya", "Bank Transfer"].map((method) => (
-                        <button
-                          key={method}
-                          type="button"
-                          onClick={() => setPaymentMethod(method)}
-                          className={`py-2.5 rounded-lg text-xs font-[Prata] font-bold transition-colors ${
-                            paymentMethod === method
-                              ? 'bg-[#1d080f] text-white'
-                              : 'bg-neutral-200/70 text-[#1d080f] hover:bg-neutral-300/70'
-                          }`}
-                        >
-                          {method}
-                        </button>
-                      ))}
+                    <div className="relative">
+                      <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} className={`${inputClass} appearance-none ${paymentMethod ? 'text-[#1d080f]' : 'text-neutral-400'}`}>
+                        <option value="" disabled className="text-neutral-400">Mode of Payment *</option>
+                        <option className="text-[#1d080f]">Cash</option>
+                        <option className="text-[#1d080f]">GCash</option>
+                        <option className="text-[#1d080f]">Paymaya</option>
+                        <option className="text-[#1d080f]">Bank Transfer</option>
+                      </select>
+                      <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-400" />
                     </div>
                     {!paymentMethod && (
-                      <p className="text-xs text-red-500 font-[Prata] mt-2">Please select a downpayment method.</p>
+                      <p className="text-xs text-red-500 font-[Prata] mt-2">Please select a mode of payment.</p>
+                    )}
+
+                    {paymentMethod === "Cash" && (
+                      <div className="mt-4 bg-[#f7f5f0] rounded-lg p-4">
+                        <p className="text-xs font-[Prata] text-neutral-600 leading-relaxed">
+                          Please pay your Php. {(tab === "event" ? DOWNPAYMENT.event : DOWNPAYMENT.table).toLocaleString()} downpayment in cash at the restaurant, then upload the photo of your receipt below.
+                        </p>
+                      </div>
                     )}
 
                     {paymentMethod && PAYMENT_ACCOUNTS[paymentMethod] && (
@@ -682,10 +726,42 @@ function Reservation() {
                             <div className="text-[#1d080f] font-bold">{PAYMENT_ACCOUNTS[paymentMethod].accountNumber}</div>
                           </div>
                         </div>
+                      </div>
+                    )}
 
-                        <p className="text-[11px] text-neutral-400 font-[Prata] mt-3 leading-relaxed">
-                          After sending, take a screenshot of your confirmation. The cashier will verify it once you arrive.
+                    {paymentMethod && (
+                      <div className="mt-4 border-t border-neutral-200 pt-4">
+                        <label className="font-[Prata] text-sm text-neutral-600 block mb-2">
+                          Proof of Payment *
+                        </label>
+                        <p className="text-xs text-neutral-400 font-[Prata] mb-3 leading-relaxed">
+                          Upload a screenshot or photo of your payment receipt. The receptionist will verify this to confirm your reservation.
                         </p>
+                        <label
+                          htmlFor="payment-proof-upload"
+                          className="flex items-center justify-center gap-2 border-2 border-dashed border-neutral-300 rounded-md py-6 cursor-pointer hover:bg-neutral-50 transition"
+                        >
+                          <Upload size={16} className="text-neutral-400" />
+                          <span className="font-[Prata] text-xs text-neutral-500">
+                            {paymentProofPreview ? "Change proof of payment" : "Click to upload proof of payment"}
+                          </span>
+                        </label>
+                        <input
+                          id="payment-proof-upload"
+                          type="file"
+                          accept="image/*"
+                          onChange={handlePaymentProofChange}
+                          className="hidden"
+                        />
+                        {paymentProofPreview ? (
+                          <img
+                            src={paymentProofPreview}
+                            alt="Proof of payment preview"
+                            className="mt-3 w-full max-h-48 object-contain rounded-md bg-neutral-50"
+                          />
+                        ) : (
+                          <p className="text-xs text-red-500 font-[Prata] mt-2">Proof of payment is required.</p>
+                        )}
                       </div>
                     )}
                   </div>
@@ -695,9 +771,10 @@ function Reservation() {
                       type="button"
                       onClick={() => {
                         document.getElementById('reservation-form')?.reset()
-                        setSelectedTable("")
-                        setSelectedTime("")
+                        setSelectedTime(getDefaultTime())
+                        setOccasion("")
                         setPaymentMethod("")
+                        setPaymentProofPreview("")
                         setThemeImagePreview("")
                       }}
                       className="flex-1 bg-[#c0392b] text-white font-[Prata] font-bold py-3.5 rounded-full hover:opacity-90 transition"
@@ -707,10 +784,10 @@ function Reservation() {
                     <button
                       type="submit"
                       form="reservation-form"
-                      disabled={submitting || (tab === "table" && !selectedTable)}
+                      disabled={submitting}
                       className="flex-1 bg-[#1d080f] text-white font-[Prata] font-bold py-3.5 rounded-full hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {submitting ? "Submitting..." : "Confirm Reservation"}
+                      {submitting ? "Submitting..." : "Submit Reservation"}
                     </button>
                   </div>
                 </form>
@@ -738,79 +815,95 @@ function Reservation() {
                 </p>
               )}
 
-              {filteredReservations.map((r) => (
-                <div key={r.id} className="bg-white rounded-xl p-6 mb-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm font-[Prata]">
-                    <div className="flex flex-col gap-3">
-                      <div>
-                        <span className="block text-xs text-neutral-400">Date</span>
-                        <span>{formatDateDisplay(r.reservation_date)}</span>
+              {filteredReservations.map((r) => {
+                const remainingDays = daysUntil(r.reservation_date)
+                const isClosed = r.status === 'cancelled' || r.status === 'completed' || r.status === 'no_show'
+                const pastCutoff = remainingDays !== null && remainingDays < CANCEL_CUTOFF_DAYS
+                const cancelDisabled = isClosed || pastCutoff
+
+                return (
+                  <div key={r.id} className="bg-white rounded-xl p-6 mb-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm font-[Prata]">
+                      <div className="flex flex-col gap-3">
+                        <div>
+                          <span className="block text-xs text-neutral-400">Date</span>
+                          <span>{formatDateDisplay(r.reservation_date)}</span>
+                        </div>
+                        <div>
+                          <span className="block text-xs text-neutral-400">Name</span>
+                          <span>{r.guest_name}</span>
+                        </div>
+                        <div>
+                          <span className="block text-xs text-neutral-400">Contact No.</span>
+                          <span>{r.contact_number}</span>
+                        </div>
+                        <div>
+                          <span className="block text-xs text-neutral-400">Email Address</span>
+                          <span>{r.email}</span>
+                        </div>
+                        <div>
+                          <span className="block text-xs text-neutral-400">Occasion</span>
+                          <span>{r.occasion || '—'}</span>
+                        </div>
                       </div>
-                      <div>
-                        <span className="block text-xs text-neutral-400">Name</span>
-                        <span>{r.guest_name}</span>
-                      </div>
-                      <div>
-                        <span className="block text-xs text-neutral-400">Contact No.</span>
-                        <span>{r.contact_number}</span>
-                      </div>
-                      <div>
-                        <span className="block text-xs text-neutral-400">Email Address</span>
-                        <span>{r.email}</span>
-                      </div>
-                      <div>
-                        <span className="block text-xs text-neutral-400">Occasion</span>
-                        <span>{r.occasion || '—'}</span>
+                      <div className="flex flex-col gap-3">
+                        <div>
+                          <span className="block text-xs text-neutral-400">Time</span>
+                          <span>{formatTimeDisplay(r.reservation_time)}</span>
+                        </div>
+                        <div>
+                          <span className="block text-xs text-neutral-400">Number of Pax</span>
+                          <span>{r.party_size}</span>
+                        </div>
+                        <div>
+                          <span className="block text-xs text-neutral-400">Downpayment</span>
+                          <span>
+                            {r.downpayment_amount ? `Php. ${Number(r.downpayment_amount).toLocaleString()} (${r.payment_status || 'Pending'})` : '—'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="block text-xs text-neutral-400 mb-1">Status</span>
+                          <StatusBadge status={r.status} />
+                        </div>
+
+                        <div>
+                          <button
+                            onClick={() => handleCancelReservation(r.id)}
+                            disabled={cancelDisabled}
+                            className="w-full bg-[#c0392b] text-white font-[Prata] font-bold py-3 rounded-full hover:opacity-90 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            Cancel Reservation
+                          </button>
+                          {pastCutoff && !isClosed && (
+                            <p className="text-[11px] text-neutral-500 font-[Prata] mt-2 text-center leading-relaxed">
+                              Cancellations must be made at least {CANCEL_CUTOFF_DAYS} days before your reservation date.
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </div>
-                    <div className="flex flex-col gap-3">
-                      <div>
-                        <span className="block text-xs text-neutral-400">Time</span>
-                        <span>{formatTimeDisplay(r.reservation_time)}</span>
-                      </div>
-                      <div>
-                        <span className="block text-xs text-neutral-400">Number of persons</span>
-                        <span>{r.party_size}</span>
-                      </div>
-                      <div>
-                        <span className="block text-xs text-neutral-400">Table / Preference</span>
-                        <span>{r.table_number || r.special_requests || '—'}</span>
-                      </div>
-                      <div>
-                        <span className="block text-xs text-neutral-400">Downpayment</span>
-                        <span>
-                          {r.downpayment_amount ? `Php. ${Number(r.downpayment_amount).toLocaleString()} (${r.payment_status || 'Pending'})` : '—'}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="block text-xs text-neutral-400">Status</span>
-                        <span className="capitalize">{r.status}</span>
-                      </div>
-                    </div>
-                  </div>
 
-                  {r.theme_image && (
-                    <img
-                      src={r.theme_image}
-                      alt="Theme inspiration"
-                      className="mt-4 w-full max-h-48 object-cover rounded-md"
-                    />
-                  )}
+                    {r.payment_proof && (
+                      <div className="mt-4">
+                        <span className="block text-xs text-neutral-400 font-[Prata] mb-2">Proof of Payment</span>
+                        <img
+                          src={r.payment_proof}
+                          alt="Proof of payment"
+                          className="w-full max-h-48 object-contain rounded-md bg-neutral-50"
+                        />
+                      </div>
+                    )}
 
-                  <div className="flex gap-3 mt-6 max-w-md">
-                    <button
-                      onClick={() => handleCancelReservation(r.id)}
-                      disabled={r.status === 'cancelled'}
-                      className="flex-1 bg-[#c0392b] text-white font-[Prata] font-bold py-3 rounded-full hover:opacity-90 transition disabled:opacity-50"
-                    >
-                      Cancel Reservation
-                    </button>
-                    <button className="flex-1 bg-[#1d080f] text-white font-[Prata] font-bold py-3 rounded-full hover:opacity-90 transition">
-                      Pay Reservation
-                    </button>
+                    {r.theme_image && (
+                      <img
+                        src={r.theme_image}
+                        alt="Theme inspiration"
+                        className="mt-4 w-full max-h-48 object-cover rounded-md"
+                      />
+                    )}
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>
@@ -834,8 +927,9 @@ function Reservation() {
             <div className="mx-auto mb-4 w-14 h-14 rounded-full bg-green-100 flex items-center justify-center">
               <Check size={28} className="text-green-600" />
             </div>
-            <h3 className="font-[Prata] text-lg mb-3">Reservation Confirmed!</h3>
+            <h3 className="font-[Prata] text-lg mb-3">Reservation Submitted!</h3>
             <p className="text-xs text-neutral-500 leading-relaxed">
+              Your proof of payment will be verified by our receptionist. <br /><br />
               <b>REMINDER:</b> Cancellations must be made at least 3 days before your reservation date.
             </p>
           </div>

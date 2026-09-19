@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { useState } from 'react'
+import { NavLink } from 'react-router-dom'
+import { User } from 'lucide-react'
 import logo from '../assets/logoword.png'
 import trayIcon from '../assets/tray-icon.png'
 import { useCart } from '../context/CartContext'
@@ -7,7 +8,6 @@ import { useCart } from '../context/CartContext'
 function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const { itemCount, openTray, trayIconRef } = useCart()
-  const location = useLocation()
 
   const linkClass = ({ isActive }) =>
     isActive
@@ -25,8 +25,13 @@ function Navbar() {
           <NavLink to="/" end className={linkClass}>Home</NavLink>
           <NavLink to="/menu" className={linkClass}>Menu</NavLink>
           <NavLink to="/reservation" className={linkClass}>Reservation</NavLink>
-          <NavLink to="/payment" className={linkClass}>Payment</NavLink>
+          <NavLink to="/payment" className={linkClass}>Order</NavLink>
           <NavLink to="/about" className={linkClass}>About Us</NavLink>
+
+          <NavLink to="/login" aria-label="Account" title="Account" className={({ isActive }) => (isActive ? 'text-[#1d080f]' : 'hover:opacity-70')}>
+            <User className="h-7 w-7" strokeWidth={1.75} />
+          </NavLink>
+
           <button ref={trayIconRef} onClick={openTray} className="hover:opacity-70 relative">
             <img src={trayIcon} alt="Tray" className="h-11 w-auto" />
             {itemCount > 0 && (
@@ -63,8 +68,11 @@ function Navbar() {
           <NavLink to="/" end onClick={() => setMobileOpen(false)} className={linkClass}>Home</NavLink>
           <NavLink to="/menu" onClick={() => setMobileOpen(false)} className={linkClass}>Menu</NavLink>
           <NavLink to="/reservation" onClick={() => setMobileOpen(false)} className={linkClass}>Reservation</NavLink>
-          <NavLink to="/payment" onClick={() => setMobileOpen(false)} className={linkClass}>Payment</NavLink>
+          <NavLink to="/payment" onClick={() => setMobileOpen(false)} className={linkClass}>Order</NavLink>
           <NavLink to="/about" onClick={() => setMobileOpen(false)} className={linkClass}>About Us</NavLink>
+          <NavLink to="/login" onClick={() => setMobileOpen(false)} className={linkClass}>
+            <span className="inline-flex items-center gap-2"><User className="h-5 w-5" strokeWidth={1.75} /> Account</span>
+          </NavLink>
         </div>
       )}
     </nav>

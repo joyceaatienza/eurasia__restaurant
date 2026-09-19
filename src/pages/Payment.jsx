@@ -2,10 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   UploadCloud,
-  Wallet,
-  Smartphone,
-  CreditCard,
-  Landmark,
   CheckCircle2,
   ShieldCheck,
   Receipt,
@@ -13,16 +9,17 @@ import {
   History,
   X,
   Check,
-  ArrowLeft
+  ArrowLeft,
+  ChevronDown
 } from 'lucide-react';
 import heroImage from '../assets/bgHero.jpg';
 import { ordersApi } from '../services/ordersApi';
 
 const PAYMENT_METHODS = [
-  { id: 'cash', label: 'Cash', icon: Wallet },
-  { id: 'gcash', label: 'GCash', icon: Smartphone },
-  { id: 'paymaya', label: 'PayMaya', icon: CreditCard },
-  { id: 'bank', label: 'Bank Transfer', icon: Landmark },
+  { id: 'cash', label: 'Cash' },
+  { id: 'gcash', label: 'GCash' },
+  { id: 'paymaya', label: 'PayMaya' },
+  { id: 'bank', label: 'Bank Transfer' },
 ];
 
 const CART_STORAGE_KEY = 'eurasia_cart';
@@ -101,13 +98,16 @@ function OrderHistoryCard({ order }) {
     <div className="bg-white rounded-2xl border border-neutral-200/80 p-5 shadow-xs">
       <div className="flex items-center justify-between mb-1">
         <span className="font-[Prata] text-sm text-[#1d080f]">
-          Table {order.table_number || '—'}
+          {order.customer_name || '—'}
         </span>
         <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-full ${payClass}`}>
           {payLabel}
         </span>
       </div>
-      <p className="text-[11px] text-neutral-400 mb-4">Order #{orderNo}</p>
+      <p className="text-[11px] text-neutral-400 mb-4">
+        Order #{orderNo}
+        {order.table_number ? ` · Table ${order.table_number}` : ''}
+      </p>
 
       {cancelled ? (
         <div className="bg-red-50 text-red-600 text-xs font-medium rounded-lg px-3 py-2 text-center mb-3">
@@ -182,14 +182,15 @@ function Payment() {
   const [screen, setScreen] = useState('loading');
 
   // --- Order screen state ---
-  const [tableNumber, setTableNumber] = useState("");
+  const [customerName, setCustomerName] = useState("");
   const [orderItems, setOrderItems] = useState([]);
   const [isBuyNow, setIsBuyNow] = useState(false);
-  const [method, setMethod] = useState('cash');
+  const [method, setMethod] = useState('');
   const [discount, setDiscount] = useState(null);
   const [discountIdFile, setDiscountIdFile] = useState(null);
   const [placing, setPlacing] = useState(false);
   const [justOrdered, setJustOrdered] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   // --- Settle screen state ---
   const [unpaidOrders, setUnpaidOrders] = useState([]);
@@ -254,8 +255,13 @@ function Payment() {
 
   // ---------------- Place Order ----------------
   const handlePlaceOrder = async () => {
-    if (!tableNumber.trim()) {
-      alert("Please enter your table number before proceeding.");
+    if (!customerName.trim()) {
+      alert("Please enter your name before proceeding.");
+      return;
+    }
+
+    if (!method) {
+      alert("Please select a mode of payment.");
       return;
     }
 
@@ -270,7 +276,8 @@ function Payment() {
       const discountIdBase64 = discountIdFile ? await fileToBase64(discountIdFile) : null;
 
       const payload = {
-        table_number: tableNumber.trim(),
+        customer_name: customerName.trim(),
+        table_number: null,
         payment_method: method,
         discount_type: discount || null,
         discount_id_image: discountIdBase64,
@@ -307,6 +314,7 @@ function Payment() {
       setOrderItems([]);
       setDiscount(null);
       setDiscountIdFile(null);
+      setMethod('');
       setJustOrdered(true);
       setScreen('empty');
 
@@ -348,7 +356,7 @@ function Payment() {
       if (settledIds.length > 0) removeFromStoredIds(MY_ORDERS_KEY, settledIds);
 
       setUnpaidOrders(unpaid);
-      if (unpaid.length > 0) setTableNumber(unpaid[0].table_number || "");
+      if (unpaid.length > 0) setCustomerName(unpaid[0].customer_name || "");
     } catch (err) {
       console.error('Failed to load unpaid orders:', err);
       setUnpaidOrders([]);
@@ -501,19 +509,19 @@ function Payment() {
 
             <div className="bg-white rounded-2xl shadow-sm p-8 border border-neutral-200/80">
               <h2 className="text-center font-[Prata] text-amber-700 tracking-wide text-sm mb-4">
-                ENTER YOUR TABLE NUMBER
+                ENTER YOUR NAME
               </h2>
               <div className="max-w-xs mx-auto">
                 <input
                   type="text"
-                  value={tableNumber}
-                  onChange={(e) => setTableNumber(e.target.value)}
-                  placeholder="e.g. T7"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  placeholder="e.g. Juan Dela Cruz"
                   className="w-full text-center bg-[#f7f5f0] rounded-md px-4 py-3.5 font-[Prata] text-[#1d080f] placeholder:text-neutral-400 focus:outline-none focus:ring-1 focus:ring-[#1d080f]"
                 />
-                {!tableNumber && (
+                {!customerName && (
                   <p className="text-xs text-red-500 font-[Prata] text-center mt-2">
-                    Please enter your table number.
+                    Please enter your name.
                   </p>
                 )}
               </div>
@@ -521,27 +529,24 @@ function Payment() {
 
             <div className="bg-white rounded-2xl border border-neutral-200/80 p-6 shadow-xs">
               <h4 className="text-[16px] font-bold text-[#b38548] uppercase tracking-wider mb-4">
-                1. Select Payment Method
+                1. Mode of Payment
               </h4>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {PAYMENT_METHODS.map(({ id, label, icon: Icon }) => {
-                  const isSelected = method === id;
-                  return (
-                    <button
-                      key={id}
-                      onClick={() => setMethod(id)}
-                      className={`flex flex-col items-center gap-2.5 p-3.5 rounded-xl text-xs font-medium transition-all border cursor-pointer ${
-                        isSelected
-                          ? 'bg-[#1d080f] text-white border-[#1d080f] shadow-sm'
-                          : 'bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-50'
-                      }`}
-                    >
-                      <Icon size={20} className={isSelected ? 'text-white' : 'text-neutral-600'} />
-                      <span>{label}</span>
-                    </button>
-                  );
-                })}
+              <div className="relative">
+                <select
+                  value={method}
+                  onChange={(e) => setMethod(e.target.value)}
+                  className={`w-full bg-white border border-neutral-200 rounded-xl px-4 py-3.5 text-sm appearance-none focus:outline-none focus:ring-1 focus:ring-[#1d080f] ${method ? 'text-[#1d080f]' : 'text-neutral-400'}`}
+                >
+                  <option value="" disabled className="text-neutral-400">Mode of Payment *</option>
+                  {PAYMENT_METHODS.map(({ id, label }) => (
+                    <option key={id} value={id} className="text-[#1d080f]">{label}</option>
+                  ))}
+                </select>
+                <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-400" />
               </div>
+              {!method && (
+                <p className="text-xs text-red-500 mt-2">Please select a mode of payment.</p>
+              )}
             </div>
 
             <div className="bg-white rounded-2xl border border-neutral-200/80 p-6 shadow-xs">
@@ -667,9 +672,9 @@ function Payment() {
               </div>
 
               <div className="flex gap-3 mt-8 font-sans">
-                <button
+                                                <button
                   type="button"
-                  onClick={() => navigate('/menu')}
+                  onClick={() => setShowCancelConfirm(true)}
                   className="flex-1 border border-neutral-300 text-neutral-700 text-sm font-medium py-3 rounded-xl hover:bg-neutral-50 transition cursor-pointer"
                 >
                   Cancel
@@ -737,7 +742,7 @@ function Payment() {
             ) : (
               <>
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-800 font-[Prata] text-center">
-                  Found {unpaidOrders.length} unpaid order{unpaidOrders.length !== 1 ? 's' : ''} for Table {tableNumber || '—'}. Review the bill below.
+                  Found {unpaidOrders.length} unpaid order{unpaidOrders.length !== 1 ? 's' : ''} for {customerName || '—'}. Review the bill below.
                 </div>
 
                 <div className="bg-white rounded-2xl border border-neutral-200/80 p-6 shadow-xs">
@@ -829,8 +834,8 @@ function Payment() {
 
       {historyOpen && (
         <div
-          className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm sm:p-4"
-          onClick={() => setHistoryOpen(false)}
+          className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center bg-black/30 sm:p-4"
+            onClick={() => setHistoryOpen(false)}
         >
           <div
             className="bg-[#faf8f5] w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[85vh] flex flex-col shadow-2xl"
@@ -869,6 +874,51 @@ function Payment() {
               ) : (
                 historyOrders.map((o) => <OrderHistoryCard key={o.id} order={o} />)
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+            {showCancelConfirm && (
+        <div
+          onClick={() => setShowCancelConfirm(false)}
+          className="fixed inset-0 z-[130] flex items-center justify-center bg-black/30 px-4"        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl p-8 max-w-sm w-full text-center shadow-2xl"
+          >
+            <div className="mx-auto mb-4 w-14 h-14 rounded-full bg-red-50 flex items-center justify-center">
+              <X size={26} className="text-red-500" />
+            </div>
+            <h3 className="font-[Prata] text-lg text-[#1d080f] mb-2">Cancel this order?</h3>
+            <p className="text-sm text-neutral-500 mb-6 leading-relaxed">
+              Your items will be removed. You can always browse the menu again.
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowCancelConfirm(false)}
+                className="flex-1 border border-neutral-300 text-neutral-700 text-sm font-medium py-3 rounded-xl hover:bg-neutral-50 transition cursor-pointer"
+              >
+                Keep Order
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.removeItem(BUY_NOW_KEY);
+                  localStorage.removeItem(CART_STORAGE_KEY);
+                  setOrderItems([]);
+                  setCustomerName("");
+                  setMethod('');
+                  setDiscount(null);
+                  setDiscountIdFile(null);
+                  setShowCancelConfirm(false);
+                  setScreen('empty');
+                }}
+                className="flex-1 bg-[#c0392b] text-white text-sm font-bold py-3 rounded-xl hover:opacity-90 transition cursor-pointer"
+              >
+                Yes, Cancel
+              </button>
             </div>
           </div>
         </div>

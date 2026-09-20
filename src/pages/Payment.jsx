@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import heroImage from '../assets/bgHero.jpg';
 import { ordersApi } from '../services/ordersApi';
+import { useAuth } from '../context/AuthContext';
 
 const PAYMENT_METHODS = [
   { id: 'cash', label: 'Cash' },
@@ -24,8 +25,7 @@ const PAYMENT_METHODS = [
 
 const CART_STORAGE_KEY = 'eurasia_cart';
 const BUY_NOW_KEY = 'eurasia_buy_now';
-const MY_ORDERS_KEY = 'eurasia_my_pending_orders';
-const MY_ORDER_HISTORY_KEY = 'eurasia_my_order_history';
+const FINALIZED_KEY = 'eurasia_finalized';
 
 const HISTORY_POLL_MS = 5000;
 
@@ -43,27 +43,6 @@ function fileToBase64(file) {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
-}
-
-function addToStoredIds(key, ids) {
-  if (!ids || ids.length === 0) return;
-  try {
-    const existing = JSON.parse(localStorage.getItem(key) || '[]');
-    const merged = Array.from(new Set([...existing, ...ids.filter((id) => id != null)]));
-    localStorage.setItem(key, JSON.stringify(merged));
-  } catch (e) {
-    console.error(`Failed to update ${key}:`, e);
-  }
-}
-
-function removeFromStoredIds(key, ids) {
-  try {
-    const existing = JSON.parse(localStorage.getItem(key) || '[]');
-    const remaining = existing.filter((id) => !ids.includes(id));
-    localStorage.setItem(key, JSON.stringify(remaining));
-  } catch (e) {
-    console.error(`Failed to prune ${key}:`, e);
-  }
 }
 
 function OrderHistoryCard({ order }) {
@@ -177,12 +156,12 @@ function OrderHistoryCard({ order }) {
 
 function Payment() {
   const navigate = useNavigate();
+  const { user, isAuthenticated } = useAuth();
 
   // 'loading' | 'order' | 'empty' | 'settle'
   const [screen, setScreen] = useState('loading');
 
   // --- Order screen state ---
-  const [customerName, setCustomerName] = useState("");
   const [orderItems, setOrderItems] = useState([]);
   const [isBuyNow, setIsBuyNow] = useState(false);
   const [method, setMethod] = useState('');
@@ -191,6 +170,7 @@ function Payment() {
   const [placing, setPlacing] = useState(false);
   const [justOrdered, setJustOrdered] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [openNotes, setOpenNotes] = useState({});
 
   // --- Settle screen state ---
   const [unpaidOrders, setUnpaidOrders] = useState([]);
@@ -220,8 +200,10 @@ function Payment() {
       }
     }
 
+     // Only show the tray if the customer finalized it from the tray panel
+    const finalized = localStorage.getItem(FINALIZED_KEY) === 'true';
     const savedCart = localStorage.getItem(CART_STORAGE_KEY);
-    if (savedCart) {
+    if (finalized && savedCart) {
       try {
         const parsed = JSON.parse(savedCart);
         if (parsed.length > 0) {
@@ -236,6 +218,15 @@ function Payment() {
 
     setScreen('empty');
   }, []);
+
+  // Lock page scroll while a modal is open
+  useEffect(() => {
+    if (historyOpen || showCancelConfirm) {
+      const previous = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => { document.body.style.overflow = previous; };
+    }
+  }, [historyOpen, showCancelConfirm]);
 
   // ---------------- Order totals ----------------
   const orderSubtotal = orderItems.reduce((sum, item) => sum + item.price * item.qty, 0);
@@ -253,10 +244,34 @@ function Payment() {
   const settleMethodLabel =
     PAYMENT_METHODS.find((m) => m.id === settleMethod)?.label || settleMethod;
 
+   const updateItemNote = (index, note) => {
+    setOrderItems((prev) => {
+      const next = prev.map((it, i) => (i === index ? { ...it, note } : it));
+      // Keep the saved tray in sync so the note survives a refresh
+      const key = isBuyNow ? BUY_NOW_KEY : CART_STORAGE_KEY;
+      try {
+        localStorage.setItem(key, JSON.stringify(isBuyNow ? next[0] : next));
+      } catch (e) {
+        console.error('Failed to save note:', e);
+      }
+      return next;
+    });
+  };
+
+  const clearTray = () => {
+    localStorage.removeItem(BUY_NOW_KEY);
+    localStorage.removeItem(CART_STORAGE_KEY);
+    localStorage.removeItem(FINALIZED_KEY);
+    setOrderItems([]);
+    setMethod('');
+    setDiscount(null);
+    setDiscountIdFile(null);
+  };
+
   // ---------------- Place Order ----------------
   const handlePlaceOrder = async () => {
-    if (!customerName.trim()) {
-      alert("Please enter your name before proceeding.");
+    if (!isAuthenticated) {
+      navigate('/login');
       return;
     }
 
@@ -276,7 +291,7 @@ function Payment() {
       const discountIdBase64 = discountIdFile ? await fileToBase64(discountIdFile) : null;
 
       const payload = {
-        customer_name: customerName.trim(),
+        customer_name: user.full_name,
         table_number: null,
         payment_method: method,
         discount_type: discount || null,
@@ -294,21 +309,13 @@ function Payment() {
         })),
       };
 
-      const created = await ordersApi.create(payload);
-      const newId =
-        created?.id ??
-        created?.order?.id ??
-        created?.orderId ??
-        created?.insertId;
+      await ordersApi.create(payload);
 
-      // Remember this order so Settle Bill and History can find it later
-      addToStoredIds(MY_ORDERS_KEY, [newId]);
-      addToStoredIds(MY_ORDER_HISTORY_KEY, [newId]);
-
-      if (isBuyNow) {
+     if (isBuyNow) {
         localStorage.removeItem(BUY_NOW_KEY);
       } else {
         localStorage.removeItem(CART_STORAGE_KEY);
+        localStorage.removeItem(FINALIZED_KEY);
       }
 
       setOrderItems([]);
@@ -322,7 +329,7 @@ function Payment() {
       setTimeout(() => setToast(""), 5000);
     } catch (err) {
       console.error(err);
-      alert("Sorry, something went wrong while placing your order. Please try again.");
+      alert(err.message || "Sorry, something went wrong while placing your order. Please try again.");
     } finally {
       setPlacing(false);
     }
@@ -330,33 +337,21 @@ function Payment() {
 
   // ---------------- Settle Bill ----------------
   const openSettle = async () => {
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
+
     setScreen('settle');
     setSettleLoading(true);
     setJustSettled(false);
 
     try {
-      const ids = JSON.parse(localStorage.getItem(MY_ORDERS_KEY) || '[]');
-      if (ids.length === 0) {
-        setUnpaidOrders([]);
-        return;
-      }
-
-      const results = await Promise.all(
-        ids.map((id) => ordersApi.getById(id).catch(() => null))
+      const mine = await ordersApi.getMine();
+      const unpaid = mine.filter(
+        (o) => !o.receipt_image && o.status !== 'cancelled'
       );
-
-      // Unpaid = no receipt uploaded yet and not cancelled
-      const unpaid = results.filter(
-        (o) => o && !o.receipt_image && o.status !== 'cancelled'
-      );
-
-      // Drop anything already settled or gone from the saved list
-      const stillUnpaidIds = unpaid.map((o) => o.id);
-      const settledIds = ids.filter((id) => !stillUnpaidIds.includes(id));
-      if (settledIds.length > 0) removeFromStoredIds(MY_ORDERS_KEY, settledIds);
-
       setUnpaidOrders(unpaid);
-      if (unpaid.length > 0) setCustomerName(unpaid[0].customer_name || "");
     } catch (err) {
       console.error('Failed to load unpaid orders:', err);
       setUnpaidOrders([]);
@@ -383,9 +378,6 @@ function Payment() {
         receipt_image: receiptBase64,
       });
 
-      removeFromStoredIds(MY_ORDERS_KEY, orderIds);
-      addToStoredIds(MY_ORDER_HISTORY_KEY, orderIds);
-
       setUnpaidOrders([]);
       setReceiptFile(null);
       setJustSettled(true);
@@ -402,20 +394,16 @@ function Payment() {
 
   // ---------------- History ----------------
   const fetchHistory = useCallback(async () => {
-    const ids = JSON.parse(localStorage.getItem(MY_ORDER_HISTORY_KEY) || '[]');
-    if (ids.length === 0) {
-      setHistoryOrders([]);
-      return;
-    }
-    const results = await Promise.all(
-      ids.map((id) => ordersApi.getById(id).catch(() => null))
-    );
-    const valid = results.filter(Boolean);
-    valid.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
-    setHistoryOrders(valid);
+    const mine = await ordersApi.getMine();
+    setHistoryOrders(mine);
   }, []);
 
   const openHistory = async () => {
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
+
     setHistoryOpen(true);
     setHistoryLoading(true);
     try {
@@ -447,17 +435,17 @@ function Payment() {
     if (file) setDiscountIdFile(file);
   };
 
-  const heroTitle = screen === 'settle' ? 'Settle your bill' : 'Place your order';
+  const heroTitle = screen === 'settle' ? 'Settle your bill' : 'Finalize your Culinary Selection';
 
   return (
     <div className="min-h-screen bg-[#faf8f5] text-[#1d080f] font-sans">
       <div className="relative h-64 overflow-hidden shrink-0 md:h-60">
         <img src={heroImage} alt="" className="absolute inset-0 h-full w-full object-cover" />
         <div className="absolute inset-0 bg-white/40" />
-        <div className="relative flex h-full items-start justify-center px-4 pt-10 md:pt-14">
+                <div className="relative flex h-full items-start justify-center px-4 pt-10 md:pt-14">
           <h1
             className="font-[Prata] font-bold text-xs md:text-xs text-[#1d080f]"
-            style={{ WebkitTextStroke: '0.7px #1d080f' }}
+            style={{ WebkitTextStroke: '0.7px #1d080f', letterSpacing: '1.5px' }}
           >
             {heroTitle}
           </h1>
@@ -507,25 +495,39 @@ function Payment() {
         {screen === 'order' && orderItems.length > 0 && (
           <div className="grid gap-6">
 
-            <div className="bg-white rounded-2xl shadow-sm p-8 border border-neutral-200/80">
-              <h2 className="text-center font-[Prata] text-amber-700 tracking-wide text-sm mb-4">
-                ENTER YOUR NAME
-              </h2>
-              <div className="max-w-xs mx-auto">
-                <input
-                  type="text"
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  placeholder="e.g. Juan Dela Cruz"
-                  className="w-full text-center bg-[#f7f5f0] rounded-md px-4 py-3.5 font-[Prata] text-[#1d080f] placeholder:text-neutral-400 focus:outline-none focus:ring-1 focus:ring-[#1d080f]"
-                />
-                {!customerName && (
-                  <p className="text-xs text-red-500 font-[Prata] text-center mt-2">
-                    Please enter your name.
-                  </p>
-                )}
+            {!isAuthenticated ? (
+              <div className="bg-white rounded-2xl border border-neutral-200/80 p-10 text-center shadow-xs">
+                <h2 className="font-['Prata'],serif text-xl font-bold mb-3">Log in to place your order</h2>
+                <p className="text-sm text-neutral-500 mb-6">
+                  You need an account to send your order to the kitchen. Your items are saved in your tray.
+                </p>
+                <div className="flex flex-col sm:flex-row justify-center gap-3">
+                  <button
+                    onClick={() => navigate('/login')}
+                    className="bg-[#1d080f] text-white text-sm font-semibold px-8 py-3 rounded-xl hover:opacity-90 transition cursor-pointer"
+                  >
+                    Login
+                  </button>
+                  <button
+                    onClick={() => navigate('/register')}
+                    className="border border-[#1d080f] text-[#1d080f] text-sm font-semibold px-8 py-3 rounded-xl hover:bg-[#1d080f]/5 transition cursor-pointer"
+                  >
+                    Create Account
+                  </button>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="bg-white rounded-2xl shadow-sm p-8 border border-neutral-200/80">
+                <h2 className="text-center font-[Prata] text-amber-700 tracking-wide text-sm mb-4">
+                  ORDERING AS
+                </h2>
+                <div className="max-w-xs mx-auto">
+                  <div className="w-full text-center bg-neutral-100 rounded-md px-4 py-3.5 font-[Prata] text-[#1d080f]">
+                    {user?.full_name}
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="bg-white rounded-2xl border border-neutral-200/80 p-6 shadow-xs">
               <h4 className="text-[16px] font-bold text-[#b38548] uppercase tracking-wider mb-4">
@@ -637,15 +639,49 @@ function Payment() {
                 </div>
               </div>
 
-              <div className="divide-y divide-neutral-100 max-h-64 overflow-y-auto pr-1">
+              <div className="divide-y divide-neutral-100 max-h-80 overflow-y-auto pr-1">
                 {orderItems.map((item, i) => (
-                  <div key={i} className="py-2 flex justify-between items-center text-xs">
-                    <span className="text-neutral-800">
-                      {(item.name || '').toString().toUpperCase()} x{item.qty}
-                    </span>
-                    <span className="font-semibold text-neutral-800">
-                      ₱ {(item.price * item.qty).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                    </span>
+                  <div key={i} className="py-2.5">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-neutral-800">
+                        {(item.name || '').toString().toUpperCase()} x{item.qty}
+                      </span>
+                      <span className="font-semibold text-neutral-800">
+                        ₱ {(item.price * item.qty).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+
+                    <div className="mt-1.5 font-sans" style={{ textAlign: 'left' }}>
+                                            {openNotes[i] || item.note ? (
+                        <div>
+                          <input
+                            type="text"
+                            value={item.note || ''}
+                            onChange={(e) => updateItemNote(i, e.target.value)}
+                            placeholder="e.g. less spicy, no onions"
+                            className="w-full bg-[#faf8f5] border border-neutral-200 rounded-md px-3 py-2 text-xs text-[#1d080f] placeholder:text-neutral-400 focus:outline-none focus:ring-1 focus:ring-[#1d080f]"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              updateItemNote(i, '');
+                              setOpenNotes((prev) => ({ ...prev, [i]: false }));
+                            }}
+                            className="mt-1 text-[11px] text-[#c0392b] hover:opacity-70 transition"
+                       >
+                            Remove note
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setOpenNotes((prev) => ({ ...prev, [i]: true }))}
+                          className="text-[11px] text-[#b38548] font-semibold hover:text-[#1d080f] transition"
+                        >
+                          + Add note
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -672,7 +708,7 @@ function Payment() {
               </div>
 
               <div className="flex gap-3 mt-8 font-sans">
-                                                <button
+                <button
                   type="button"
                   onClick={() => setShowCancelConfirm(true)}
                   className="flex-1 border border-neutral-300 text-neutral-700 text-sm font-medium py-3 rounded-xl hover:bg-neutral-50 transition cursor-pointer"
@@ -742,7 +778,7 @@ function Payment() {
             ) : (
               <>
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-800 font-[Prata] text-center">
-                  Found {unpaidOrders.length} unpaid order{unpaidOrders.length !== 1 ? 's' : ''} for {customerName || '—'}. Review the bill below.
+                  Found {unpaidOrders.length} unpaid order{unpaidOrders.length !== 1 ? 's' : ''} for {user?.full_name || '—'}. Review the bill below.
                 </div>
 
                 <div className="bg-white rounded-2xl border border-neutral-200/80 p-6 shadow-xs">
@@ -814,7 +850,7 @@ function Payment() {
                       onClick={() => setScreen('empty')}
                       className="flex-1 border border-neutral-300 text-neutral-700 text-sm font-medium py-3 rounded-xl hover:bg-neutral-50 transition cursor-pointer"
                     >
-                      Cancel
+                      Pay Later
                     </button>
                     <button
                       type="button"
@@ -832,10 +868,50 @@ function Payment() {
         )}
       </div>
 
+      {showCancelConfirm && (
+        <div
+          onClick={() => setShowCancelConfirm(false)}
+          className="fixed inset-0 z-[130] flex items-center justify-center bg-black/30 px-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl p-8 max-w-sm w-full text-center shadow-2xl"
+          >
+            <div className="mx-auto mb-4 w-14 h-14 rounded-full bg-red-50 flex items-center justify-center">
+              <X size={26} className="text-red-500" />
+            </div>
+            <h3 className="font-[Prata] text-lg text-[#1d080f] mb-2">Cancel this order?</h3>
+            <p className="text-sm text-neutral-500 mb-6 leading-relaxed">
+              Your items will be removed from the tray. You can always browse the menu again.
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowCancelConfirm(false)}
+                className="flex-1 border border-neutral-300 text-neutral-700 text-sm font-medium py-3 rounded-xl hover:bg-neutral-50 transition cursor-pointer"
+              >
+                Keep Order
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  clearTray();
+                  setShowCancelConfirm(false);
+                  setScreen('empty');
+                }}
+                className="flex-1 bg-[#c0392b] text-white text-sm font-bold py-3 rounded-xl hover:opacity-90 transition cursor-pointer"
+              >
+                Yes, Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {historyOpen && (
         <div
           className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center bg-black/30 sm:p-4"
-            onClick={() => setHistoryOpen(false)}
+          onClick={() => setHistoryOpen(false)}
         >
           <div
             className="bg-[#faf8f5] w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[85vh] flex flex-col shadow-2xl"
@@ -874,51 +950,6 @@ function Payment() {
               ) : (
                 historyOrders.map((o) => <OrderHistoryCard key={o.id} order={o} />)
               )}
-            </div>
-          </div>
-        </div>
-      )}
-
-            {showCancelConfirm && (
-        <div
-          onClick={() => setShowCancelConfirm(false)}
-          className="fixed inset-0 z-[130] flex items-center justify-center bg-black/30 px-4"        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl p-8 max-w-sm w-full text-center shadow-2xl"
-          >
-            <div className="mx-auto mb-4 w-14 h-14 rounded-full bg-red-50 flex items-center justify-center">
-              <X size={26} className="text-red-500" />
-            </div>
-            <h3 className="font-[Prata] text-lg text-[#1d080f] mb-2">Cancel this order?</h3>
-            <p className="text-sm text-neutral-500 mb-6 leading-relaxed">
-              Your items will be removed. You can always browse the menu again.
-            </p>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setShowCancelConfirm(false)}
-                className="flex-1 border border-neutral-300 text-neutral-700 text-sm font-medium py-3 rounded-xl hover:bg-neutral-50 transition cursor-pointer"
-              >
-                Keep Order
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  localStorage.removeItem(BUY_NOW_KEY);
-                  localStorage.removeItem(CART_STORAGE_KEY);
-                  setOrderItems([]);
-                  setCustomerName("");
-                  setMethod('');
-                  setDiscount(null);
-                  setDiscountIdFile(null);
-                  setShowCancelConfirm(false);
-                  setScreen('empty');
-                }}
-                className="flex-1 bg-[#c0392b] text-white text-sm font-bold py-3 rounded-xl hover:opacity-90 transition cursor-pointer"
-              >
-                Yes, Cancel
-              </button>
             </div>
           </div>
         </div>

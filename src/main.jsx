@@ -9,6 +9,9 @@ import Payment from "./pages/Payment";
 import Reservation from "./pages/Reservation";
 import AboutUs from "./pages/AboutUs";
 import Feedback from "./pages/Feedback";
+import Login from "./pages/CustomerLogin";
+import Register from "./pages/Register";
+import Account from "./pages/Account";
 import "./index.css";
 
 const router = createBrowserRouter([
@@ -22,6 +25,9 @@ const router = createBrowserRouter([
       { path: "reservation", element: <Reservation /> },
       { path: "about", element: <AboutUs /> },
       { path: "feedback", element: <Feedback /> },
+      { path: "login", element: <Login /> },
+      { path: "register", element: <Register /> },
+      { path: "account", element: <Account /> },
     ],
   },
 ]);

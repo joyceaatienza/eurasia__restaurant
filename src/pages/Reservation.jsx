@@ -1,7 +1,9 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, ChevronDown, Check, X, Clock, Upload } from 'lucide-react'
 import heroImage from '../assets/bgHero.jpg'
 import { reservationsApi } from '../services/reservationsApi'
+import { useAuth } from '../context/AuthContext'
 
 const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"]
 const ITEM_H = 40
@@ -34,7 +36,6 @@ const PAYMENT_ACCOUNTS = {
   },
 };
 
-// I-convert ang 12-hour parts papuntang 24-hour na oras
 function to24Hour(hour12, ampm) {
   let h = parseInt(hour12, 10)
   if (ampm === 'PM' && h < 12) h += 12
@@ -42,13 +43,11 @@ function to24Hour(hour12, ampm) {
   return h
 }
 
-// Available ba ang oras? (11:00 AM - 10:00 PM lang)
 function isTimeAllowed(h, m) {
   const mins = h * 60 + m
   return mins >= OPEN_HOUR * 60 && mins <= CLOSE_HOUR * 60
 }
 
-// Kasalukuyang oras bilang default, pero laging nasa loob ng operating hours
 function getDefaultTime() {
   const now = new Date()
   const h = now.getHours()
@@ -59,7 +58,6 @@ function getDefaultTime() {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 }
 
-// Ilang araw pa bago ang reservation date
 function daysUntil(isoDate) {
   if (!isoDate) return null
   const [y, m, d] = String(isoDate).slice(0, 10).split('-').map(Number)
@@ -133,7 +131,6 @@ function WheelColumn({ options, selected, onSelect, loop = true, isDisabled }) {
   const scrollTimer = useRef(null)
   const fromScroll = useRef(false)
 
-  // Tinriple ang listahan para sa infinite loop (kopya - original - kopya)
   const looped = useMemo(
     () => (loop ? [...options, ...options, ...options] : options),
     [options, loop]
@@ -368,6 +365,9 @@ function WheelTimePicker({ value, onChange }) {
 }
 
 function Reservation() {
+  const navigate = useNavigate()
+  const { user, isAuthenticated } = useAuth()
+
   const [tab, setTab] = useState("table")
 
   const [viewDate, setViewDate] = useState(() => new Date())
@@ -375,7 +375,6 @@ function Reservation() {
 
   const [selectedTime, setSelectedTime] = useState(getDefaultTime)
   const [showConfirm, setShowConfirm] = useState(false)
-  const [historyQuery, setHistoryQuery] = useState("")
   const [occasion, setOccasion] = useState("")
   const [paymentMethod, setPaymentMethod] = useState("")
   const [paymentProofPreview, setPaymentProofPreview] = useState("")
@@ -383,7 +382,7 @@ function Reservation() {
   const [submitting, setSubmitting] = useState(false)
 
   const [reservations, setReservations] = useState([])
-  const [loadingReservations, setLoadingReservations] = useState(true)
+  const [loadingReservations, setLoadingReservations] = useState(false)
 
   const isoDate = `${viewDate.getFullYear()}-${String(viewDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDay).padStart(2, '0')}`
 
@@ -393,15 +392,23 @@ function Reservation() {
     return t
   }, [])
 
-  useEffect(() => {
-    let cancelled = false
+  // Load the logged-in customer's own reservations
+  const loadMine = () => {
+    if (!isAuthenticated) {
+      setReservations([])
+      return
+    }
     setLoadingReservations(true)
-    reservationsApi.getAll()
-      .then((data) => { if (!cancelled) setReservations(data) })
+    reservationsApi.getMine()
+      .then((data) => setReservations(data))
       .catch((err) => console.error('Failed to load reservations:', err))
-      .finally(() => { if (!cancelled) setLoadingReservations(false) })
-    return () => { cancelled = true }
-  }, [])
+      .finally(() => setLoadingReservations(false))
+  }
+
+  useEffect(() => {
+    loadMine()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated])
 
   const cells = useMemo(
     () => buildCalendar(viewDate.getFullYear(), viewDate.getMonth()),
@@ -431,6 +438,12 @@ function Reservation() {
   const handleConfirm = async (e) => {
     e.preventDefault()
 
+    if (!isAuthenticated) {
+      alert("Please log in to make a reservation.")
+      navigate('/login')
+      return
+    }
+
     const formData = new FormData(e.target)
     const time = formData.get('time')
 
@@ -459,11 +472,11 @@ function Reservation() {
 
     const payload = {
       reservation_type: tab,
-      guest_name: formData.get('name'),
-      contact_number: formData.get('contact'),
-      email: formData.get('email'),
+      guest_name: user.full_name,
+      contact_number: user.contact_number,
+      email: user.email,
       party_size: formData.get('persons'),
-      occasion: formData.get('occasion') || null,
+      occasion: occasion || null,
       reservation_date: isoDate,
       reservation_time: `${time}:00`,
       table_number: null,
@@ -477,7 +490,7 @@ function Reservation() {
     try {
       setSubmitting(true)
       const created = await reservationsApi.create(payload)
-      setReservations((prev) => [...prev, created])
+      setReservations((prev) => [created, ...prev])
 
       e.target.reset()
       setSelectedTime(getDefaultTime())
@@ -488,7 +501,7 @@ function Reservation() {
       setShowConfirm(true)
     } catch (err) {
       console.error(err)
-      alert("Sorry, something went wrong while submitting your reservation. Please try again.")
+      alert(err.message || "Sorry, something went wrong while submitting your reservation. Please try again.")
     } finally {
       setSubmitting(false)
     }
@@ -505,14 +518,11 @@ function Reservation() {
     }
   }
 
-  const filteredReservations = reservations.filter(
-    (r) =>
-      r.contact_number?.includes(historyQuery) ||
-      r.email?.toLowerCase().includes(historyQuery.toLowerCase())
-  )
-
   const inputClass =
     "w-full bg-white rounded-md px-4 py-3.5 text-[#1d080f] placeholder:text-neutral-400 font-[Prata] focus:outline-none focus:ring-1 focus:ring-[#1d080f]"
+
+  const lockedInputClass =
+    "w-full bg-neutral-100 rounded-md px-4 py-3.5 text-[#1d080f] font-[Prata] cursor-not-allowed"
 
   return (
     <div className="bg-white text-[#1d080f]">
@@ -525,7 +535,7 @@ function Reservation() {
         <div className="relative flex h-full items-start justify-center px-4 pt-10 md:pt-14">
           <h1
             className="font-[Prata] font-bold text-xs md:text-xs text-[#1d080f]"
-            style={{ WebkitTextStroke: '0.7px #1d080f' }}
+            style={{ WebkitTextStroke: '0.7px #1d080f', letterSpacing: '1.5px' }}
           >
             Have a Reservation Now!
           </h1>
@@ -568,7 +578,30 @@ function Reservation() {
             </button>
           </div>
 
-          {tab !== "history" && (
+          {tab !== "history" && !isAuthenticated && (
+            <div className="bg-white rounded-xl p-10 text-center">
+              <p className="font-[Prata] text-lg text-[#1d080f] mb-2">Log in to reserve a table</p>
+              <p className="text-sm text-neutral-500 font-[Prata] mb-6">
+                You need an account to make a reservation with us.
+              </p>
+              <div className="flex flex-col sm:flex-row justify-center gap-3">
+                <button
+                  onClick={() => navigate('/login')}
+                  className="bg-[#1d080f] text-white font-[Prata] font-bold px-8 py-3 rounded-full hover:opacity-90 transition"
+                >
+                  Login
+                </button>
+                <button
+                  onClick={() => navigate('/register')}
+                  className="border border-[#1d080f] text-[#1d080f] font-[Prata] font-bold px-8 py-3 rounded-full hover:bg-[#1d080f] hover:text-white transition"
+                >
+                  Create Account
+                </button>
+              </div>
+            </div>
+          )}
+
+          {tab !== "history" && isAuthenticated && (
             <>
               <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-6">
                 <div>
@@ -613,18 +646,18 @@ function Reservation() {
 
                 <form id="reservation-form" onSubmit={handleConfirm} className="flex flex-col gap-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <input name="name" placeholder="Name *" required className={inputClass} />
-                    <input name="contact" placeholder="Contact No. *" required className={inputClass} />
+                    <input value={user?.full_name || ''} readOnly className={lockedInputClass} />
+                    <input value={user?.contact_number || ''} readOnly className={lockedInputClass} />
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <input name="email" type="email" placeholder="Email Address *" required className={inputClass} />
+                    <input value={user?.email || ''} readOnly className={lockedInputClass} />
                     <WheelTimePicker value={selectedTime} onChange={setSelectedTime} />
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="relative">
-                      <select name="occasion" value={occasion} onChange={(e) => setOccasion(e.target.value)} required={tab === "event"} className={`${inputClass} appearance-none ${occasion ? 'text-[#1d080f]' : 'text-neutral-400'}`}>
+                      <select value={occasion} onChange={(e) => setOccasion(e.target.value)} required={tab === "event"} className={`${inputClass} appearance-none ${occasion ? 'text-[#1d080f]' : 'text-neutral-400'}`}>
                         <option value="" disabled className="text-neutral-400">Occasion{tab === "event" ? " *" : ""}</option>
                         <option className="text-[#1d080f]">Birthday</option>
                         <option className="text-[#1d080f]">Anniversary</option>
@@ -797,113 +830,130 @@ function Reservation() {
 
           {tab === "history" && (
             <div>
-              <div className="font-[Prata] text-lg mb-4">Your Reservations</div>
-              <input
-                placeholder="Enter phone number or email address"
-                value={historyQuery}
-                onChange={(e) => setHistoryQuery(e.target.value)}
-                className={`${inputClass} mb-6`}
-              />
-
-              {loadingReservations && (
-                <p className="text-neutral-500 text-center py-8 text-sm font-[Prata]">Loading...</p>
-              )}
-
-              {!loadingReservations && filteredReservations.length === 0 && (
-                <p className="text-neutral-500 text-center py-8 text-sm font-[Prata]">
-                  {historyQuery ? "No matching reservations found." : "No reservations yet."}
-                </p>
-              )}
-
-              {filteredReservations.map((r) => {
-                const remainingDays = daysUntil(r.reservation_date)
-                const isClosed = r.status === 'cancelled' || r.status === 'completed' || r.status === 'no_show'
-                const pastCutoff = remainingDays !== null && remainingDays < CANCEL_CUTOFF_DAYS
-                const cancelDisabled = isClosed || pastCutoff
-
-                return (
-                  <div key={r.id} className="bg-white rounded-xl p-6 mb-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm font-[Prata]">
-                      <div className="flex flex-col gap-3">
-                        <div>
-                          <span className="block text-xs text-neutral-400">Date</span>
-                          <span>{formatDateDisplay(r.reservation_date)}</span>
-                        </div>
-                        <div>
-                          <span className="block text-xs text-neutral-400">Name</span>
-                          <span>{r.guest_name}</span>
-                        </div>
-                        <div>
-                          <span className="block text-xs text-neutral-400">Contact No.</span>
-                          <span>{r.contact_number}</span>
-                        </div>
-                        <div>
-                          <span className="block text-xs text-neutral-400">Email Address</span>
-                          <span>{r.email}</span>
-                        </div>
-                        <div>
-                          <span className="block text-xs text-neutral-400">Occasion</span>
-                          <span>{r.occasion || '—'}</span>
-                        </div>
-                      </div>
-                      <div className="flex flex-col gap-3">
-                        <div>
-                          <span className="block text-xs text-neutral-400">Time</span>
-                          <span>{formatTimeDisplay(r.reservation_time)}</span>
-                        </div>
-                        <div>
-                          <span className="block text-xs text-neutral-400">Number of Pax</span>
-                          <span>{r.party_size}</span>
-                        </div>
-                        <div>
-                          <span className="block text-xs text-neutral-400">Downpayment</span>
-                          <span>
-                            {r.downpayment_amount ? `Php. ${Number(r.downpayment_amount).toLocaleString()} (${r.payment_status || 'Pending'})` : '—'}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="block text-xs text-neutral-400 mb-1">Status</span>
-                          <StatusBadge status={r.status} />
-                        </div>
-
-                        <div>
-                          <button
-                            onClick={() => handleCancelReservation(r.id)}
-                            disabled={cancelDisabled}
-                            className="w-full bg-[#c0392b] text-white font-[Prata] font-bold py-3 rounded-full hover:opacity-90 transition disabled:opacity-40 disabled:cursor-not-allowed"
-                          >
-                            Cancel Reservation
-                          </button>
-                          {pastCutoff && !isClosed && (
-                            <p className="text-[11px] text-neutral-500 font-[Prata] mt-2 text-center leading-relaxed">
-                              Cancellations must be made at least {CANCEL_CUTOFF_DAYS} days before your reservation date.
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {r.payment_proof && (
-                      <div className="mt-4">
-                        <span className="block text-xs text-neutral-400 font-[Prata] mb-2">Proof of Payment</span>
-                        <img
-                          src={r.payment_proof}
-                          alt="Proof of payment"
-                          className="w-full max-h-48 object-contain rounded-md bg-neutral-50"
-                        />
-                      </div>
-                    )}
-
-                    {r.theme_image && (
-                      <img
-                        src={r.theme_image}
-                        alt="Theme inspiration"
-                        className="mt-4 w-full max-h-48 object-cover rounded-md"
-                      />
-                    )}
+              {!isAuthenticated ? (
+                <div className="bg-white rounded-xl p-10 text-center">
+                  <p className="font-[Prata] text-lg text-[#1d080f] mb-2">Log in to see your reservations</p>
+                  <p className="text-sm text-neutral-500 font-[Prata] mb-6">
+                    Your booking history is tied to your account.
+                  </p>
+                  <div className="flex flex-col sm:flex-row justify-center gap-3">
+                    <button
+                      onClick={() => navigate('/login')}
+                      className="bg-[#1d080f] text-white font-[Prata] font-bold px-8 py-3 rounded-full hover:opacity-90 transition"
+                    >
+                      Login
+                    </button>
+                    <button
+                      onClick={() => navigate('/register')}
+                      className="border border-[#1d080f] text-[#1d080f] font-[Prata] font-bold px-8 py-3 rounded-full hover:bg-[#1d080f] hover:text-white transition"
+                    >
+                      Create Account
+                    </button>
                   </div>
-                )
-              })}
+                </div>
+              ) : (
+                <>
+                  {loadingReservations && (
+                    <p className="text-neutral-500 text-center py-8 text-sm font-[Prata]">Loading...</p>
+                  )}
+
+                  {!loadingReservations && reservations.length === 0 && (
+                    <p className="text-neutral-500 text-center py-8 text-sm font-[Prata]">
+                      No reservations yet.
+                    </p>
+                  )}
+
+                  {reservations.map((r) => {
+                    const remainingDays = daysUntil(r.reservation_date)
+                    const isClosed = r.status === 'cancelled' || r.status === 'completed' || r.status === 'no_show'
+                    const pastCutoff = remainingDays !== null && remainingDays < CANCEL_CUTOFF_DAYS
+                    const cancelDisabled = isClosed || pastCutoff
+
+                    return (
+                      <div key={r.id} className="bg-white rounded-xl p-6 mb-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm font-[Prata]">
+                          <div className="flex flex-col gap-3">
+                            <div>
+                              <span className="block text-xs text-neutral-400">Date</span>
+                              <span>{formatDateDisplay(r.reservation_date)}</span>
+                            </div>
+                            <div>
+                              <span className="block text-xs text-neutral-400">Name</span>
+                              <span>{r.guest_name}</span>
+                            </div>
+                            <div>
+                              <span className="block text-xs text-neutral-400">Contact No.</span>
+                              <span>{r.contact_number}</span>
+                            </div>
+                            <div>
+                              <span className="block text-xs text-neutral-400">Email Address</span>
+                              <span>{r.email}</span>
+                            </div>
+                            <div>
+                              <span className="block text-xs text-neutral-400">Occasion</span>
+                              <span>{r.occasion || '—'}</span>
+                            </div>
+                          </div>
+                          <div className="flex flex-col gap-3">
+                            <div>
+                              <span className="block text-xs text-neutral-400">Time</span>
+                              <span>{formatTimeDisplay(r.reservation_time)}</span>
+                            </div>
+                            <div>
+                              <span className="block text-xs text-neutral-400">Number of Pax</span>
+                              <span>{r.party_size}</span>
+                            </div>
+                            <div>
+                              <span className="block text-xs text-neutral-400">Downpayment</span>
+                              <span>
+                                {r.downpayment_amount ? `Php. ${Number(r.downpayment_amount).toLocaleString()} (${r.payment_status || 'Pending'})` : '—'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="block text-xs text-neutral-400 mb-1">Status</span>
+                              <StatusBadge status={r.status} />
+                            </div>
+
+                            <div>
+                              <button
+                                onClick={() => handleCancelReservation(r.id)}
+                                disabled={cancelDisabled}
+                                className="w-full bg-[#c0392b] text-white font-[Prata] font-bold py-3 rounded-full hover:opacity-90 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                              >
+                                Cancel Reservation
+                              </button>
+                              {pastCutoff && !isClosed && (
+                                <p className="text-[11px] text-neutral-500 font-[Prata] mt-2 text-center leading-relaxed">
+                                  Cancellations must be made at least {CANCEL_CUTOFF_DAYS} days before your reservation date.
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {r.payment_proof && (
+                          <div className="mt-4">
+                            <span className="block text-xs text-neutral-400 font-[Prata] mb-2">Proof of Payment</span>
+                            <img
+                              src={r.payment_proof}
+                              alt="Proof of payment"
+                              className="w-full max-h-48 object-contain rounded-md bg-neutral-50"
+                            />
+                          </div>
+                        )}
+
+                        {r.theme_image && (
+                          <img
+                            src={r.theme_image}
+                            alt="Theme inspiration"
+                            className="mt-4 w-full max-h-48 object-cover rounded-md"
+                          />
+                        )}
+                      </div>
+                    )
+                  })}
+                </>
+              )}
             </div>
           )}
         </div>
@@ -912,7 +962,7 @@ function Reservation() {
       {showConfirm && (
         <div
           onClick={() => setShowConfirm(false)}
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4"
+          className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 px-4"
         >
           <div
             onClick={(e) => e.stopPropagation()}

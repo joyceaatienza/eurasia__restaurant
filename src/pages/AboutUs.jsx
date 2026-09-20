@@ -8,10 +8,10 @@ import {
   Users, 
   Sun,
   Target,
+  Clock,
   History as HistoryIcon
 } from 'lucide-react';
 import heroImage from '../assets/bgHero.jpg';
-import logo from '../assets/logoword.png';
 import asian from '../assets/asian.jpg';
 import european from '../assets/european.jpg';
 import about1 from '../assets/aboutUs1.jpg';
@@ -37,14 +37,33 @@ export default function AboutUs() {
           className="absolute inset-0 h-full w-full object-cover"
         />
         <div className="absolute inset-0 bg-white/40" />
-        <div className="relative flex h-full items-start justify-center px-4 pt-16 md:pt-20">
-          <img
-            src={logo}
-            alt="Eurasia Restaurant"
-            className="h-20 w-auto md:h-32"
-          />
+        <div className="relative flex h-full items-start justify-center px-4 pt-10 md:pt-14">
+          <h1
+            className="font-[Prata] font-bold text-xs md:text-xs text-[#1d080f]"
+            style={{ WebkitTextStroke: '0.7px #1d080f', letterSpacing: '1.5px' }}
+          >
+            Where flavors come together!
+          </h1>
         </div>
       </div>
+
+      {/* Operating Hours */}
+      <section className="pt-14 px-4 max-w-6xl mx-auto">
+        <div className="bg-white rounded-2xl border border-neutral-200/60 shadow-xs px-6 py-8 md:px-10 flex flex-col md:flex-row items-center justify-center gap-4 md:gap-8 text-center md:text-left">
+          <div className="w-12 h-12 shrink-0 rounded-full bg-[#b38548] flex items-center justify-center shadow-md">
+            <Clock size={22} className="text-white" />
+          </div>
+          <div>
+            <span className="text-xs font-semibold tracking-[0.25em] text-[#b38548] uppercase mb-1 block">
+              Operating Hours
+            </span>
+            <p className="font-['Prata'],serif text-xl md:text-2xl font-bold text-[#1d080f]">
+              11:00 AM – 10:00 PM
+            </p>
+            <p className="text-xs text-neutral-500 mt-1">Open daily, Monday to Sunday</p>
+          </div>
+        </div>
+      </section>
 
       {/* 1. What We Offer Section */}
       <section className="py-16 px-4 max-w-6xl mx-auto">
@@ -188,7 +207,7 @@ export default function AboutUs() {
             </p>
             <p className="text-sm md:text-base leading-relaxed text-neutral-700">
               Eurasia is a fine-dining restaurant located in Banay-Banay, San Jose, Batangas,
-              specifically on the 5th Floor of the ARADA VIRTUCIO Building.
+              specifically on the 5th Floor of the A-VIRTUCIO Building.
             </p>
             <p className="text-sm md:text-base leading-relaxed text-neutral-700">
               It was built in 2024 as a gift from the loving parents of the owner.

@@ -1,13 +1,14 @@
-import React, { useState } from "react";
-import { X, Minus, Plus, Trash2, ShoppingBag, ArrowRight, CheckCircle2 } from "lucide-react";
+import React from "react";
+import { X, Minus, Plus, Trash2, ShoppingBag, ArrowRight } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
-import { ordersApi } from "../services/ordersApi";
 
 const FONT = "'Prata', serif";
 const INK = "#1d080f";
-const MY_ORDERS_KEY = 'eurasia_my_pending_orders';
+const FINALIZED_KEY = 'eurasia_finalized';
 
 export default function TrayPanel() {
+  const navigate = useNavigate();
   const {
     cart,
     isTrayOpen,
@@ -15,74 +16,28 @@ export default function TrayPanel() {
     updateQty,
     updateNote,
     removeItem,
-    clearCart,
-    trayIconRef,
   } = useCart();
-
-  const [tableNumber, setTableNumber] = useState("");
-  const [placing, setPlacing] = useState(false);
-  const [toast, setToast] = useState("");
 
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
   const service = Math.round(subtotal * 0.05);
   const total = subtotal + service;
 
-  const handlePlaceOrder = async () => {
-    if (!tableNumber) {
-      alert("Please enter your table number.");
-      return;
-    }
+  const handleFinalizeOrder = () => {
     if (cart.length === 0) {
       alert("Your tray is empty.");
       return;
     }
-
-    try {
-      setPlacing(true);
-
-      const payload = {
-        table_number: tableNumber,
-        payment_method: "pay_later",
-        discount_type: null,
-        discount_id_image: null,
-        receipt_image: null,
-        subtotal,
-        service_fee: service,
-        discount_amount: 0,
-        total,
-        items: cart.map((item) => ({
-          menu_item_id: item.id,
-          item_name: item.name,
-          price: item.price,
-          quantity: item.qty,
-          note: item.note || null,
-        })),
-      };
-
-      const createdOrder = await ordersApi.create(payload);
-
-      const existingIds = JSON.parse(localStorage.getItem(MY_ORDERS_KEY) || '[]');
-      localStorage.setItem(MY_ORDERS_KEY, JSON.stringify([...existingIds, createdOrder.id]));
-
-      clearCart();
-      setTableNumber("");
-      closeTray();
-
-      setToast("Your food is on its way to the kitchen. You can pay after your meal.");
-      setTimeout(() => setToast(""), 3500);
-    } catch (err) {
-      console.error(err);
-      alert("Sorry, something went wrong while placing your order. Please try again.");
-    } finally {
-      setPlacing(false);
-    }
+    // Mark the tray as ready so the Order page will show it
+    localStorage.setItem(FINALIZED_KEY, 'true');
+    closeTray();
+    navigate('/payment');
   };
 
   return (
     <>
       {isTrayOpen && (
         <div className="fixed inset-0 z-50 flex justify-end">
-          <div className="absolute inset-0 bg-black/40" onClick={closeTray} />
+          <div className="absolute inset-0 bg-black/30" onClick={closeTray} />
 
           <div className="relative bg-[#f0eff3] w-full max-w-md h-full flex flex-col shadow-xl" style={{ fontFamily: FONT }}>
             {/* Header */}
@@ -146,31 +101,11 @@ export default function TrayPanel() {
                       />
                     </div>
                   ))}
-
-                  {/* Table Number */}
-                  <div className="bg-white rounded-xl p-5">
-                    <div className="text-center text-amber-700 text-xs tracking-wide mb-4">
-                      ENTER YOUR TABLE NUMBER
-                    </div>
-                    <input
-                      type="text"
-                      value={tableNumber}
-                      onChange={(e) => setTableNumber(e.target.value)}
-                      placeholder="e.g. T7"
-                      className="w-full text-center bg-[#f7f5f0] rounded-md px-4 py-3 focus:outline-none focus:ring-1 focus:ring-[#1d080f]"
-                      style={{ color: INK }}
-                    />
-                    {!tableNumber && (
-                      <p className="text-xs text-red-500 text-center mt-2">
-                        Please enter your table number.
-                      </p>
-                    )}
-                  </div>
                 </div>
               )}
             </div>
 
-            {/* Summary + Place Order */}
+            {/* Summary + Finalize Order */}
             {cart.length > 0 && (
               <div className="bg-white px-6 py-5 border-t border-gray-100">
                 <div className="flex justify-between text-sm mb-1" style={{ color: INK }}>
@@ -187,64 +122,17 @@ export default function TrayPanel() {
                 </div>
 
                 <p className="text-xs text-gray-400 text-center mb-4">
-                  Payment will be collected after your meal.
+                  Choose your mode of payment and discount on the next step.
                 </p>
 
                 <button
-                  onClick={handlePlaceOrder}
-                  disabled={placing || !tableNumber}
-                  className="w-full bg-[#296c39] text-white py-4 rounded-full flex items-center justify-center gap-2 hover:bg-[#1f5129] transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={handleFinalizeOrder}
+                  className="w-full bg-[#296c39] text-white py-4 rounded-full flex items-center justify-center gap-2 hover:bg-[#1f5129] transition"
                 >
-                  {placing ? "Placing order..." : (
-                    <>Place Order <ArrowRight size={16} /></>
-                  )}
+                  Finalize Order <ArrowRight size={16} />
                 </button>
               </div>
             )}
-          </div>
-        </div>
-      )}
-
-      {toast && (
-        <div
-          style={{
-            position: "fixed",
-            bottom: 28,
-            right: 28,
-            background: "rgba(26, 122, 76, 0.6)",
-            backdropFilter: "blur(8px)",
-            WebkitBackdropFilter: "blur(8px)",
-            color: "#fff",
-            padding: "16px 20px",
-            borderRadius: 14,
-            boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
-            display: "flex",
-            alignItems: "flex-start",
-            gap: 12,
-            zIndex: 100,
-            maxWidth: 340,
-          }}
-          className="font-sans"
-        >
-          <span
-            style={{
-              background: "rgba(255,255,255,0.2)",
-              borderRadius: 10,
-              width: 36,
-              height: 36,
-              flexShrink: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <CheckCircle2 size={20} className="text-white" />
-          </span>
-          <div>
-            <div className="text-sm font-bold leading-tight">Order Placed</div>
-            <div className="text-xs text-white/85 leading-snug mt-0.5">
-              Your food is on its way to the kitchen. You can pay after your meal.
-            </div>
           </div>
         </div>
       )}

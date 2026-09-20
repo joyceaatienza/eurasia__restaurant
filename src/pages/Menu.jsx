@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import 'flag-icons/css/flag-icons.min.css'
 import heroImage from '../assets/bgHero.jpg'
-import logo from '../assets/logoword.png'
 import trayIcon from '../assets/tray-icon.png'
 import bakedSalmon from '../assets/bakedSalmon2.png'
 import bbqRibs from '../assets/texas-bbq-ribs2.png'
@@ -318,6 +317,48 @@ const menuItems = [
     image: affumicato,
     category: 'Salad',
   },
+
+  //Pasta
+  {
+    id: 27,
+    name: 'Ensalada Marinera',
+    flag: 'ar',
+    emoji: '🦐',
+    description: 'Romaine, lollo rosso, calamari, shrimps, salmon cubes and mussels mixed with sesame dressing',
+    price: 489,
+    image: marinera,
+    category: 'Salad',
+  },
+  {
+    id: 28,
+    name: 'Greek Salad',
+    flag: 'gr',
+    emoji: '🌿',
+    description: 'Feta cheese, black olives, green olives, cucumber, tomato, onion, capsicum with olive oil and lemon dressing',
+    price: 450,
+    image: greekSalad,
+    category: 'Salad',
+  },
+  {
+    id: 29,
+    name: 'Insalata Ceasar',
+    flag: 'it',
+    emoji: '🐷',
+    description: 'Fresh romaine lettuce tossed with homemade Caesar dressing, herb croutons and topped with crispy bacon',
+    price: 425,
+    image: caesar,
+    category: 'Salad',
+  },
+  {
+    id: 30,
+    name: 'Insalata Di Salmone Affumicato',
+    flag: 'it',
+    emoji: '🐟',
+    description: 'Smoked salmon, romaine, lollo rosso, olives, capers mixed with dill mustard dressing',
+    price: 450,
+    image: affumicato,
+    category: 'Salad',
+  },
 ]
 
 // Renders a compact star row with the numeric average and review count
@@ -399,12 +440,13 @@ const handleBuyNow = (item) => {
           className="absolute inset-0 h-full w-full object-cover"
         />
         <div className="absolute inset-0 bg-white/40" />
-        <div className="relative flex h-full items-start justify-center px-4 pt-16 md:pt-20">
-          <img
-            src={logo}
-            alt="Eurasia Restaurant"
-            className="h-20 w-auto md:h-32"
-          />
+        <div className="relative flex h-full items-start justify-center px-4 pt-10 md:pt-14">
+         <h1
+            className="font-[Prata] font-bold text-xs md:text-xs text-[#1d080f]"
+            style={{ WebkitTextStroke: '0.7px #1d080f', letterSpacing: '1.5px' }}
+          >
+            Select your Culinary Indulgence
+          </h1>
         </div>
       </div>
 

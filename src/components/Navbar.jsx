@@ -1,13 +1,22 @@
 import { useState } from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import { User } from 'lucide-react'
 import logo from '../assets/logoword.png'
 import trayIcon from '../assets/tray-icon.png'
 import { useCart } from '../context/CartContext'
+import { useAuth } from '../context/AuthContext'
 
 function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const { itemCount, openTray, trayIconRef } = useCart()
+  const { isAuthenticated } = useAuth()
+  const location = useLocation()
+
+  // Hide the wordmark on the auth pages — the big logo is already on the page
+  const isAuthPage = ['/login', '/register'].includes(location.pathname)
+
+  // Send guests to login, logged-in customers to their account
+  const accountPath = isAuthenticated ? '/account' : '/login'
 
   const linkClass = ({ isActive }) =>
     isActive
@@ -17,9 +26,13 @@ function Navbar() {
   return (
     <nav className="fixed top-0 left-0 w-full z-50 bg-white shadow-xl">
       <div className="flex items-center justify-between px-6 md:px-10 py-4">
-        <NavLink to="/">
-          <img src={logo} alt="Eurasia Restaurant" className="h-12 w-auto" />
-        </NavLink>
+        {isAuthPage ? (
+          <span className="h-12" />
+        ) : (
+          <NavLink to="/">
+            <img src={logo} alt="Eurasia Restaurant" className="h-12 w-auto" />
+          </NavLink>
+        )}
 
         <div className="hidden md:flex items-center gap-8 text-[#1d080f] font-heading">
           <NavLink to="/" end className={linkClass}>Home</NavLink>
@@ -28,7 +41,7 @@ function Navbar() {
           <NavLink to="/payment" className={linkClass}>Order</NavLink>
           <NavLink to="/about" className={linkClass}>About Us</NavLink>
 
-          <NavLink to="/login" aria-label="Account" title="Account" className={({ isActive }) => (isActive ? 'text-[#1d080f]' : 'hover:opacity-70')}>
+          <NavLink to={accountPath} aria-label="Account" title="Account" className={({ isActive }) => (isActive ? 'text-[#1d080f]' : 'hover:opacity-70')}>
             <User className="h-7 w-7" strokeWidth={1.75} />
           </NavLink>
 
@@ -70,7 +83,7 @@ function Navbar() {
           <NavLink to="/reservation" onClick={() => setMobileOpen(false)} className={linkClass}>Reservation</NavLink>
           <NavLink to="/payment" onClick={() => setMobileOpen(false)} className={linkClass}>Order</NavLink>
           <NavLink to="/about" onClick={() => setMobileOpen(false)} className={linkClass}>About Us</NavLink>
-          <NavLink to="/login" onClick={() => setMobileOpen(false)} className={linkClass}>
+          <NavLink to={accountPath} onClick={() => setMobileOpen(false)} className={linkClass}>
             <span className="inline-flex items-center gap-2"><User className="h-5 w-5" strokeWidth={1.75} /> Account</span>
           </NavLink>
         </div>

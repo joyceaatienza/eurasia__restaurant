@@ -71,11 +71,15 @@ export function AuthProvider({ children }) {
     return customerAuthApi.changePassword(token, payload);
   };
 
-  const logout = () => {
+   const logout = () => {
     setUser(null);
     setToken(null);
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
+    // Clear the tray so the next person doesn't see the previous order
+    localStorage.removeItem('eurasia_cart');
+    localStorage.removeItem('eurasia_buy_now');
+    localStorage.removeItem('eurasia_finalized');
   };
 
   return (

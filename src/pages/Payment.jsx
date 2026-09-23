@@ -156,7 +156,7 @@ function OrderHistoryCard({ order }) {
 
 function Payment() {
   const navigate = useNavigate();
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, loading: authLoading } = useAuth();
 
   // 'loading' | 'order' | 'empty' | 'settle'
   const [screen, setScreen] = useState('loading');
@@ -454,6 +454,34 @@ function Payment() {
 
       <div className="max-w-3xl mx-auto px-4 md:px-6 py-8">
 
+        {authLoading ? (
+          <div className="bg-white rounded-2xl border border-neutral-200/80 p-12 text-center shadow-xs">
+            <p className="text-sm text-neutral-500">Loading...</p>
+          </div>
+         ) : !isAuthenticated ? (
+          <div className="bg-white rounded-2xl border border-neutral-200/80 shadow-xs p-12 text-center">
+              <p className="font-[Prata] text-lg text-[#1d080f] mb-2">Log in to place an order</p>
+              <p className="text-sm text-neutral-500 font-[Prata] mb-8">
+                You need an account to order from our kitchen and settle your bill.
+              </p>
+              <div className="flex flex-col sm:flex-row justify-center gap-3">
+                <button
+                  onClick={() => navigate('/login')}
+                  className="bg-[#1d080f] text-white font-[Prata] font-bold px-10 py-3 rounded-full hover:opacity-90 transition"
+                >
+                  Login
+                </button>
+                <button
+                  onClick={() => navigate('/register')}
+                  className="border border-[#1d080f] text-[#1d080f] font-[Prata] font-bold px-10 py-3 rounded-full hover:bg-[#1d080f] hover:text-white transition"
+                >
+                  Create Account
+                </button>
+              </div>
+            </div>
+        ) : (
+        <>
+
         {/* ---------------- EMPTY / LANDING ---------------- */}
         {screen === 'empty' && (
           <div className="bg-white rounded-2xl border border-neutral-200/80 p-12 text-center shadow-xs">
@@ -495,39 +523,16 @@ function Payment() {
         {screen === 'order' && orderItems.length > 0 && (
           <div className="grid gap-6">
 
-            {!isAuthenticated ? (
-              <div className="bg-white rounded-2xl border border-neutral-200/80 p-10 text-center shadow-xs">
-                <h2 className="font-['Prata'],serif text-xl font-bold mb-3">Log in to place your order</h2>
-                <p className="text-sm text-neutral-500 mb-6">
-                  You need an account to send your order to the kitchen. Your items are saved in your tray.
-                </p>
-                <div className="flex flex-col sm:flex-row justify-center gap-3">
-                  <button
-                    onClick={() => navigate('/login')}
-                    className="bg-[#1d080f] text-white text-sm font-semibold px-8 py-3 rounded-xl hover:opacity-90 transition cursor-pointer"
-                  >
-                    Login
-                  </button>
-                  <button
-                    onClick={() => navigate('/register')}
-                    className="border border-[#1d080f] text-[#1d080f] text-sm font-semibold px-8 py-3 rounded-xl hover:bg-[#1d080f]/5 transition cursor-pointer"
-                  >
-                    Create Account
-                  </button>
+            <div className="bg-white rounded-2xl shadow-sm p-8 border border-neutral-200/80">
+              <h2 className="text-center font-[Prata] text-amber-700 tracking-wide text-sm mb-4">
+                ORDERING AS
+              </h2>
+              <div className="max-w-xs mx-auto">
+                <div className="w-full text-center bg-neutral-100 rounded-md px-4 py-3.5 font-[Prata] text-[#1d080f]">
+                  {user?.full_name}
                 </div>
               </div>
-            ) : (
-              <div className="bg-white rounded-2xl shadow-sm p-8 border border-neutral-200/80">
-                <h2 className="text-center font-[Prata] text-amber-700 tracking-wide text-sm mb-4">
-                  ORDERING AS
-                </h2>
-                <div className="max-w-xs mx-auto">
-                  <div className="w-full text-center bg-neutral-100 rounded-md px-4 py-3.5 font-[Prata] text-[#1d080f]">
-                    {user?.full_name}
-                  </div>
-                </div>
-              </div>
-            )}
+            </div>
 
             <div className="bg-white rounded-2xl border border-neutral-200/80 p-6 shadow-xs">
               <h4 className="text-[16px] font-bold text-[#b38548] uppercase tracking-wider mb-4">
@@ -863,8 +868,11 @@ function Payment() {
                   </div>
                 </div>
               </>
-            )}
+                       )}
           </div>
+        )}
+
+        </>
         )}
       </div>
 

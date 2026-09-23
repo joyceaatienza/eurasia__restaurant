@@ -366,7 +366,7 @@ function WheelTimePicker({ value, onChange }) {
 
 function Reservation() {
   const navigate = useNavigate()
-  const { user, isAuthenticated } = useAuth()
+  const { user, isAuthenticated, loading: authLoading } = useAuth()
 
   const [tab, setTab] = useState("table")
 
@@ -393,7 +393,7 @@ function Reservation() {
   }, [])
 
   // Load the logged-in customer's own reservations
-  const loadMine = () => {
+  useEffect(() => {
     if (!isAuthenticated) {
       setReservations([])
       return
@@ -403,11 +403,6 @@ function Reservation() {
       .then((data) => setReservations(data))
       .catch((err) => console.error('Failed to load reservations:', err))
       .finally(() => setLoadingReservations(false))
-  }
-
-  useEffect(() => {
-    loadMine()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated])
 
   const cells = useMemo(
@@ -437,12 +432,6 @@ function Reservation() {
 
   const handleConfirm = async (e) => {
     e.preventDefault()
-
-    if (!isAuthenticated) {
-      alert("Please log in to make a reservation.")
-      navigate('/login')
-      return
-    }
 
     const formData = new FormData(e.target)
     const time = formData.get('time')
@@ -545,314 +534,292 @@ function Reservation() {
       <div style={{ marginTop: '4rem' }}> </div>
       <div className="max-w-5xl mx-auto px-4 md:px-3 -mt-24 md:-mt-32 relative z-10 pb-16">
         <div className="bg-[#e6e1d8] rounded-xl shadow-xl p-6 md:p-10">
-          <div className="flex gap-3 mb-8">
-            <button
-              onClick={() => setTab("table")}
-              className={`flex-1 py-4 rounded-xl text-base md:text-lg font-[Prata] font-bold transition-colors ${
-                tab === "table"
-                  ? 'bg-[#1d080f] text-white'
-                  : 'bg-neutral-200/70 text-[#1d080f] hover:bg-neutral-300/70'
-              }`}
-            >
-              Table Reservation
-            </button>
-            <button
-              onClick={() => setTab("event")}
-              className={`flex-1 py-4 rounded-xl text-base md:text-lg font-[Prata] font-bold transition-colors ${
-                tab === "event"
-                  ? 'bg-[#1d080f] text-white'
-                  : 'bg-neutral-200/70 text-[#1d080f] hover:bg-neutral-300/70'
-              }`}
-            >
-              Event Reservation
-            </button>
-            <button
-              onClick={() => setTab("history")}
-              className={`flex-1 py-4 rounded-xl text-base md:text-lg font-[Prata] font-bold transition-colors ${
-                tab === "history"
-                  ? 'bg-[#1d080f] text-white'
-                  : 'bg-neutral-200/70 text-[#1d080f] hover:bg-neutral-300/70'
-              }`}
-            >
-              History
-            </button>
-          </div>
 
-          {tab !== "history" && !isAuthenticated && (
-            <div className="bg-white rounded-xl p-10 text-center">
-              <p className="font-[Prata] text-lg text-[#1d080f] mb-2">Log in to reserve a table</p>
-              <p className="text-sm text-neutral-500 font-[Prata] mb-6">
-                You need an account to make a reservation with us.
+          {authLoading ? (
+            <p className="text-center py-16 text-sm text-neutral-500 font-[Prata]">Loading...</p>
+          ) : !isAuthenticated ? (
+            <div className="bg-white rounded-xl p-12 text-center">
+              <p className="font-[Prata] text-lg text-[#1d080f] mb-2">Log in to make a reservation</p>
+              <p className="text-sm text-neutral-500 font-[Prata] mb-8">
+                You need an account to book a table or an event with us.
               </p>
               <div className="flex flex-col sm:flex-row justify-center gap-3">
                 <button
                   onClick={() => navigate('/login')}
-                  className="bg-[#1d080f] text-white font-[Prata] font-bold px-8 py-3 rounded-full hover:opacity-90 transition"
+                  className="bg-[#1d080f] text-white font-[Prata] font-bold px-10 py-3 rounded-full hover:opacity-90 transition"
                 >
                   Login
                 </button>
                 <button
                   onClick={() => navigate('/register')}
-                  className="border border-[#1d080f] text-[#1d080f] font-[Prata] font-bold px-8 py-3 rounded-full hover:bg-[#1d080f] hover:text-white transition"
+                  className="border border-[#1d080f] text-[#1d080f] font-[Prata] font-bold px-10 py-3 rounded-full hover:bg-[#1d080f] hover:text-white transition"
                 >
                   Create Account
                 </button>
               </div>
             </div>
-          )}
-
-          {tab !== "history" && isAuthenticated && (
+          ) : (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-6">
-                <div>
-                  <div className="font-[Prata] text-lg mb-4">Select a date</div>
-                  <div className="bg-white rounded-xl shadow-sm p-4">
-                    <div className="flex items-center justify-between mb-3 font-[Prata] font-bold text-base">
-                      <button onClick={() => changeMonth(-1)} className="p-1 hover:bg-neutral-100 rounded">
-                        <ChevronLeft size={16} />
-                      </button>
-                      <span>{MONTH_NAMES[viewDate.getMonth()]} {viewDate.getFullYear()}</span>
-                      <button onClick={() => changeMonth(1)} className="p-1 hover:bg-neutral-100 rounded">
-                        <ChevronRight size={16} />
-                      </button>
-                    </div>
-                    <div className="grid grid-cols-7 gap-y-1 text-center text-sm font-[Prata]">
-                      {WEEKDAYS.map((w, i) => (
-                        <div key={i} className="font-bold text-[#1d080f] py-1">{w}</div>
-                      ))}
-                      {cells.map((c, i) => {
-                        const cellDate = c.muted ? null : new Date(viewDate.getFullYear(), viewDate.getMonth(), c.day)
-                        const isPast = cellDate && cellDate < today
-                        const disabled = c.muted || isPast
-                        return (
-                          <div
-                            key={i}
-                            onClick={() => !disabled && setSelectedDay(c.day)}
-                            className={`py-1.5 rounded ${
-                              disabled
-                                ? 'text-neutral-300 cursor-not-allowed'
-                                : c.day === selectedDay
-                                ? 'bg-[#1d080f] text-white cursor-pointer'
-                                : 'text-[#1d080f] hover:bg-neutral-100 cursor-pointer'
-                            }`}
-                          >
-                            {c.day}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                </div>
+              <div className="flex gap-3 mb-8">
+                <button
+                  onClick={() => setTab("table")}
+                  className={`flex-1 py-4 rounded-xl text-base md:text-lg font-[Prata] font-bold transition-colors ${
+                    tab === "table"
+                      ? 'bg-[#1d080f] text-white'
+                      : 'bg-neutral-200/70 text-[#1d080f] hover:bg-neutral-300/70'
+                  }`}
+                >
+                  Table Reservation
+                </button>
+                <button
+                  onClick={() => setTab("event")}
+                  className={`flex-1 py-4 rounded-xl text-base md:text-lg font-[Prata] font-bold transition-colors ${
+                    tab === "event"
+                      ? 'bg-[#1d080f] text-white'
+                      : 'bg-neutral-200/70 text-[#1d080f] hover:bg-neutral-300/70'
+                  }`}
+                >
+                  Event Reservation
+                </button>
+                <button
+                  onClick={() => setTab("history")}
+                  className={`flex-1 py-4 rounded-xl text-base md:text-lg font-[Prata] font-bold transition-colors ${
+                    tab === "history"
+                      ? 'bg-[#1d080f] text-white'
+                      : 'bg-neutral-200/70 text-[#1d080f] hover:bg-neutral-300/70'
+                  }`}
+                >
+                  History
+                </button>
+              </div>
 
-                <form id="reservation-form" onSubmit={handleConfirm} className="flex flex-col gap-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <input value={user?.full_name || ''} readOnly className={lockedInputClass} />
-                    <input value={user?.contact_number || ''} readOnly className={lockedInputClass} />
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <input value={user?.email || ''} readOnly className={lockedInputClass} />
-                    <WheelTimePicker value={selectedTime} onChange={setSelectedTime} />
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="relative">
-                      <select value={occasion} onChange={(e) => setOccasion(e.target.value)} required={tab === "event"} className={`${inputClass} appearance-none ${occasion ? 'text-[#1d080f]' : 'text-neutral-400'}`}>
-                        <option value="" disabled className="text-neutral-400">Occasion{tab === "event" ? " *" : ""}</option>
-                        <option className="text-[#1d080f]">Birthday</option>
-                        <option className="text-[#1d080f]">Anniversary</option>
-                        <option className="text-[#1d080f]">Wedding</option>
-                        <option className="text-[#1d080f]">Business</option>
-                        <option className="text-[#1d080f]">Casual</option>
-                      </select>
-                      <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-400" />
-                    </div>
-                    <input name="persons" type="number" min="1" placeholder="Number of Pax *" required className={inputClass} />
-                  </div>
-
-                  {tab === "event" && (
-                    <>
-                      <input name="preference" placeholder="Theme Preference *" required className={inputClass} />
-
-                      <div className="bg-white rounded-md p-4">
-                        <label className="font-[Prata] text-sm text-neutral-600 block mb-2">
-                          Theme Inspiration Photo (optional)
-                        </label>
-                        <label
-                          htmlFor="theme-image-upload"
-                          className="flex items-center justify-center gap-2 border-2 border-dashed border-neutral-300 rounded-md py-6 cursor-pointer hover:bg-neutral-50 transition"
-                        >
-                          <Upload size={16} className="text-neutral-400" />
-                          <span className="font-[Prata] text-xs text-neutral-500">
-                            {themeImagePreview ? "Change photo" : "Click to upload a photo"}
-                          </span>
-                        </label>
-                        <input
-                          id="theme-image-upload"
-                          type="file"
-                          accept="image/*"
-                          onChange={handleThemeImageChange}
-                          className="hidden"
-                        />
-                        {themeImagePreview && (
-                          <img
-                            src={themeImagePreview}
-                            alt="Theme preview"
-                            className="mt-3 w-full max-h-40 object-cover rounded-md"
-                          />
-                        )}
+              {tab !== "history" && (
+                <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-6">
+                  <div>
+                    <div className="font-[Prata] text-lg mb-4">Select a date</div>
+                    <div className="bg-white rounded-xl shadow-sm p-4">
+                      <div className="flex items-center justify-between mb-3 font-[Prata] font-bold text-base">
+                        <button onClick={() => changeMonth(-1)} className="p-1 hover:bg-neutral-100 rounded">
+                          <ChevronLeft size={16} />
+                        </button>
+                        <span>{MONTH_NAMES[viewDate.getMonth()]} {viewDate.getFullYear()}</span>
+                        <button onClick={() => changeMonth(1)} className="p-1 hover:bg-neutral-100 rounded">
+                          <ChevronRight size={16} />
+                        </button>
                       </div>
-
-                      <textarea name="note" placeholder="Note (optional)" className={`${inputClass} resize-none h-20`} />
-                    </>
-                  )}
-
-                  <div className="bg-white rounded-xl p-5">
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="font-[Prata] text-sm text-neutral-600">Required Downpayment</span>
-                      <span className="font-[Prata] font-bold text-lg text-[#1d080f]">
-                        Php. {(tab === "event" ? DOWNPAYMENT.event : DOWNPAYMENT.table).toLocaleString()}
-                      </span>
-                    </div>
-                    <p className="text-xs text-neutral-500 font-[Prata] mb-4">
-                      This amount will be deducted from your final bill.
-                    </p>
-
-                    <div className="relative">
-                      <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} className={`${inputClass} appearance-none ${paymentMethod ? 'text-[#1d080f]' : 'text-neutral-400'}`}>
-                        <option value="" disabled className="text-neutral-400">Mode of Payment *</option>
-                        <option className="text-[#1d080f]">Cash</option>
-                        <option className="text-[#1d080f]">GCash</option>
-                        <option className="text-[#1d080f]">Paymaya</option>
-                        <option className="text-[#1d080f]">Bank Transfer</option>
-                      </select>
-                      <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-400" />
-                    </div>
-                    {!paymentMethod && (
-                      <p className="text-xs text-red-500 font-[Prata] mt-2">Please select a mode of payment.</p>
-                    )}
-
-                    {paymentMethod === "Cash" && (
-                      <div className="mt-4 bg-[#f7f5f0] rounded-lg p-4">
-                        <p className="text-xs font-[Prata] text-neutral-600 leading-relaxed">
-                          Please pay your Php. {(tab === "event" ? DOWNPAYMENT.event : DOWNPAYMENT.table).toLocaleString()} downpayment in cash at the restaurant, then upload the photo of your receipt below.
-                        </p>
-                      </div>
-                    )}
-
-                    {paymentMethod && PAYMENT_ACCOUNTS[paymentMethod] && (
-                      <div className="mt-4 bg-[#f7f5f0] rounded-lg p-4">
-                        <p className="text-xs font-[Prata] text-neutral-600 mb-3">
-                          Send your Php. {(tab === "event" ? DOWNPAYMENT.event : DOWNPAYMENT.table).toLocaleString()} downpayment to:
-                        </p>
-
-                        <div className="flex items-center gap-4">
-                          {PAYMENT_ACCOUNTS[paymentMethod].qrPlaceholder && (
-                            <div className="w-20 h-20 shrink-0 bg-white rounded-md border border-dashed border-neutral-300 flex items-center justify-center text-[9px] text-neutral-400 text-center font-[Prata] leading-tight">
-                              QR Code
+                      <div className="grid grid-cols-7 gap-y-1 text-center text-sm font-[Prata]">
+                        {WEEKDAYS.map((w, i) => (
+                          <div key={i} className="font-bold text-[#1d080f] py-1">{w}</div>
+                        ))}
+                        {cells.map((c, i) => {
+                          const cellDate = c.muted ? null : new Date(viewDate.getFullYear(), viewDate.getMonth(), c.day)
+                          const isPast = cellDate && cellDate < today
+                          const disabled = c.muted || isPast
+                          return (
+                            <div
+                              key={i}
+                              onClick={() => !disabled && setSelectedDay(c.day)}
+                              className={`py-1.5 rounded ${
+                                disabled
+                                  ? 'text-neutral-300 cursor-not-allowed'
+                                  : c.day === selectedDay
+                                  ? 'bg-[#1d080f] text-white cursor-pointer'
+                                  : 'text-[#1d080f] hover:bg-neutral-100 cursor-pointer'
+                              }`}
+                            >
+                              {c.day}
                             </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  <form id="reservation-form" onSubmit={handleConfirm} className="flex flex-col gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <input value={user?.full_name || ''} readOnly className={lockedInputClass} />
+                      <input value={user?.contact_number || ''} readOnly className={lockedInputClass} />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <input value={user?.email || ''} readOnly className={lockedInputClass} />
+                      <WheelTimePicker value={selectedTime} onChange={setSelectedTime} />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="relative">
+                        <select value={occasion} onChange={(e) => setOccasion(e.target.value)} required={tab === "event"} className={`${inputClass} appearance-none ${occasion ? 'text-[#1d080f]' : 'text-neutral-400'}`}>
+                          <option value="" disabled className="text-neutral-400">Occasion{tab === "event" ? " *" : ""}</option>
+                          <option className="text-[#1d080f]">Birthday</option>
+                          <option className="text-[#1d080f]">Anniversary</option>
+                          <option className="text-[#1d080f]">Wedding</option>
+                          <option className="text-[#1d080f]">Business</option>
+                          <option className="text-[#1d080f]">Casual</option>
+                        </select>
+                        <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-400" />
+                      </div>
+                      <input name="persons" type="number" min="1" placeholder="Number of Pax *" required className={inputClass} />
+                    </div>
+
+                    {tab === "event" && (
+                      <>
+                        <input name="preference" placeholder="Theme Preference *" required className={inputClass} />
+
+                        <div className="bg-white rounded-md p-4">
+                          <label className="font-[Prata] text-sm text-neutral-600 block mb-2">
+                            Theme Inspiration Photo (optional)
+                          </label>
+                          <label
+                            htmlFor="theme-image-upload"
+                            className="flex items-center justify-center gap-2 border-2 border-dashed border-neutral-300 rounded-md py-6 cursor-pointer hover:bg-neutral-50 transition"
+                          >
+                            <Upload size={16} className="text-neutral-400" />
+                            <span className="font-[Prata] text-xs text-neutral-500">
+                              {themeImagePreview ? "Change photo" : "Click to upload a photo"}
+                            </span>
+                          </label>
+                          <input
+                            id="theme-image-upload"
+                            type="file"
+                            accept="image/*"
+                            onChange={handleThemeImageChange}
+                            className="hidden"
+                          />
+                          {themeImagePreview && (
+                            <img
+                              src={themeImagePreview}
+                              alt="Theme preview"
+                              className="mt-3 w-full max-h-40 object-cover rounded-md"
+                            />
                           )}
-                          <div className="text-xs font-[Prata]">
-                            <div className="text-neutral-500">Account Name</div>
-                            <div className="text-[#1d080f] font-bold mb-2">{PAYMENT_ACCOUNTS[paymentMethod].accountName}</div>
-                            <div className="text-neutral-500">{paymentMethod === "Bank Transfer" ? "Account Number" : "Number"}</div>
-                            <div className="text-[#1d080f] font-bold">{PAYMENT_ACCOUNTS[paymentMethod].accountNumber}</div>
+                        </div>
+
+                        <textarea name="note" placeholder="Note (optional)" className={`${inputClass} resize-none h-20`} />
+                      </>
+                    )}
+
+                    <div className="bg-white rounded-xl p-5">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="font-[Prata] text-sm text-neutral-600">Required Downpayment</span>
+                        <span className="font-[Prata] font-bold text-lg text-[#1d080f]">
+                          Php. {(tab === "event" ? DOWNPAYMENT.event : DOWNPAYMENT.table).toLocaleString()}
+                        </span>
+                      </div>
+                      <p className="text-xs text-neutral-500 font-[Prata] mb-4">
+                        This amount will be deducted from your final bill.
+                      </p>
+
+                      <div className="relative">
+                        <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} className={`${inputClass} appearance-none ${paymentMethod ? 'text-[#1d080f]' : 'text-neutral-400'}`}>
+                          <option value="" disabled className="text-neutral-400">Mode of Payment *</option>
+                          <option className="text-[#1d080f]">Cash</option>
+                          <option className="text-[#1d080f]">GCash</option>
+                          <option className="text-[#1d080f]">Paymaya</option>
+                          <option className="text-[#1d080f]">Bank Transfer</option>
+                        </select>
+                        <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-400" />
+                      </div>
+                      {!paymentMethod && (
+                        <p className="text-xs text-red-500 font-[Prata] mt-2">Please select a mode of payment.</p>
+                      )}
+
+                      {paymentMethod === "Cash" && (
+                        <div className="mt-4 bg-[#f7f5f0] rounded-lg p-4">
+                          <p className="text-xs font-[Prata] text-neutral-600 leading-relaxed">
+                            Please pay your Php. {(tab === "event" ? DOWNPAYMENT.event : DOWNPAYMENT.table).toLocaleString()} downpayment in cash at the restaurant, then upload the photo of your receipt below.
+                          </p>
+                        </div>
+                      )}
+
+                      {paymentMethod && PAYMENT_ACCOUNTS[paymentMethod] && (
+                        <div className="mt-4 bg-[#f7f5f0] rounded-lg p-4">
+                          <p className="text-xs font-[Prata] text-neutral-600 mb-3">
+                            Send your Php. {(tab === "event" ? DOWNPAYMENT.event : DOWNPAYMENT.table).toLocaleString()} downpayment to:
+                          </p>
+
+                          <div className="flex items-center gap-4">
+                            {PAYMENT_ACCOUNTS[paymentMethod].qrPlaceholder && (
+                              <div className="w-20 h-20 shrink-0 bg-white rounded-md border border-dashed border-neutral-300 flex items-center justify-center text-[9px] text-neutral-400 text-center font-[Prata] leading-tight">
+                                QR Code
+                              </div>
+                            )}
+                            <div className="text-xs font-[Prata]">
+                              <div className="text-neutral-500">Account Name</div>
+                              <div className="text-[#1d080f] font-bold mb-2">{PAYMENT_ACCOUNTS[paymentMethod].accountName}</div>
+                              <div className="text-neutral-500">{paymentMethod === "Bank Transfer" ? "Account Number" : "Number"}</div>
+                              <div className="text-[#1d080f] font-bold">{PAYMENT_ACCOUNTS[paymentMethod].accountNumber}</div>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )}
+                      )}
 
-                    {paymentMethod && (
-                      <div className="mt-4 border-t border-neutral-200 pt-4">
-                        <label className="font-[Prata] text-sm text-neutral-600 block mb-2">
-                          Proof of Payment *
-                        </label>
-                        <p className="text-xs text-neutral-400 font-[Prata] mb-3 leading-relaxed">
-                          Upload a screenshot or photo of your payment receipt. The receptionist will verify this to confirm your reservation.
-                        </p>
-                        <label
-                          htmlFor="payment-proof-upload"
-                          className="flex items-center justify-center gap-2 border-2 border-dashed border-neutral-300 rounded-md py-6 cursor-pointer hover:bg-neutral-50 transition"
-                        >
-                          <Upload size={16} className="text-neutral-400" />
-                          <span className="font-[Prata] text-xs text-neutral-500">
-                            {paymentProofPreview ? "Change proof of payment" : "Click to upload proof of payment"}
-                          </span>
-                        </label>
-                        <input
-                          id="payment-proof-upload"
-                          type="file"
-                          accept="image/*"
-                          onChange={handlePaymentProofChange}
-                          className="hidden"
-                        />
-                        {paymentProofPreview ? (
-                          <img
-                            src={paymentProofPreview}
-                            alt="Proof of payment preview"
-                            className="mt-3 w-full max-h-48 object-contain rounded-md bg-neutral-50"
+                      {paymentMethod && (
+                        <div className="mt-4 border-t border-neutral-200 pt-4">
+                          <label className="font-[Prata] text-sm text-neutral-600 block mb-2">
+                            Proof of Payment *
+                          </label>
+                          <p className="text-xs text-neutral-400 font-[Prata] mb-3 leading-relaxed">
+                            Upload a screenshot or photo of your payment receipt. The receptionist will verify this to confirm your reservation.
+                          </p>
+                          <label
+                            htmlFor="payment-proof-upload"
+                            className="flex items-center justify-center gap-2 border-2 border-dashed border-neutral-300 rounded-md py-6 cursor-pointer hover:bg-neutral-50 transition"
+                          >
+                            <Upload size={16} className="text-neutral-400" />
+                            <span className="font-[Prata] text-xs text-neutral-500">
+                              {paymentProofPreview ? "Change proof of payment" : "Click to upload proof of payment"}
+                            </span>
+                          </label>
+                          <input
+                            id="payment-proof-upload"
+                            type="file"
+                            accept="image/*"
+                            onChange={handlePaymentProofChange}
+                            className="hidden"
                           />
-                        ) : (
-                          <p className="text-xs text-red-500 font-[Prata] mt-2">Proof of payment is required.</p>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                          {paymentProofPreview ? (
+                            <img
+                              src={paymentProofPreview}
+                              alt="Proof of payment preview"
+                              className="mt-3 w-full max-h-48 object-contain rounded-md bg-neutral-50"
+                            />
+                          ) : (
+                            <p className="text-xs text-red-500 font-[Prata] mt-2">Proof of payment is required.</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
 
-                  <div className="flex gap-4 mt-8 max-w-md">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        document.getElementById('reservation-form')?.reset()
-                        setSelectedTime(getDefaultTime())
-                        setOccasion("")
-                        setPaymentMethod("")
-                        setPaymentProofPreview("")
-                        setThemeImagePreview("")
-                      }}
-                      className="flex-1 bg-[#c0392b] text-white font-[Prata] font-bold py-3.5 rounded-full hover:opacity-90 transition"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      form="reservation-form"
-                      disabled={submitting}
-                      className="flex-1 bg-[#1d080f] text-white font-[Prata] font-bold py-3.5 rounded-full hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {submitting ? "Submitting..." : "Submit Reservation"}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </>
-          )}
-
-          {tab === "history" && (
-            <div>
-              {!isAuthenticated ? (
-                <div className="bg-white rounded-xl p-10 text-center">
-                  <p className="font-[Prata] text-lg text-[#1d080f] mb-2">Log in to see your reservations</p>
-                  <p className="text-sm text-neutral-500 font-[Prata] mb-6">
-                    Your booking history is tied to your account.
-                  </p>
-                  <div className="flex flex-col sm:flex-row justify-center gap-3">
-                    <button
-                      onClick={() => navigate('/login')}
-                      className="bg-[#1d080f] text-white font-[Prata] font-bold px-8 py-3 rounded-full hover:opacity-90 transition"
-                    >
-                      Login
-                    </button>
-                    <button
-                      onClick={() => navigate('/register')}
-                      className="border border-[#1d080f] text-[#1d080f] font-[Prata] font-bold px-8 py-3 rounded-full hover:bg-[#1d080f] hover:text-white transition"
-                    >
-                      Create Account
-                    </button>
-                  </div>
+                    <div className="flex gap-4 mt-8 max-w-md">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          document.getElementById('reservation-form')?.reset()
+                          setSelectedTime(getDefaultTime())
+                          setOccasion("")
+                          setPaymentMethod("")
+                          setPaymentProofPreview("")
+                          setThemeImagePreview("")
+                        }}
+                        className="flex-1 bg-[#c0392b] text-white font-[Prata] font-bold py-3.5 rounded-full hover:opacity-90 transition"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        form="reservation-form"
+                        disabled={submitting}
+                        className="flex-1 bg-[#1d080f] text-white font-[Prata] font-bold py-3.5 rounded-full hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {submitting ? "Submitting..." : "Submit Reservation"}
+                      </button>
+                    </div>
+                  </form>
                 </div>
-              ) : (
-                <>
+              )}
+
+              {tab === "history" && (
+                <div>
                   {loadingReservations && (
                     <p className="text-neutral-500 text-center py-8 text-sm font-[Prata]">Loading...</p>
                   )}
@@ -952,9 +919,9 @@ function Reservation() {
                       </div>
                     )
                   })}
-                </>
+                </div>
               )}
-            </div>
+            </>
           )}
         </div>
       </div>

@@ -207,10 +207,10 @@ function Account() {
                 <div className="bg-white rounded-xl p-6 md:p-8">
                   <div className="flex items-center justify-between mb-5">
                     <h2 className="font-[Prata] text-sm text-[#1d080f]">Your Details</h2>
-                    {!editing && (
+                                        {!editing && (
                       <button
                         onClick={() => setEditing(true)}
-                        className="font-[Prata] text-xs text-[#1d080f] underline hover:opacity-70"
+                        className="border border-[#1d080f] text-[#1d080f] font-[Prata] text-xs px-5 py-1.5 rounded-full hover:bg-[#1d080f] hover:text-white transition"
                       >
                         Edit
                       </button>

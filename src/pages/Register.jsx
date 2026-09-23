@@ -241,7 +241,7 @@ function Register() {
                   A downpayment is required to confirm any reservation, and is deducted from your
                   final bill. Your reservation remains pending until our receptionist verifies your
                   proof of payment. Cancellations must be made at least three (3) days before your
-                  reservation date. Downpayments for late cancellations and no-shows are
+                  reservation date. Downpayments for cancellations and no-shows are
                   non-refundable. The restaurant reserves the right to release a table after a
                   reasonable waiting period.
                 </p>

@@ -1,5 +1,11 @@
 const API_URL = 'http://localhost:5000/api/password-reset';
 
+async function handle(res) {
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Something went wrong. Please try again.');
+  return data;
+}
+
 export const passwordResetApi = {
   async requestReset(email) {
     const res = await fetch(`${API_URL}/request`, {
@@ -7,26 +13,24 @@ export const passwordResetApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email }),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to send reset link');
-    return data;
+    return handle(res);
   },
 
-  async verifyToken(token) {
-    const res = await fetch(`${API_URL}/verify/${token}`);
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Invalid or expired link');
-    return data;
+  async verifyCode(email, code) {
+    const res = await fetch(`${API_URL}/verify-code`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, code }),
+    });
+    return handle(res);
   },
 
-  async resetPassword(token, password) {
+  async resetPassword(email, code, password) {
     const res = await fetch(`${API_URL}/reset`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, password }),
+      body: JSON.stringify({ email, code, password }),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to reset password');
-    return data;
+    return handle(res);
   },
 };

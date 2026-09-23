@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useLocation } from "react-router-dom";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, X } from "lucide-react";
 import { reservationsApi } from "../services/reservationsApi";
 import StaffHeader from "../components/StaffHeader";
 
@@ -32,28 +32,10 @@ const FONT = "'Prata', serif";
 
 const HIGHLIGHT_MS = 3000;
 
-const TABLES = ["T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10", "T11", "T12", "T13", "T14", "T15", "T16", "T17"];
 const DAY_LABELS = ["SUN", "MON", "TUES", "WED", "THU", "FRI", "SAT"];
 const HOURS = [11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]; // 11am–10pm
 
-const FLOOR_TABLES = [
-  { id: "T13", x: 20, y: 7.3, w: 15.5, h: 11 },
-  { id: "T6", x: 67.3, y: 7.3, w: 15.7, h: 11 },
-  { id: "T14", x: 3.7, y: 22.6, w: 16.2, h: 8 },
-  { id: "T5", x: 81, y: 22.6, w: 16.2, h: 8 },
-  { id: "T12", x: 33.7, y: 23, w: 7, h: 20 },
-  { id: "T7", x: 58, y: 23, w: 7.2, h: 20 },
-  { id: "T15", x: 3.7, y: 38.4, w: 16.2, h: 7.7 },
-  { id: "T4", x: 81, y: 38.4, w: 16.2, h: 7.7 },
-  { id: "T11", x: 29.2, y: 49, w: 16.5, h: 8.6 },
-  { id: "T8", x: 54.1, y: 49, w: 16.5, h: 8.6 },
-  { id: "T16", x: 2.5, y: 55.3, w: 16.2, h: 9 },
-  { id: "T3", x: 81, y: 55.3, w: 16.2, h: 9 },
-  { id: "T10", x: 33.7, y: 61.8, w: 7, h: 19.8 },
-  { id: "T9", x: 58, y: 61.8, w: 7.2, h: 19.8 },
-  { id: "T17", x: 2.5, y: 70, w: 16.2, h: 8.6 },
-  { id: "T2", x: 81, y: 70, w: 16.2, h: 8.6 },
-];
+const STATUS_OPTIONS = ["Pending", "Confirmed", "Arrived", "Completed", "Cancelled"];
 
 /* ---------------------------------------------------------------- */
 /* Date helpers                                                      */
@@ -61,20 +43,16 @@ const FLOOR_TABLES = [
 function toISO(date) {
   return date.toISOString().slice(0, 10);
 }
-// Normalizes any incoming date value (Date object OR string) to a "YYYY-MM-DD" string
 function toISOString(value) {
   if (!value) return "";
   if (value instanceof Date) {
-    // Use local date parts to avoid UTC shifting the day
     const y = value.getFullYear();
     const m = String(value.getMonth() + 1).padStart(2, "0");
     const d = String(value.getDate()).padStart(2, "0");
     return `${y}-${m}-${d}`;
   }
-  // Already a string like "2026-08-15" or "2026-08-15T00:00:00.000Z" — take first 10 chars
   return String(value).slice(0, 10);
 }
-// Turns a "YYYY-MM-DD" string into a friendly display like "Aug 15, 2026"
 function displayDateFromISO(iso) {
   if (!iso) return "";
   const [y, m, d] = iso.split("-").map(Number);
@@ -117,6 +95,10 @@ function to12h(time24) {
 function hourBucket(time24) {
   return Number(time24.split(":")[0]);
 }
+function peso(amount) {
+  const n = Number(amount || 0);
+  return `Php. ${n.toLocaleString()}`;
+}
 function buildMonthMatrix(date) {
   const year = date.getFullYear();
   const month = date.getMonth();
@@ -149,10 +131,18 @@ function Badge({ children, tone = "green" }) {
   };
   const t = map[tone] || map.green;
   return (
-    <span style={{ background: t.bg, color: t.fg, fontSize: 12, fontWeight: 700, padding: "5px 12px", borderRadius: 999, whiteSpace: "nowrap", fontFamily: FONT }}>
-      {children}
+    <span style={{ background: t.bg, color: t.fg, fontSize: 12, fontWeight: 700, padding: "5px 12px", borderRadius: 8, whiteSpace: "nowrap", fontFamily: FONT }}>
+            {children}
     </span>
   );
+}
+
+function statusColors(status) {
+  if (status === "Completed") return { bg: "#eeecec", fg: C.grayText, border: C.gray };
+  if (status === "Arrived") return { bg: "#fbeee2", fg: C.orange, border: C.orange };
+  if (status === "Confirmed") return { bg: "#e5f0e6", fg: C.green, border: C.green };
+  if (status === "Cancelled") return { bg: "#fbe7e7", fg: C.red, border: C.red };
+  return { bg: "#fdf3df", fg: "#9c7a1f", border: "#d9bf72" }; // Pending
 }
 
 function Card({ children, style }) {
@@ -172,47 +162,139 @@ function SectionTitle({ children }) {
 }
 
 /* ---------------------------------------------------------------- */
-/* Status action buttons — Arrived / Completed                       */
+/* Status dropdown                                                    */
 /* ---------------------------------------------------------------- */
-function StatusButtons({ status, onMark }) {
-  const isCompleted = status === "Completed";
-  const isArrived = status === "Arrived" || isCompleted;
+function StatusSelect({ status, onChange }) {
+  const c = statusColors(status);
 
   return (
-    <div style={{ display: "flex", gap: 8 }}>
-      <button
-        onClick={() => onMark("Arrived")}
-        disabled={isCompleted}
+    <div style={{ position: "relative", display: "inline-block" }}>
+      <select
+        value={status}
+        onChange={(e) => onChange(e.target.value)}
         style={{
-          border: isArrived ? "none" : `1px solid ${C.hair}`,
+          appearance: "none",
+          WebkitAppearance: "none",
+          background: c.bg,
+          color: c.fg,
+          border: `1px solid ${c.border}`,
           borderRadius: 8,
-          padding: "7px 14px",
-          fontSize: 12.5,
-          fontWeight: 700,
-          fontFamily: FONT,
-          cursor: isCompleted ? "default" : "pointer",
-          background: isArrived ? C.orange : "#fff",
-          color: isArrived ? "#fff" : C.ink,
-        }}
-      >
-        Arrived
-      </button>
-      <button
-        onClick={() => onMark("Completed")}
-        style={{
-          border: "none",
-          borderRadius: 8,
-          padding: "7px 14px",
+          padding: "7px 32px 7px 14px",
           fontSize: 12.5,
           fontWeight: 700,
           fontFamily: FONT,
           cursor: "pointer",
-          background: isCompleted ? C.gray : C.flame,
-          color: isCompleted ? C.grayText : "#fff",
+          outline: "none",
+          minWidth: 130,
         }}
       >
-        Completed
-      </button>
+        {STATUS_OPTIONS.map((s) => (
+          <option key={s} value={s} style={{ background: "#fff", color: C.ink }}>
+            {s}
+          </option>
+        ))}
+      </select>
+      <ChevronDown
+        size={14}
+        style={{
+          position: "absolute",
+          right: 11,
+          top: "50%",
+          transform: "translateY(-50%)",
+          pointerEvents: "none",
+          color: c.fg,
+        }}
+      />
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- */
+/* Downpayment cell                                                   */
+/* ---------------------------------------------------------------- */
+function DownpaymentCell({ reservation, onViewProof }) {
+  const amount = Number(reservation.downpayment || 0);
+
+  if (!amount) {
+    return <span style={{ color: C.inkSoft, fontSize: 12.5 }}>—</span>;
+  }
+
+  return (
+    <div>
+      <div style={{ fontWeight: 700, fontSize: 13, lineHeight: "18px" }}>{peso(amount)}</div>
+      <div style={{ color: C.inkSoft, fontSize: 11, lineHeight: "16px" }}>{reservation.paymentMethod || "—"}</div>
+      {reservation.paymentProof && (
+        <div
+          onClick={() => onViewProof(reservation)}
+          style={{
+            color: C.gold,
+            fontSize: 11,
+            fontWeight: 700,
+            lineHeight: "16px",
+            cursor: "pointer",
+          }}
+        >
+          View proof
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- */
+/* Proof of payment modal                                             */
+/* ---------------------------------------------------------------- */
+function ProofModal({ reservation, onClose }) {
+  if (!reservation) return null;
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.3)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 200,
+        padding: 16,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "#fff",
+          borderRadius: 16,
+          maxWidth: 480,
+          width: "100%",
+          maxHeight: "85vh",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          fontFamily: FONT,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 22px", borderBottom: `1px solid ${C.hair}` }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: C.ink }}>Proof of Payment</div>
+            <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 2 }}>
+              {reservation.name} · {peso(reservation.downpayment)} · {reservation.paymentMethod || "—"}
+            </div>
+          </div>
+          <button onClick={onClose} style={{ border: "none", background: "transparent", cursor: "pointer", color: C.inkSoft }}>
+            <X size={20} />
+          </button>
+        </div>
+
+        <div style={{ overflowY: "auto", padding: 22, background: C.canvas }}>
+          <img
+            src={reservation.paymentProof}
+            alt="Proof of payment"
+            style={{ width: "100%", borderRadius: 10, background: "#fff" }}
+          />
+        </div>
+      </div>
     </div>
   );
 }
@@ -293,11 +375,9 @@ function WeekView({ selectedDate, reservations, onOpenDay }) {
                         <div style={{ fontWeight: 700 }}>
                           {to12h(r.time)} · {r.type === "event" ? r.eventTitle : r.name}
                         </div>
-                        {r.type === "table" ? (
-                          <div style={{ color: C.inkSoft }}>{r.table} ({r.pax})</div>
-                        ) : (
-                          <div style={{ color: C.inkSoft }}>{r.location}</div>
-                        )}
+                        <div style={{ color: C.inkSoft }}>
+                          {r.type === "table" ? `${r.pax} pax` : r.location}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -373,9 +453,9 @@ function MonthView({ selectedDate, reservations }) {
 }
 
 /* ---------------------------------------------------------------- */
-/* History view — completed reservations, table & event              */
+/* History view — completed reservations                              */
 /* ---------------------------------------------------------------- */
-function HistoryView({ reservations }) {
+function HistoryView({ reservations, onViewProof }) {
   const completed = [...reservations]
     .filter((r) => r.status === "Completed")
     .sort((a, b) => (a.date + a.time < b.date + b.time ? 1 : -1));
@@ -394,160 +474,67 @@ function HistoryView({ reservations }) {
           No completed reservations yet.
         </div>
       ) : (
-        <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: FONT, tableLayout: "fixed" }}>
-          <colgroup>
-            <col style={{ width: "16%" }} />
-            <col style={{ width: "14%" }} />
-            <col style={{ width: "24%" }} />
-            <col style={{ width: "16%" }} />
-            <col style={{ width: "12%" }} />
-            <col style={{ width: "18%" }} />
-          </colgroup>
-          <thead>
-            <tr style={{ textAlign: "left", fontSize: 12, color: C.inkSoft }}>
-              {["Date", "Time", "Name", "Table", "Pax", "Type"].map((h) => (
-                <th key={h} style={{ padding: "10px 22px", borderBottom: `1px solid ${C.hair}`, fontWeight: 700, textAlign: "left" }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {completed.map((r) => (
-              <tr key={r.id} style={{ fontSize: 13.5 }}>
-                <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, textAlign: "left" }}>{displayDateFromISO(r.date)}</td>
-                <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, fontWeight: 700, textAlign: "left" }}>{to12h(r.time)}</td>
-                <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, textAlign: "left" }}>
-                  {r.type === "event" ? r.eventTitle : r.name}
-                </td>
-                <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, color: r.type === "event" ? C.eventBlue : C.ink, fontWeight: r.type === "event" ? 700 : 400, textAlign: "left" }}>
-                  {r.type === "event" ? "Event" : r.table}
-                </td>
-                <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, color: C.inkSoft, textAlign: "left" }}>{r.pax}</td>
-                <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, textAlign: "left" }}>
-                  <Badge tone="green">Completed</Badge>
-                </td>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: FONT, minWidth: 800 }}>
+            <thead>
+              <tr style={{ textAlign: "left", fontSize: 12, color: C.inkSoft }}>
+                {["Date", "Time", "Name", "Pax", "Downpayment", "Type"].map((h) => (
+                  <th key={h} style={{ padding: "10px 22px", borderBottom: `1px solid ${C.hair}`, fontWeight: 700, textAlign: "left" }}>{h}</th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {completed.map((r) => (
+                <tr key={r.id} style={{ fontSize: 13.5 }}>
+                  <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, textAlign: "left" }}>{displayDateFromISO(r.date)}</td>
+                  <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, fontWeight: 700, textAlign: "left" }}>{to12h(r.time)}</td>
+                  <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, textAlign: "left" }}>
+                    {r.type === "event" ? r.eventTitle : r.name}
+                  </td>
+                  <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, color: C.inkSoft, textAlign: "left" }}>{r.pax}</td>
+                     <td style={{ padding: "16px 22px", borderBottom: `1px solid ${C.hair}`, verticalAlign: "top", textAlign: "left" }}>
+                      <DownpaymentCell reservation={r} onViewProof={onViewProof} />
+                    </td>
+                  <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, textAlign: "left" }}>
+                    <Badge tone={r.type === "event" ? "amber" : "green"}>
+                      {r.type === "event" ? "Event" : "Table"}
+                    </Badge>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </Card>
   );
 }
 
 /* ---------------------------------------------------------------- */
-/* Floor Plan                                                        */
-/* ---------------------------------------------------------------- */
-function FloorPlan({ tableStatus }) {
-  const statusFor = (id) => tableStatus.find((t) => t.table === id)?.status || "Available";
-
-  const colorsFor = (status) => {
-    if (status === "Occupied") return { bg: C.orange, border: C.orange, text: "#fff" };
-    if (status === "Available") return { bg: "#fff", border: "#cfe3d2", text: C.green };
-    return { bg: "#fbe7e7", border: C.red, text: C.red };
-  };
-
-  return (
-    <div style={{ margin: 18, marginTop: 0 }}>
-      <div
-        style={{
-          position: "relative",
-          width: "100%",
-          aspectRatio: "401 / 521",
-          background: "#f4f2f6",
-          borderRadius: 12,
-          border: `1px solid ${C.hair}`,
-          overflow: "hidden",
-        }}
-      >
-        {FLOOR_TABLES.map((t) => {
-          const status = statusFor(t.id);
-          const c = colorsFor(status);
-          return (
-            <div
-              key={t.id}
-              title={status === "Available" ? t.id : `${t.id} — ${status}`}
-              style={{
-                position: "absolute",
-                left: `${t.x}%`,
-                top: `${t.y}%`,
-                width: `${t.w}%`,
-                height: `${t.h}%`,
-                background: c.bg,
-                border: `2px solid ${c.border}`,
-                borderRadius: 6,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontFamily: FONT,
-                fontWeight: 700,
-                fontSize: 11,
-                color: c.text,
-              }}
-            >
-              {t.id}
-            </div>
-          );
-        })}
-      </div>
-      <div style={{ display: "flex", gap: 14, justifyContent: "center", marginTop: 12, fontSize: 11.5, color: C.inkSoft, fontFamily: FONT }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-          <span style={{ width: 10, height: 10, borderRadius: 3, background: "#fff", border: `2px solid #cfe3d2`, display: "inline-block" }} />
-          Available
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-          <span style={{ width: 10, height: 10, borderRadius: 3, background: "#fbe7e7", border: `2px solid ${C.red}`, display: "inline-block" }} />
-          Reserved
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-          <span style={{ width: 10, height: 10, borderRadius: 3, background: C.orange, display: "inline-block" }} />
-          Occupied
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ---------------------------------------------------------------- */
 /* Day view                                                           */
 /* ---------------------------------------------------------------- */
-function DayView({ selectedISO, reservations, markStatus, highlightId, highlightRef }) {
+function DayView({ selectedISO, reservations, markStatus, highlightId, highlightRef, onViewProof }) {
   const dayReservations = reservations.filter((r) => r.date === selectedISO && r.status !== "Completed");
-  const tableRes = dayReservations.filter((r) => r.type === "table");
   const sortedAll = [...dayReservations].sort((a, b) => (a.time > b.time ? 1 : -1));
 
-  const tableStatus = TABLES.map((table) => {
-    const match = tableRes.find((r) => r.table === table);
-    if (!match) return { table, status: "Available" };
-    if (match.status === "Arrived") return { table, status: "Occupied" };
-    return { table, status: `Reserved - ${to12h(match.time)}` };
-  });
-
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1.7fr 0.65fr", gap: 16, alignItems: "start" }}>
-      <Card style={{ padding: 0, overflow: "hidden" }}>
-        <div style={{ padding: "16px 18px 0" }}>
-          <SectionTitle>Floor Plan</SectionTitle>
-        </div>
-        <FloorPlan tableStatus={tableStatus} />
-      </Card>
-
-      <Card style={{ padding: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "20px 22px 0" }}>
-          <SectionTitle>Today's Reservations</SectionTitle>
-          <span style={{ background: C.void, color: "#f5e9d8", fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, marginTop: -14, fontFamily: FONT }}>
-            {sortedAll.length}
-          </span>
-        </div>
-        {sortedAll.length === 0 ? (
-          <div style={{ color: C.inkSoft, fontSize: 13.5, textAlign: "center", padding: "30px 0", fontFamily: FONT }}>No reservations today.</div>
-        ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: FONT }}>
-            <thead>
+    <Card style={{ padding: 0, overflow: "hidden" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "20px 22px 0" }}>
+        <SectionTitle>Today's Reservations</SectionTitle>
+        <span style={{ background: C.void, color: "#f5e9d8", fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, marginTop: -14, fontFamily: FONT }}>
+          {sortedAll.length}
+        </span>
+      </div>
+      {sortedAll.length === 0 ? (
+        <div style={{ color: C.inkSoft, fontSize: 13.5, textAlign: "center", padding: "30px 0", fontFamily: FONT }}>No reservations today.</div>
+      ) : (
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: FONT, minWidth: 800, textAlign: "left" }}>
+                        <thead>
               <tr style={{ textAlign: "left", fontSize: 12, color: C.inkSoft }}>
-                {["Time", "Name", "Table", "Pax", "Status"].map((h) => (
+                {["Time", "Name", "Type", "Pax", "Downpayment", "Status"].map((h) => (
                   <th key={h} style={{ padding: "10px 22px", borderBottom: `1px solid ${C.hair}`, fontWeight: 700 }}>{h}</th>
                 ))}
-                <th style={{ padding: "10px 22px", borderBottom: `1px solid ${C.hair}` }} />
               </tr>
             </thead>
             <tbody>
@@ -561,56 +548,58 @@ function DayView({ selectedISO, reservations, markStatus, highlightId, highlight
                       fontSize: 13.5,
                       background: isHighlighted ? C.highlight : "transparent",
                       transition: "background 0.4s ease",
+                      opacity: r.status === "Cancelled" ? 0.55 : 1,
                     }}
                   >
-                    <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, fontWeight: 700 }}>
+                    <td style={{ padding: "16px 22px", borderBottom: `1px solid ${C.hair}`, fontWeight: 700, verticalAlign: "top" }}>
                       {to12h(r.time)}
                     </td>
-                    <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}` }}>
+                    <td style={{ padding: "16px 22px", borderBottom: `1px solid ${C.hair}`, verticalAlign: "top" }}>
                       {r.type === "event" ? r.eventTitle : r.name}
                     </td>
-                    <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, color: r.type === "event" ? C.eventBlue : C.ink, fontWeight: r.type === "event" ? 700 : 400 }}>
-                      {r.type === "event" ? "Event" : r.table}
+                    <td style={{ padding: "16px 22px", borderBottom: `1px solid ${C.hair}`, verticalAlign: "top" }}>
+                      <Badge tone={r.type === "event" ? "amber" : "green"}>
+                        {r.type === "event" ? "Event" : "Table"}
+                      </Badge>
                     </td>
-                    <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, color: C.inkSoft }}>{r.pax}</td>
-                    <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}` }}>
-                      <Badge tone={r.status === "Completed" ? "gray" : r.status === "Arrived" ? "orange" : "amber"}>{r.status}</Badge>
+                    <td style={{ padding: "16px 22px", borderBottom: `1px solid ${C.hair}`, color: C.inkSoft, verticalAlign: "top" }}>{r.pax}</td>
+                    <td style={{ padding: "16px 22px", borderBottom: `1px solid ${C.hair}`, verticalAlign: "top" }}>
+                      <DownpaymentCell reservation={r} onViewProof={onViewProof} />
                     </td>
-                    <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}` }}>
-                      <StatusButtons status={r.status} onMark={(status) => markStatus(r.id, status)} />
+                    <td style={{ padding: "16px 22px", borderBottom: `1px solid ${C.hair}`, verticalAlign: "top" }}>
+                      <StatusSelect status={r.status} onChange={(status) => markStatus(r.id, status)} />
                     </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
-        )}
-      </Card>
-
-      <Card style={{ padding: 16 }}>
-        <div style={{ fontFamily: FONT, fontWeight: 700, fontSize: 15, margin: "0 0 10px 0", color: C.ink }}>Table Availability</div>
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontWeight: 700, color: C.inkSoft, paddingBottom: 6, borderBottom: `1px solid ${C.hair}`, fontFamily: FONT }}>
-            <span>Table</span>
-            <span>Status</span>
-          </div>
-          {tableStatus.map((t) => (
-            <div key={t.table} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: `1px solid ${C.hair}`, fontSize: 12, fontFamily: FONT }}>
-              <span style={{ fontWeight: 700, color: C.ink }}>{t.table}</span>
-              <span style={{ color: t.status === "Available" ? C.green : t.status === "Occupied" ? C.orange : C.red, fontWeight: 600, fontSize: 11 }}>
-                {t.status}
-              </span>
-            </div>
-          ))}
         </div>
-      </Card>
-    </div>
+      )}
+    </Card>
   );
 }
 
 /* ---------------------------------------------------------------- */
 /* Root                                                               */
 /* ---------------------------------------------------------------- */
+
+const STATUS_TO_BACKEND = {
+  Pending: "pending",
+  Confirmed: "confirmed",
+  Arrived: "seated",
+  Completed: "completed",
+  Cancelled: "cancelled",
+};
+
+const BACKEND_TO_STATUS = {
+  pending: "Pending",
+  confirmed: "Confirmed",
+  seated: "Arrived",
+  completed: "Completed",
+  cancelled: "Cancelled",
+  no_show: "Cancelled",
+};
 
 // Converts a raw MySQL reservation row into the shape the views above expect
 function normalizeReservation(r) {
@@ -625,10 +614,12 @@ function normalizeReservation(r) {
     type: r.reservation_type,
     name: r.guest_name,
     eventTitle: r.guest_name,
-    table: r.table_number,
     pax: r.party_size,
     location: r.special_requests || r.occasion || "—",
-    status: r.status === "seated" ? "Arrived" : r.status === "completed" ? "Completed" : "Reserved",
+    downpayment: r.downpayment_amount,
+    paymentMethod: r.payment_method,
+    paymentProof: r.payment_proof,
+    status: BACKEND_TO_STATUS[r.status] || "Pending",
   };
 }
 
@@ -639,15 +630,13 @@ export default function Reservations({ embedded = false, highlightTarget = null 
   const [reservations, setReservations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [highlightId, setHighlightId] = useState(null);
+  const [proofTarget, setProofTarget] = useState(null);
   const highlightRef = useRef(null);
 
   const loadReservations = useCallback(() => {
     setLoading(true);
     reservationsApi.getAll()
-      .then((data) => {
-        const active = data.filter((r) => r.status !== "cancelled" && r.status !== "no_show");
-        setReservations(active.map(normalizeReservation));
-      })
+      .then((data) => setReservations(data.map(normalizeReservation)))
       .catch((err) => console.error("Failed to load reservations:", err))
       .finally(() => setLoading(false));
   }, []);
@@ -681,7 +670,9 @@ export default function Reservations({ embedded = false, highlightTarget = null 
   }, [highlightId, reservations]);
 
   const markStatus = async (id, status) => {
-    const backendStatus = status === "Arrived" ? "seated" : status === "Completed" ? "completed" : "pending";
+    if (status === "Cancelled" && !window.confirm("Cancel this reservation?")) return;
+
+    const backendStatus = STATUS_TO_BACKEND[status] || "pending";
     try {
       await reservationsApi.updateStatus(id, backendStatus);
       setReservations((prev) => prev.map((r) => (r.id === id ? { ...r, status } : r)));
@@ -766,14 +757,17 @@ export default function Reservations({ embedded = false, highlightTarget = null 
                 markStatus={markStatus}
                 highlightId={highlightId}
                 highlightRef={highlightRef}
+                onViewProof={setProofTarget}
               />
             )}
             {range === "Week" && <WeekView selectedDate={selectedDate} reservations={reservations} onOpenDay={openDay} />}
             {range === "Month" && <MonthView selectedDate={selectedDate} reservations={reservations} />}
-            {range === "History" && <HistoryView reservations={reservations} />}
+            {range === "History" && <HistoryView reservations={reservations} onViewProof={setProofTarget} />}
           </>
         )}
       </div>
+
+      <ProofModal reservation={proofTarget} onClose={() => setProofTarget(null)} />
     </div>
   );
 }

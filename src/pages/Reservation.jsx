@@ -837,8 +837,8 @@ function Reservation() {
                     const cancelDisabled = isClosed || pastCutoff
 
                     return (
-                      <div key={r.id} className="bg-white rounded-xl p-6 mb-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm font-[Prata]">
+                       <div key={r.id} className="bg-white rounded-xl p-6 mb-4 text-left">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm font-[Prata] text-left">
                           <div className="flex flex-col gap-3">
                             <div>
                               <span className="block text-xs text-neutral-400">Date</span>

@@ -1,16 +1,17 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import logo from '../assets/logopic2.png';
 import heroImage from '../assets/bg2.jpg';
 
 function Login() {
-  const navigate = useNavigate();
+   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuth();
 
-  const [fullName, setFullName] = useState('');
-  const [identifier, setIdentifier] = useState('');
+  const [fullName, setFullName] = useState(location.state?.fullName || '');
+  const [identifier, setIdentifier] = useState(location.state?.identifier || '');  
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -120,6 +121,7 @@ function Login() {
 
               <Link
                 to="/forgot-password"
+                state={{ fullName, identifier }}
                 className="bg-[#c0392b] text-white font-[Prata] font-bold px-12 py-3 rounded-md hover:opacity-90 transition"
               >
                 Forgot Password

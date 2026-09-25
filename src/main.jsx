@@ -12,6 +12,7 @@ import Feedback from "./pages/Feedback";
 import Login from "./pages/CustomerLogin";
 import Register from "./pages/Register";
 import Account from "./pages/Account";
+import CustomerForgotPassword from "./pages/CustomerForgotPassword";
 import "./index.css";
 
 const router = createBrowserRouter([
@@ -28,6 +29,7 @@ const router = createBrowserRouter([
       { path: "login", element: <Login /> },
       { path: "register", element: <Register /> },
       { path: "account", element: <Account /> },
+      { path: "forgot-password", element: <CustomerForgotPassword /> },
     ],
   },
 ]);

@@ -29,6 +29,16 @@ import marinera from '../assets/ensalada-marinera.png'
 import greekSalad from '../assets/greek-salad.png'
 import caesar from '../assets/insalata-caesar.png'
 import affumicato from '../assets/affumicato.png'
+import tuttodemare from '../assets/tuttodemare.png'
+import bolognese from '../assets/bolognese.png'
+import truffleTuscan from '../assets/truffle-tuscan.png'
+import lasagna from '../assets/classic-lasagna.png'
+import penneSalmone from '../assets/penne-salmone.png'
+import cilantro from '../assets/shrimp-cilantro.png'
+import miGoreng from '../assets/migoreng.png'
+import yakisoba from '../assets/yakisoba2.png'
+import hkNoodles from '../assets/hkstyle-noodles2.png'
+import padThai from '../assets/padthai.png'
 import { useCart } from '../context/CartContext'
 import { getDishRatings } from '../utils/reviewsStore'
 
@@ -321,43 +331,105 @@ const menuItems = [
   //Pasta
   {
     id: 27,
-    name: 'Ensalada Marinera',
-    flag: 'ar',
+    name: 'Tutto De Mare',
+    flag: 'it',
     emoji: '🦐',
-    description: 'Romaine, lollo rosso, calamari, shrimps, salmon cubes and mussels mixed with sesame dressing',
-    price: 489,
-    image: marinera,
-    category: 'Salad',
+    description: 'Tagliatelle pasta cooked mussels, shrimp, calamari, salmon chunks in Aglio e Olio sauce',
+    price: 730,
+    image: tuttodemare,
+    category: 'Pasta',
   },
   {
     id: 28,
-    name: 'Greek Salad',
-    flag: 'gr',
-    emoji: '🌿',
-    description: 'Feta cheese, black olives, green olives, cucumber, tomato, onion, capsicum with olive oil and lemon dressing',
-    price: 450,
-    image: greekSalad,
-    category: 'Salad',
+    name: 'Bolognese',
+    flag: 'it',
+    emoji: '🐮',
+    description: 'Tagliatelle pasta, ground beef cooked with Pomodoro sauce, butter, fresh basil and parmesan cheese',
+    price: 614,
+    image: bolognese,
+    category: 'Pasta',
   },
   {
     id: 29,
-    name: 'Insalata Ceasar',
+    name: 'Truffle Tuscan Sausage',
     flag: 'it',
     emoji: '🐷',
-    description: 'Fresh romaine lettuce tossed with homemade Caesar dressing, herb croutons and topped with crispy bacon',
-    price: 425,
-    image: caesar,
-    category: 'Salad',
+    description: 'Rigatoni pasta cooked with Italian sausage, sundried tomato and white wine creamy sauce',
+    price: 675,
+    image: truffleTuscan,
+    category: 'Pasta',
   },
   {
     id: 30,
-    name: 'Insalata Di Salmone Affumicato',
+    name: 'Classic Lasagna',
+    flag: 'it',
+    emoji: '🐮',
+    description: 'Three layered pasta sheet with béchamel sauce, mozzarella cheese and bolognese sauce',
+    price: 690,
+    image: lasagna,
+    category: 'Pasta',
+  },
+  {
+    id: 31,
+    name: 'Penne Salmone',
     flag: 'it',
     emoji: '🐟',
-    description: 'Smoked salmon, romaine, lollo rosso, olives, capers mixed with dill mustard dressing',
-    price: 450,
-    image: affumicato,
-    category: 'Salad',
+    description: 'Cooked pesto creamy sauce with smoked salmon, fresh cherry tomato and parmesan cheese',
+    price: 604,
+    image: penneSalmone,
+    category: 'Pasta',
+  },
+  {
+    id: 32,
+    name: 'Shrimp Cilantro',
+    flag: 'it',
+    emoji: '🦐',
+    description: 'Shrimp, garlic, cilantro, white wine and cooking cream and parmesan cheese. served with garlic bread',
+    price: 725,
+    image: cilantro,
+    category: 'Pasta',
+  },
+
+  //Noodles
+  {
+    id: 33,
+    name: 'Mi Goreng',
+    flag: '🇮🇩',
+    emoji: '🦐',
+    description: 'Stir fried egg noodles, chicken, shrimp, bokchoi, spring onion topped with fried egg',
+    price: 410,
+    image: miGoreng,
+    category: 'Noodles',
+  },
+  {
+    id: 34,
+    name: 'Yakisoba',
+    flag: '🇯🇵',
+    emoji: '🐔',
+    description: 'Stir fried wheat noodles, chicken strips, carrots, bell peppers, onion, garlic and homemade sauce',
+    price: 613,
+    image: yakisoba,
+    category: 'Noodles',
+  },
+  {
+    id: 35,
+    name: 'Hongkong Style Noodles',
+    flag: '🇭🇰',
+    emoji: '🐷',
+    description: 'Stir fried egg noodles, pork siomai, bean sprout, Chinese cabbage, chili garlic, sesame oil, spring onion and oyster sauce',
+    price: 504,
+    image: hkNoodles,
+    category: 'Noodles',
+  },
+  {
+    id: 36,
+    name: 'Pad Thai',
+    flag: '🇹🇭',
+    emoji: '🐔🐷🦐🥜🌶️',
+    description: 'Stir fried rice noodles, egg, shrimp, pork strips, tofu, bean sprout, Chinese cabbage, toasted peanut and chili flakes served with lemon wedges',
+    price: 571,
+    image: padThai,
+    category: 'Noodles',
   },
 ]
 
@@ -486,8 +558,8 @@ const handleBuyNow = (item) => {
                   <div className="flex flex-1 flex-col">
                     
                     {/* 1. TOP HEADER: Prata Font with faux bold stroke */}
-                    <div className="px-5 pt-5 text-left font-['Prata']">
-                      <h3 className="text-base md:text-lg font-bold text-neutral-900 leading-snug [text-shadow:_0.3px_0_0_#1d080f]">
+                    <div className="px-5 pt-5 text-left font-['Prata']" style={{ height: '150px' }}>
+                       <h3 className="text-base md:text-lg font-bold text-neutral-900 leading-snug [text-shadow:_0.3px_0_0_#1d080f]">
                         {item.name}{' '}
                         <span className="inline-flex items-center gap-1 align-middle text-sm font-normal">
                           {item.flag && (
@@ -507,7 +579,7 @@ const handleBuyNow = (item) => {
                     </div>
 
                     {/* 2. MIDDLE: Food Image */}
-                    <div className="mt-4 aspect-[4/3] w-full overflow-hidden bg-white">
+                    <div className="w-full overflow-hidden bg-white" style={{ height: '200px' }}>
                       <img
                         src={item.image}
                         alt={item.name}
@@ -516,7 +588,7 @@ const handleBuyNow = (item) => {
                     </div>
 
                     {/* 3. DESCRIPTION: Clean Prata Font */}
-                    <div className="flex flex-1 px-5 py-4">
+                    <div className="flex items-start px-5 py-4" style={{ height: '120px' }}>
                       <p className="text-center font-['Prata'] text-xs md:text-sm leading-relaxed text-neutral-600">
                         {item.description}
                       </p>

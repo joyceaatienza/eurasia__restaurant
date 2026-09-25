@@ -49,4 +49,58 @@ export const customerAuthApi = {
     });
     return handle(res);
   },
+
+  async forgotPassword(email) {
+    const res = await fetch(`${API_URL}/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    return handle(res);
+  },
+
+  async verifyResetCode(email, code) {
+    const res = await fetch(`${API_URL}/verify-reset-code`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, code }),
+    });
+    return handle(res);
+  },
+
+   async changePassword(token, payload) {
+    const res = await fetch(`${API_URL}/password`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(payload),
+    });
+    return handle(res);
+  },
+
+  async forgotPassword(email) {
+    const res = await fetch(`${API_URL}/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    return handle(res);
+  },
+
+  async verifyResetCode(email, code) {
+    const res = await fetch(`${API_URL}/verify-reset-code`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, code }),
+    });
+    return handle(res);
+  },
+
+  async resetPassword(email, code, password) {
+    const res = await fetch(`${API_URL}/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, code, password }),
+    });
+    return handle(res);
+  },
 };

@@ -39,6 +39,21 @@ import miGoreng from '../assets/migoreng.png'
 import yakisoba from '../assets/yakisoba2.png'
 import hkNoodles from '../assets/hkstyle-noodles2.png'
 import padThai from '../assets/padthai.png'
+import sisig from '../assets/sisig.png'
+import dinakdakan from '../assets/dinakdakan.png'
+import lechon from '../assets/lechon-express.png'
+import bagnet from '../assets/crispy-bagnet.png'
+import kungPao from '../assets/kungpao.png'
+import parmigiano from '../assets/parmigiano.png'
+import honeySoy from '../assets/honey-soy2.png'
+import monggolianChick from '../assets/sizzling-monggolian.png'
+import tikka from '../assets/tikka2.png'
+import mongolianBeef from '../assets/mongolian-beef.png'
+import koreanStew from '../assets/koreanstew.png'
+import stroganoff from '../assets/stroganoff.png'
+import salpicao from '../assets/salpicao.png'
+import rendang from '../assets/rendang.png'
+import thaiBasil from '../assets/thaibasil.png'
 import { useCart } from '../context/CartContext'
 import { getDishRatings } from '../utils/reviewsStore'
 
@@ -394,7 +409,7 @@ const menuItems = [
   {
     id: 33,
     name: 'Mi Goreng',
-    flag: '🇮🇩',
+    flag: 'id',
     emoji: '🦐',
     description: 'Stir fried egg noodles, chicken, shrimp, bokchoi, spring onion topped with fried egg',
     price: 410,
@@ -404,7 +419,7 @@ const menuItems = [
   {
     id: 34,
     name: 'Yakisoba',
-    flag: '🇯🇵',
+    flag: 'jp',
     emoji: '🐔',
     description: 'Stir fried wheat noodles, chicken strips, carrots, bell peppers, onion, garlic and homemade sauce',
     price: 613,
@@ -414,7 +429,7 @@ const menuItems = [
   {
     id: 35,
     name: 'Hongkong Style Noodles',
-    flag: '🇭🇰',
+    flag: 'hk',
     emoji: '🐷',
     description: 'Stir fried egg noodles, pork siomai, bean sprout, Chinese cabbage, chili garlic, sesame oil, spring onion and oyster sauce',
     price: 504,
@@ -424,12 +439,164 @@ const menuItems = [
   {
     id: 36,
     name: 'Pad Thai',
-    flag: '🇹🇭',
+    flag: 'th',
     emoji: '🐔🐷🦐🥜🌶️',
     description: 'Stir fried rice noodles, egg, shrimp, pork strips, tofu, bean sprout, Chinese cabbage, toasted peanut and chili flakes served with lemon wedges',
     price: 571,
     image: padThai,
     category: 'Noodles',
+  },
+
+    //Main Courses
+  {
+    id: 37,
+    name: 'Sizzling Crispy Sisig',
+    flag: 'ph',
+    emoji: '🐷🌶️🌶️',
+    description: 'Deep fried pork belly and jowl tossed with signature sauce served on a hot plate',
+    price: 567,
+    image: sisig,
+    category: 'Main Courses',
+  },
+  {
+    id: 38,
+    name: 'Dinakdakan',
+    flag: 'ph',
+    emoji: '🐷🌶️🌶️',
+    description: 'Deep fried pork belly and jowl, onion, mayo and seasoning, garnished with chives, red and green chili',
+    price: 474,
+    image: dinakdakan,
+    category: 'Main Courses',
+  },
+  {
+    id: 39,
+    name: 'Lechon Express',
+    flag: 'ph',
+    emoji: '🐷🌶️🌶️',
+    description: 'Deep fried pork belly with spicy coconut cream sauce',
+    price: 474,
+    image: lechon,
+    category: 'Main Courses',
+  },
+  {
+    id: 40,
+    name: 'Crispy Bagnet',
+    flag: 'ph',
+    emoji: '🐷',
+    description: 'Deep fried pork belly served with soya dip, lechon sauce and pickled papaya',
+    price: 590,
+    image: bagnet,
+    category: 'Main Courses',
+  },
+   {
+    id: 41,
+    name: 'Sizzling Kung Pao',
+    flag: 'cn',
+    emoji: '🐔🌶️🌶️',
+    description: 'Stir fried marinated diced chicken with tofu, bell peppers, peanuts, chives, chili flakes and served on a sizzling plate',
+    price: 525,
+    image: kungPao,
+    category: 'Main Courses',
+  },
+  {
+    id: 42,
+    name: 'Chicken Parmigiano',
+    flag: 'it',
+    emoji: '🐔',
+    description: 'Pan seared chicken filet served with Napolitano pasta topped with béchamel sauce and parmesan cheese',
+    price: 596,
+    image: parmigiano,
+    category: 'Main Courses',
+  },
+  {
+    id: 43,
+    name: 'Honey Soy Chicken',
+    flag: 'cn',
+    emoji: '🐔',
+    description: 'Marinated, seared and baked chicken filet in oyster sauce, light soy, honey served with steamed bokchoi',
+    price: 520,
+    image: honeySoy,
+    category: 'Main Courses',
+  },
+   {
+    id: 44,
+    name: 'Sizzling Monggolian',
+    flag: 'mn',
+    emoji: '🐔',
+    description: 'Chicken strips stir fry in sweet and savory sauce with bell pepper, beans sprout, celery, carrots, onion topped with spring onions and sesame',
+    price: 592,
+    image: monggolianChick,
+    category: 'Main Courses',
+  },
+  {
+    id: 45,
+    name: 'Chicken Tikka',
+    flag: 'in',
+    emoji: '🐔🌶️🌶️',
+    description: 'Pan grilled Marinated chicken filet with masala spices, served with tomato, onion, pilaf rice and raita',
+    price: 630,
+    image: tikka,
+    category: 'Main Courses',
+  },
+   {
+    id: 46,
+    name: 'Sizzling Mongolian',
+    flag: 'mn',
+    emoji: '🐮',
+    description: 'Stir fry beef with bell peppers, onion, celery and beansprout served on a sizzling hot plate',
+    price: 589,
+    image: mongolianBeef,
+    category: 'Main Courses',
+  },
+    {
+    id: 47,
+    name: 'Korean Stew',
+    flag: 'kr',
+    emoji: '🌶️🌶️',
+    description: 'Simmered beef with carrots, oyster sauce, ginger, garlic, diced potatoes and red chili paste',
+    price: 710,
+    image: koreanStew,
+    category: 'Main Courses',
+  },
+  {
+    id: 48,
+    name: 'Stroganoff ',
+    flag: 'de',
+    emoji: '🐮',
+    description: 'Sautéed beef tenderloin with garlic, mushroom served with pasta aioli topped with chopped parsley and parmesan cheese',
+    price: 704,
+    image: stroganoff,
+    category: 'Main Courses',
+  },
+   {
+    id: 49,
+    name: 'Salpicao ',
+    flag: 'ph',
+    emoji: '🐮',
+    description: 'Marinated beef sautéed with garlic and mushroom served on a bed of mashed potato',
+    price: 690,
+    image: salpicao,
+    category: 'Main Courses',
+  },
+  {
+    id: 50,
+    name: 'Rendang',
+    flag: 'id',
+    emoji: '🐮🌶️🌶️ ',
+    description: 'Slow cooked beef with curry sauce topped with coriander and yogurt',
+    price: 592,
+    image: rendang,
+    category: 'Main Courses',
+  },
+   {
+    id: 51,
+    name: 'Sizzling Thai Basil',
+    flag: 'th',
+    emoji: '🐮🌶️🌶️',
+    description: 'Stir fry beef with mushroom, bell peppers and Thai basil, garnished with chopped shallots and fried egg served on a sizzling plate',
+    price: 525,
+    image: thaiBasil,
+    category: 'Main Courses',
   },
 ]
 
@@ -558,8 +725,8 @@ const handleBuyNow = (item) => {
                   <div className="flex flex-1 flex-col">
                     
                     {/* 1. TOP HEADER: Prata Font with faux bold stroke */}
-                    <div className="px-5 pt-5 text-left font-['Prata']" style={{ height: '150px' }}>
-                       <h3 className="text-base md:text-lg font-bold text-neutral-900 leading-snug [text-shadow:_0.3px_0_0_#1d080f]">
+                    <div className="px-5 pt-5 text-left font-['Prata']" style={{ height: '130px' }}>
+                     <h3 className="text-base md:text-lg font-bold text-neutral-900 leading-snug [text-shadow:_0.3px_0_0_#1d080f]">
                         {item.name}{' '}
                         <span className="inline-flex items-center gap-1 align-middle text-sm font-normal">
                           {item.flag && (
@@ -579,17 +746,17 @@ const handleBuyNow = (item) => {
                     </div>
 
                     {/* 2. MIDDLE: Food Image */}
-                    <div className="w-full overflow-hidden bg-white" style={{ height: '200px' }}>
+                    <div className="w-full overflow-hidden bg-white px-6 py-2" style={{ height: '190px' }}>
                       <img
                         src={item.image}
                         alt={item.name}
-                        className="h-full w-full object-cover"
+                        className="h-full w-full object-contain"
                       />
                     </div>
 
                     {/* 3. DESCRIPTION: Clean Prata Font */}
                     <div className="flex items-start px-5 py-4" style={{ height: '120px' }}>
-                      <p className="text-center font-['Prata'] text-xs md:text-sm leading-relaxed text-neutral-600">
+                      <p className="text-center font-['Prata'] text-xs md:text-xs leading-relaxed text-neutral-600">
                         {item.description}
                       </p>
                     </div>

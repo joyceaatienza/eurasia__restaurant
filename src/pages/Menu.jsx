@@ -54,6 +54,28 @@ import stroganoff from '../assets/stroganoff.png'
 import salpicao from '../assets/salpicao.png'
 import rendang from '../assets/rendang.png'
 import thaiBasil from '../assets/thaibasil.png'
+import alForno from '../assets/alforno.png'
+import filetoSalmone from '../assets/fileto-salmone.png'
+import filetMignon from '../assets/filetmignon.png'
+import beefSteak from '../assets/beefsteak.png'
+import nyStyle from '../assets/nystyle.png'
+import tBone from '../assets/t-bone.png'
+import vegeCurry from '../assets/vegecurry.png'
+import vegeMedley from '../assets/vegemedley.png'
+import stirFry from '../assets/stirfry.png'
+import lechonBelly from '../assets/lechonbellyrice.png'
+import eggRice from '../assets/eggrice.png'
+import shrimmpRice from '../assets/shrimprice.png'
+import doubleBacon from '../assets/doublebacon.png'
+import eggQuesadillas from '../assets/eggquesadillas.png'
+import tortillaWrap from '../assets/tortillawrap.png'
+import porkSandwich from '../assets/porksandwich.png'
+import macCheese from '../assets/maccheese.png'
+import kidSpag from '../assets/kiddiespag.png'
+import chickTenders from '../assets/chicktenders.png'
+import bacCheesePizza from '../assets/bacon-cheese.png'
+import miniQuatro from '../assets/mini-quatro.png'
+import miniPepperoni from '../assets/mini-pepperoni.png'
 import { useCart } from '../context/CartContext'
 import { getDishRatings } from '../utils/reviewsStore'
 
@@ -538,7 +560,7 @@ const menuItems = [
     image: tikka,
     category: 'Main Courses',
   },
-   {
+  {
     id: 46,
     name: 'Sizzling Mongolian',
     flag: 'mn',
@@ -597,6 +619,232 @@ const menuItems = [
     price: 525,
     image: thaiBasil,
     category: 'Main Courses',
+  },
+  {
+    id: 52,
+    name: 'Cozze Al Forno',
+    flag: 'it',
+    emoji: ' ',
+    description: 'Baked mussels topped with pesto, parmesan and mozzarella cheese',
+    price: 567,
+    image: alForno,
+    category: 'Main Courses',
+  },
+    {
+    id: 53,
+    name: 'Fileto Salmone',
+    flag: 'it',
+    emoji: ' ',
+    description: 'Pan seared 180 grams salmon served with aioli pasta topped with pesto cream sauce',
+    price: 1500,
+    image: filetoSalmone,
+    category: 'Main Courses',
+  },
+  {
+    id: 54,
+    name: 'Filet Mignon ',
+    flag: 'it',
+    emoji: '🐮🐷',
+    description: 'Pan grilled 250 grams tenderloin served with potato puree, french beans and peppercorn sauce',
+    price: 1391,
+    image: filetMignon,
+    category: 'Main Courses',
+  },
+   {
+    id: 55,
+    name: 'Beef Steak Ala Mode ',
+    flag: 'it',
+    emoji: '🐮',
+    description: '250 grams Beef medallions served with herbed mashed sweet potato and stout sauce',
+    price: 1509,
+    image: beefSteak,
+    category: 'Main Courses',
+  },
+  {
+    id: 56,
+    name: 'NY Style Rib Eye Steak',
+    flag: 'us',
+    emoji: '🐮',
+    description: 'Pan grilled 350 grams rib eye cut garnished with mashed potato, Cajun spice vegetables and red wine rosemary sauce',
+    price: 2369,
+    image: nyStyle,
+    category: 'Main Courses',
+  },
+   {
+    id: 57,
+    name: 'T-Bone Steak',
+    flag: 'au',
+    emoji: '🐮',
+    description: '500 grams Australian steak served with sweet potato, seasoned vegetables and peppercorn sauce',
+    price: 2240,
+    image: tBone,
+    category: 'Main Courses',
+  },
+
+  //Veggies and Rice
+  {
+    id: 58,
+    name: 'Vegetable Curry',
+    flag: 'in',
+    emoji: ' ',
+    description: 'Sautéed mixed veggies with curry sauce',
+    price: 625,
+    image: vegeCurry,
+    category: 'Veggies & Rice',
+  },
+    {
+    id: 59,
+    name: 'Vegetable Medley',
+    flag: 'gr',
+    emoji: ' ',
+    description: 'Sautéed mixed veggies with white wine cream sauce topped with mozzarella cheese',
+    price: 675,
+    image: vegeMedley,
+    category: 'Veggies & Rice',
+  },
+  {
+    id: 60,
+    name: 'Stir Fry Vegetable',
+    flag: 'cn',
+    emoji: ' ',
+    description: 'Sautéed mixed veggies with oyster sauce',
+    price: 610,
+    image: stirFry,
+    category: 'Veggies & Rice',
+  },
+   {
+    id: 61,
+    name: 'Lechon Belly Fried Rice',
+    flag: 'ph',
+    emoji: ' ',
+    description: ' ',
+    price: 320,
+    image: lechonBelly,
+    category: 'Veggies & Rice',
+  },
+  {
+    id: 62,
+    name: 'Egg Fried Rice',
+    flag: 'ph',
+    emoji: ' ',
+    description: ' ',
+    price: 250,
+    image: eggRice,
+    category: 'Veggies & Rice',
+  },
+   {
+    id: 63,
+    name: 'Shrimp Fried Rice',
+    flag: 'ph',
+    emoji: ' ',
+    description: ' ',
+    price: 360,
+    image: shrimmpRice,
+    category: 'Veggies & Rice',
+  },
+
+  //Sandwiches
+  {
+    id: 64,
+    name: 'Double Bacon Cheese',
+    flag: 'us',
+    emoji: '🐷',
+    description: 'Homemade beef patty with bacon, caramelized onion, lettuce and relish served on waffle',
+    price: 441,
+    image: doubleBacon,
+    category: 'Sandwiches',
+  },
+   {
+    id: 65,
+    name: 'Bacon and Egg Quesadillas',
+    flag: 'mx',
+    emoji: '🐷',
+    description: 'Tortilla bread with egg, cheese and bacon',
+    price: 391,
+    image: eggQuesadillas,
+    category: 'Sandwiches',
+  },
+  {
+    id: 66,
+    name: 'Tortilla Wrap',
+    flag: 'mx',
+    emoji: '🐔',
+    description: 'Tortilla bread with pan seared chicken breast, mozzarella, cheddar and lettuce',
+    price: 551,
+    image: tortillaWrap,
+    category: 'Sandwiches',
+  },
+   {
+    id: 67,
+    name: 'Pulled Pork Sandwich',
+    flag: 'us',
+    emoji: '🐷',
+    description: 'Simmered pork with five Chinese spices, coleslaw served on ciabatta bread',
+    price: 360,
+    image: porkSandwich,
+    category: 'Sandwiches',
+  },
+
+  //Kids Menu
+    {
+    id: 68,
+    name: 'Mac & Cheese',
+    flag: 'us',
+    emoji: '🧀🐷',
+    description: 'Elbow macaroni cooked with béchamel, cheese sauce topped with bacon and cheddar cheese served with cheese bread stick',
+    price: 350,
+    image: macCheese,
+    category: 'Kids Menu',
+  },
+   {
+    id: 69,
+    name: 'Kiddie Spaghetti',
+    flag: 'it',
+    emoji: '🐮',
+    description: 'Spaghetti pasta cooked with ground beef and tomato sauce topped with parmesan cheese and served with bread stick',
+    price: 258,
+    image: kidSpag,
+    category: 'Kids Menu',
+  },
+  {
+    id: 70,
+    name: 'Chicken Tenders',
+    flag: 'us',
+    emoji: '🐔',
+    description: 'Deep fried chicken filet strips breaded with homemade butter and crumbs served with fries or wedges',
+    price: 295,
+    image: chickTenders,
+    category: 'Kids Menu',
+  },
+   {
+    id: 71,
+    name: 'Bacon Cheese Pizza',
+    flag: 'us',
+    emoji: '🧀🐷',
+    description: 'Thin crust pizza dough topped with pomodoro sauce, mozzarella, cheddar and slices of bacon',
+    price: 366,
+    image: bacCheesePizza,
+    category: 'Kids Menu',
+  },
+  {
+    id: 72,
+    name: 'Mini Quatro Formaggi Pizza',
+    flag: 'it',
+    emoji: '🧀',
+    description: 'Thin crust pizza dough topped with béchamel sauce, mozzarella, cheddar and parmesan cheese',
+    price: 420,
+    image: miniQuatro,
+    category: 'Kids Menu',
+  },
+   {
+    id: 73,
+    name: 'Mini Pepperoni Pizza',
+    flag: 'it',
+    emoji: '🧀🐷',
+    description: 'Thin crust pizza dough topped with pomodoro sauce, mozzarella, cheddar and NOT spicy pepperoni',
+    price: 375,
+    image: miniPepperoni,
+    category: 'Kids Menu',
   },
 ]
 

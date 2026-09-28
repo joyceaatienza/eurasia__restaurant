@@ -73,9 +73,18 @@ import porkSandwich from '../assets/porksandwich.png'
 import macCheese from '../assets/maccheese.png'
 import kidSpag from '../assets/kiddiespag.png'
 import chickTenders from '../assets/chicktenders.png'
-import bacCheesePizza from '../assets/bacon-cheese.png'
-import miniQuatro from '../assets/mini-quatro.png'
-import miniPepperoni from '../assets/mini-pepperoni.png'
+import bacCheesePizza from '../assets/baconpizza.png'
+import miniQuatro from '../assets/miniquatro.png'
+import miniPepperoni from '../assets/minipepperoni.png'
+import mango from '../assets/mango.png'
+import lilaSucre from '../assets/lilasucre.png'
+import sansRival from '../assets/sansrival.png'
+import suman from '../assets/suman.png'
+import parfaitDeluxe from '../assets/parfait-deluxe.png'
+import pizzetoChoco from '../assets/pizzeto.png'
+import marisco from '../assets/marisco.png'
+import negra from '../assets/negra.png'
+import valenciana from '../assets/valenciana.png'
 import { useCart } from '../context/CartContext'
 import { getDishRatings } from '../utils/reviewsStore'
 
@@ -846,6 +855,96 @@ const menuItems = [
     image: miniPepperoni,
     category: 'Kids Menu',
   },
+
+  //Desserts
+    {
+    id: 74,
+    name: 'Mango Sticky Rice',
+    flag: 'th',
+    emoji: ' ',
+    description: 'Ripe mango meets coconut-glazed sticky rice',
+    price: 240,
+    image: mango,
+    category: 'Desserts',
+  },
+   {
+    id: 75,
+    name: 'Lila Sucré',
+    flag: 'ph',
+    emoji: ' ',
+    description: 'A soft, purple yam cake with a light, sweet flavor and creamy frosting',
+    price: 275,
+    image: lilaSucre,
+    category: 'Desserts',
+  },
+  {
+    id: 76,
+    name: 'Lè Sans Rival',
+    flag: 'ph',
+    emoji: ' ',
+    description: 'Homemade spanish donuts sprinkled with cinnamon powder served with chocolate dip',
+    price: 275,
+    image: sansRival,
+    category: 'Desserts',
+  },
+   {
+    id: 77,
+    name: 'Sumang Yakap',
+    flag: 'ph',
+    emoji: '🥥',
+    description: 'Slow cooked rice cake topped with vanilla ice cream and coconut cream sauce, garnished with desiccated coconut',
+    price: 195,
+    image: suman,
+    category: 'Desserts',
+  },
+  {
+    id: 78,
+    name: 'Parfait Deluxe',
+    flag: 'fr',
+    emoji: ' ',
+    description: 'A chocolate parfait is a layered dessert served chilled in a tall glass, it combines creamy textures and deep chocolate flavor for a decadent treat',
+    price: 268,
+    image: parfaitDeluxe,
+    category: 'Desserts',
+  },
+   {
+    id: 79,
+    name: 'Pizzeto Chocolato',
+    flag: 'ph',
+    emoji: ' ',
+    description: 'Toasted mini pizza spread with chocolate ganache, choice of Choco chips or white chocolate',
+    price: 288,
+    image: pizzetoChoco,
+    category: 'Desserts',
+  },
+
+  //Chef's Special
+  {
+    id: 80,
+    name: 'Paella Marisco',
+    description: 'Saffron flavoured rice cooked with clams, mussels, squid and shrimp served with lemon',
+    price: 1820,
+    image: marisco,
+    category: "Chef's Special",
+  },
+   {
+    id: 81,
+    name: 'Paella Negra',
+    description: 'Rice dish cooked in squid ink, fresh squid, mussels garnished with egg, capsicums, asparagus and lemon wedges',
+    price: 1900,
+    image: negra,
+    category: "Chef's Special",
+  },
+  {
+    id: 82,
+    name: 'Paella Valenciana',
+    description: 'Classic rice dish cooked with saffron, vegetables, spanish chorizo, chicken, sea food and garnished with bacon, egg, prawn, mussels and lemon wedges',
+    price: 1820,
+    image: valenciana,
+    category: "Chef's Special",
+  },
+
+
 ]
 
 // Renders a compact star row with the numeric average and review count
@@ -960,6 +1059,18 @@ const handleBuyNow = (item) => {
         </aside>
 
         <main className="flex-1">
+          {activeCategory === "Chef's Special" && (
+            <div className="mb-6">
+              <h2 className="font-['Prata'] text-2xl md:text-3xl text-[#1d080f] text-left mb-2">
+                Homemade Paellas
+              </h2>
+              <p className="font-['Prata'] text-xs md:text-sm text-neutral-500 text-left leading-relaxed">
+                Each variety takes 30–45 minutes serving time. Good for 3–4 persons each serving.
+                Pre-ordering is highly recommended.
+              </p>
+            </div>
+          )}
+
           {filteredItems.length > 0 ? (
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
               {filteredItems.map((item) => {
@@ -994,16 +1105,16 @@ const handleBuyNow = (item) => {
                     </div>
 
                     {/* 2. MIDDLE: Food Image */}
-                    <div className="w-full overflow-hidden bg-white px-6 py-2" style={{ height: '190px' }}>
+                    <div className="w-full overflow-hidden bg-white" style={{ height: '250px' }}>
                       <img
                         src={item.image}
                         alt={item.name}
-                        className="h-full w-full object-contain"
+                        className="h-full w-full object-cover"
                       />
                     </div>
 
                     {/* 3. DESCRIPTION: Clean Prata Font */}
-                    <div className="flex items-start px-5 py-4" style={{ height: '120px' }}>
+                    <div className="flex flex-1 items-start px-5 py-4" style={{ minHeight: '110px' }}>
                       <p className="text-center font-['Prata'] text-xs md:text-xs leading-relaxed text-neutral-600">
                         {item.description}
                       </p>

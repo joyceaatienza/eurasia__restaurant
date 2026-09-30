@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from "react";
 import { X, Check, Ban } from "lucide-react";
 import StaffHeader from "../components/StaffHeader";
 import { ordersApi } from "../services/ordersApi";
-import PaymentVerificationForm from "../components/PaymentVerificationForm";
 
 function StatCard({ label, value }) {
   return (
@@ -25,35 +24,47 @@ function StatusBadge({ status }) {
     Failed: "bg-[#f8d7da] text-[#842029]",
   };
   return (
-    <span className={`text-xs font-[Prata] px-3 py-1 rounded-md ${styles[status] || styles.Pending}`}>
+    <span className={`text-xs font-[Prata] px-3 py-1 rounded-lg ${styles[status] || styles.Pending}`}>
       {status}
     </span>
   );
 }
 
-function ValidateModal({ transaction, onClose, onConfirm, onFail, onUpdateTable }) {
-  const [tableInput, setTableInput] = useState("");
-
-  useEffect(() => {
-    if (transaction) setTableInput(transaction.table || "");
-  }, [transaction]);
-
-  if (!transaction) return null;
-
-  const handleTableBlur = () => {
-    if (tableInput !== transaction.table) {
-      onUpdateTable(transaction.id, tableInput);
-    }
-  };
+function ImageViewer({ src, onClose }) {
+  if (!src) return null;
 
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4"
+      className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-6"
+    >
+      <button
+        onClick={onClose}
+        className="absolute top-6 right-6 text-white/80 hover:text-white transition"
+      >
+        <X size={26} />
+      </button>
+      <img
+        src={src}
+        alt="Receipt"
+        onClick={(e) => e.stopPropagation()}
+        className="max-w-full max-h-full object-contain rounded-lg"
+      />
+    </div>
+  );
+}
+
+function ValidateModal({ transaction, onClose, onConfirm, onFail }) {
+  if (!transaction) return null;
+
+  return (
+    <div
+      onClick={onClose}
+      className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 px-4"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative bg-white rounded-xl p-7 max-w-sm w-full font-[Prata]"
+        className="relative bg-white rounded-xl p-7 max-w-sm w-full font-[Prata] max-h-[85vh] overflow-y-auto"
       >
         <button
           onClick={onClose}
@@ -75,29 +86,23 @@ function ValidateModal({ transaction, onClose, onConfirm, onFail, onUpdateTable 
             <span className="text-gray-500">Customer</span>
             <span className="text-[#1d080f]">{transaction.customer}</span>
           </div>
-          <div className="flex justify-between items-center">
-            <span className="text-gray-500">Table</span>
-            <input
-              type="text"
-              value={tableInput}
-              onChange={(e) => setTableInput(e.target.value)}
-              onBlur={handleTableBlur}
-              placeholder="e.g. T7"
-              className="text-[#1d080f] text-right border border-gray-300 rounded-md px-2 py-1 text-sm w-24 focus:outline-none focus:ring-1 focus:ring-[#1d080f]"
-            />
-          </div>
           <div className="flex justify-between">
             <span className="text-gray-500">Order #</span>
             <span className="text-[#1d080f]">{transaction.displayNo}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-gray-500">Payment Method</span>
-            <span className="text-[#1d080f]">{transaction.method}</span>
+            <span className="text-[#1d080f] capitalize">{transaction.method || "—"}</span>
           </div>
           {transaction.discount && (
             <div className="flex justify-between">
               <span className="text-gray-500">Discount</span>
-              <span className="text-[#1d080f] capitalize">{transaction.discount}</span>
+              <span className="text-[#1d080f] capitalize">
+                {transaction.discount}
+                {transaction.discountAmount
+                  ? ` (- Php. ${Number(transaction.discountAmount).toLocaleString()})`
+                  : ""}
+              </span>
             </div>
           )}
           <div className="flex justify-between">
@@ -106,28 +111,34 @@ function ValidateModal({ transaction, onClose, onConfirm, onFail, onUpdateTable 
           </div>
         </div>
 
-        {transaction.receiptImage ? (
-          <a href={transaction.receiptImage} target="_blank" rel="noreferrer">
-            <img
-              src={transaction.receiptImage}
-              alt="Payment receipt"
-              className="w-full max-h-48 object-contain rounded-lg border border-gray-200 mb-4"
-            />
-          </a>
-        ) : (
-             <div className="border border-dashed border-gray-300 rounded-lg p-4 text-center text-xs text-gray-500 mb-4">
-            No proof of payment uploaded.
-          </div>
-        )}
+        <div className="mb-4">
+          <p className="text-xs text-gray-500 mb-2">Proof of Payment</p>
+          {transaction.receiptImage ? (
+            <a href={transaction.receiptImage} target="_blank" rel="noreferrer">
+              <img
+                src={transaction.receiptImage}
+                alt="Payment receipt"
+                className="w-full max-h-48 object-contain rounded-lg border border-gray-200 bg-gray-50"
+              />
+            </a>
+          ) : (
+            <div className="border border-dashed border-gray-300 rounded-lg p-4 text-center text-xs text-gray-500">
+              No proof of payment uploaded.
+            </div>
+          )}
+        </div>
 
         {transaction.discountIdImage && (
-          <a href={transaction.discountIdImage} target="_blank" rel="noreferrer">
-            <img
-              src={transaction.discountIdImage}
-              alt="Discount ID"
-              className="w-full max-h-40 object-contain rounded-lg border border-gray-200 mb-4"
-            />
-          </a>
+          <div className="mb-4">
+            <p className="text-xs text-gray-500 mb-2">Discount ID</p>
+            <a href={transaction.discountIdImage} target="_blank" rel="noreferrer">
+              <img
+                src={transaction.discountIdImage}
+                alt="Discount ID"
+                className="w-full max-h-40 object-contain rounded-lg border border-gray-200 bg-gray-50"
+              />
+            </a>
+          </div>
         )}
 
         <div className="flex flex-col gap-2">
@@ -163,15 +174,14 @@ function normalizeTransaction(o) {
     id: o.id,
     dailyNumber: o.daily_number,
     createdAt,
-    customer: "Guest",
-    table: o.table_number,
+    customer: o.customer_name || "Guest",
     method: o.payment_method,
     amount: Number(o.total),
     status: STATUS_LABEL[o.payment_status] || "Pending",
     discount: o.discount_type,
-    receiptImage: o.receipt_image,
+    discountAmount: o.discount_amount,
     hasReceipt: Boolean(o.has_receipt ?? o.receipt_image),
-    discountIdImage: o.discount_id_image,
+    receiptImage: o.receipt_image,
     date: createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
     time: createdAt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
   };
@@ -200,6 +210,7 @@ export default function PaymentTransactions({ embedded = false }) {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalTx, setModalTx] = useState(null);
+  const [viewerImage, setViewerImage] = useState(null);
   const [toast, setToast] = useState("");
   const [view, setView] = useState("pending");
 
@@ -222,10 +233,29 @@ export default function PaymentTransactions({ embedded = false }) {
 
   const pendingCount = transactions.filter((t) => t.status === "Pending").length;
   const completedCount = transactions.filter((t) => t.status === "Completed").length;
+  const pendingTransactions = transactions.filter((t) => t.status === "Pending");
 
   const historyTransactions = [...transactions]
     .filter((t) => t.status === "Completed" || t.status === "Failed")
     .sort((a, b) => (a.date + a.time < b.date + b.time ? 1 : -1));
+
+  // The list endpoint leaves out the images to stay light, so pull the full order on demand
+  const openVerify = async (t) => {
+    try {
+      const full = await ordersApi.getById(t.id);
+      setModalTx({
+        ...t,
+        method: full.payment_method,
+        discount: full.discount_type,
+        discountAmount: full.discount_amount,
+        receiptImage: full.receipt_image,
+        discountIdImage: full.discount_id_image,
+      });
+    } catch (err) {
+      console.error(err);
+      alert("Failed to load payment details. Please try again.");
+    }
+  };
 
   const handleConfirm = async (id) => {
     const tx = transactions.find((t) => t.id === id);
@@ -253,16 +283,7 @@ export default function PaymentTransactions({ embedded = false }) {
     }
   };
 
-  const handleUpdateTable = async (id, value) => {
-    try {
-      await ordersApi.updateTable(id, value);
-      setTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, table: value } : t)));
-      setModalTx((prev) => (prev && prev.id === id ? { ...prev, table: value } : prev));
-    } catch (err) {
-      console.error(err);
-      alert("Failed to update table. Please try again.");
-    }
-  };
+  const cellClass = "px-6 py-4 align-top text-left";
 
   return (
     <div className="min-h-screen bg-[#f0eff3] font-[Prata] text-[#1d080f] text-left">
@@ -309,45 +330,56 @@ export default function PaymentTransactions({ embedded = false }) {
         ) : (
           <>
             {view === "pending" && (
-              transactions.filter((t) => t.status === "Pending").length === 0 ? (
+              pendingTransactions.length === 0 ? (
                 <div className="bg-white rounded-xl p-12 text-center text-gray-400 font-[Prata] text-sm shadow-sm border border-gray-100">
                   No payment transactions yet.
                 </div>
               ) : (
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
-                  <table className="w-full text-left">
+                  <table className="w-full text-left" style={{ minWidth: 800 }}>
                     <thead>
                       <tr className="text-xs text-gray-500 border-b border-gray-100">
-                        {["Order #", "Customer", "Table", "Method", "Amount", "Status", "Date & Time", "Actions"].map((h) => (
-                          <th key={h} className="px-6 py-4 font-[Prata] font-normal">{h}</th>
+                        {["Order #", "Customer", "Method", "Amount", "Receipt", "Status", "Date & Time"].map((h) => (
+                         <th key={h} className="px-6 py-4 font-[Prata] font-normal text-left">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {transactions.filter((t) => t.status === "Pending").map((t) => (
+                      {pendingTransactions.map((t) => (
                         <tr key={t.id} className="border-b border-gray-100 last:border-0 text-sm">
-                          <td className="px-6 py-4" style={{ WebkitTextStroke: "0.3px #1d080f" }}>{t.displayNo}</td>
-                          <td className="px-6 py-4">{t.customer}</td>
-                          <td className="px-6 py-4">{t.table}</td>
-                          <td className="px-6 py-4 capitalize">{t.method}</td>
-                          <td className="px-6 py-4">Php. {t.amount.toLocaleString()}</td>
-                          <td className="px-6 py-4"><StatusBadge status={t.status} /></td>
-                          <td className="px-6 py-4 text-gray-500">
-                            {t.date}<br />{t.time}
+                          <td className={cellClass} style={{ WebkitTextStroke: "0.3px #1d080f" }}>{t.displayNo}</td>
+                          <td className={cellClass}>{t.customer}</td>
+                          <td className={`${cellClass} capitalize`}>
+                            {t.method || <span className="text-gray-400">—</span>}
                           </td>
-                                                    <td className="px-6 py-4">
-                            {t.receiptImage ? (
-                              <button
-                                onClick={() => setModalTx(t)}
-                                className="px-4 py-1.5 rounded-md bg-[#1d080f] text-white text-xs hover:bg-[#3a1420] transition"
-                              >
-                                Verify
+                          <td className={cellClass}>Php. {t.amount.toLocaleString()}</td>
+                          <td className={cellClass}>
+                             {t.receiptImage ? (
+                              <button onClick={() => setViewerImage(t.receiptImage)} className="block w-fit">
+                                <img
+                                  src={t.receiptImage}
+                                  alt="Receipt"
+                                  className="w-14 h-14 object-cover rounded-md border border-gray-200 bg-gray-50 hover:opacity-80 transition"
+                                />
                               </button>
                             ) : (
-                              <span className="text-xs text-gray-400 italic">
-                                Awaiting payment
-                              </span>
+                              <span className="text-xs text-gray-400">—</span>
                             )}
+                          </td>
+                          <td className={cellClass}>
+                            {t.hasReceipt ? (
+                              <button
+                                onClick={() => openVerify(t)}
+                                className="text-xs font-[Prata] px-3 py-1.5 rounded-lg bg-[#f5e79e] text-[#5e5113] hover:opacity-80 transition"
+                              >
+                                Verify Payment
+                              </button>
+                            ) : (
+                              <span className="text-xs text-gray-400 italic">Awaiting payment</span>
+                            )}
+                          </td>
+                          <td className={`${cellClass} text-gray-500`}>
+                            {t.date}<br />{t.time}
                           </td>
                         </tr>
                       ))}
@@ -364,24 +396,46 @@ export default function PaymentTransactions({ embedded = false }) {
                     No payment history yet.
                   </div>
                 ) : (
-                  <table className="w-full text-left">
+                  <table className="w-full text-left" style={{ minWidth: 800 }}>
                     <thead>
                       <tr className="text-xs text-gray-500 border-b border-gray-100">
-                        {["Order #", "Customer", "Table", "Method", "Amount", "Status", "Date & Time"].map((h) => (
-                          <th key={h} className="px-6 py-4 font-[Prata] font-normal">{h}</th>
+                        {["Order #", "Customer", "Method", "Amount", "Receipt", "Status", "Date & Time"].map((h) => (
+                         <th key={h} className="px-6 py-4 font-[Prata] font-normal text-left">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {historyTransactions.map((t) => (
                         <tr key={t.id} className="border-b border-gray-100 last:border-0 text-sm">
-                          <td className="px-6 py-4" style={{ WebkitTextStroke: "0.3px #1d080f" }}>{t.displayNo}</td>
-                          <td className="px-6 py-4">{t.customer}</td>
-                          <td className="px-6 py-4">{t.table}</td>
-                          <td className="px-6 py-4 capitalize">{t.method}</td>
-                          <td className="px-6 py-4">Php. {t.amount.toLocaleString()}</td>
-                          <td className="px-6 py-4"><StatusBadge status={t.status} /></td>
-                          <td className="px-6 py-4 text-gray-500">
+                          <td className={cellClass} style={{ WebkitTextStroke: "0.3px #1d080f" }}>{t.displayNo}</td>
+                          <td className={cellClass}>{t.customer}</td>
+                          <td className={`${cellClass} capitalize`}>
+                            {t.method || <span className="text-gray-400">—</span>}
+                          </td>
+                          <td className={cellClass}>Php. {t.amount.toLocaleString()}</td>
+                          <td className={cellClass}>
+                            {t.receiptImage ? (
+                              <button onClick={() => openVerify(t)} className="block">
+                                <img
+                                  src={t.receiptImage}
+                                  alt="Receipt"
+                                  className="w-14 h-14 object-cover rounded-md border border-gray-200 bg-gray-50 hover:opacity-80 transition"
+                                />
+                              </button>
+                            ) : (
+                              <span className="text-xs text-gray-400">—</span>
+                            )}
+                          </td>
+                          <td className={cellClass}>
+                            {t.hasReceipt ? (
+                              <button onClick={() => openVerify(t)} className="hover:opacity-80 transition">
+                                <StatusBadge status={t.status} />
+                              </button>
+                            ) : (
+                              <StatusBadge status={t.status} />
+                            )}
+                          </td>
+                          <td className={`${cellClass} text-gray-500`}>
                             {t.date}<br />{t.time}
                           </td>
                         </tr>
@@ -400,8 +454,8 @@ export default function PaymentTransactions({ embedded = false }) {
         onClose={() => setModalTx(null)}
         onConfirm={handleConfirm}
         onFail={handleFail}
-        onUpdateTable={handleUpdateTable}
       />
+        <ImageViewer src={viewerImage} onClose={() => setViewerImage(null)} />
 
       {toast && (
         <div

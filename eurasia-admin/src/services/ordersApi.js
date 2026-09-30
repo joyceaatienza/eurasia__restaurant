@@ -7,6 +7,11 @@ export const ordersApi = {
     if (!res.ok) throw new Error('Failed to fetch orders');
     return res.json();
   },
+  async getById(id) {
+    const res = await fetch(`${API_URL}/${id}`);
+    if (!res.ok) throw new Error('Failed to fetch order');
+    return res.json();
+  },
   async updateStatus(id, status) {
     const res = await fetch(`${API_URL}/${id}/status`, {
       method: 'PATCH',

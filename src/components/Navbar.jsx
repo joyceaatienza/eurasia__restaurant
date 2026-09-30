@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { User } from 'lucide-react'
 import logo from '../assets/logoword.png'
+import logoPic from '../assets/logopic3.png'
 import trayIcon from '../assets/tray-icon.png'
 import { useCart } from '../context/CartContext'
 import { useAuth } from '../context/AuthContext'
@@ -29,8 +30,9 @@ function Navbar() {
         {isAuthPage ? (
           <span className="h-12" />
         ) : (
-          <NavLink to="/">
-            <img src={logo} alt="Eurasia Restaurant" className="h-12 w-auto" />
+          <NavLink to="/" className="flex items-center">
+            <img src={logoPic} alt="" className="h-13 w-auto" />
+            <img src={logo} alt="Eurasia Restaurant" className="h-11 w-auto" />
           </NavLink>
         )}
 

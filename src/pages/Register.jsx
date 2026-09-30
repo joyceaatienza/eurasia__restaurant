@@ -5,6 +5,37 @@ import { useAuth } from '../context/AuthContext';
 import logo from '../assets/logopic2.png';
 import heroImage from '../assets/bg2.jpg';
 
+const PASSWORD_RULES = [
+  { key: 'length', label: '8-20 characters', test: (p) => p.length >= 8 && p.length <= 20 },
+  { key: 'capital', label: 'At least one capital letter', test: (p) => /[A-Z]/.test(p) },
+  { key: 'number', label: 'At least one number', test: (p) => /[0-9]/.test(p) },
+  { key: 'special', label: 'At least one special character', test: (p) => /[^A-Za-z0-9\s]/.test(p) },
+  { key: 'nospace', label: 'No spaces', test: (p) => p.length > 0 && !/\s/.test(p) },
+];
+
+function PasswordChecklist({ password }) {
+  return (
+    <div className="bg-[#f7f5f0] rounded-lg px-4 py-3 mt-1">
+      <p className="font-[Prata] text-xs text-neutral-600 mb-2">Password must include:</p>
+      <div className="flex flex-col gap-1.5">
+        {PASSWORD_RULES.map((rule) => {
+          const passed = rule.test(password);
+          return (
+            <div key={rule.key} className="flex items-center gap-2">
+              <span className={`text-sm leading-none ${passed ? 'text-green-600' : 'text-red-500'}`}>
+                {passed ? '✔' : '✘'}
+              </span>
+              <span className={`font-[Prata] text-xs ${passed ? 'text-green-700' : 'text-neutral-500'}`}>
+                {rule.label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function Register() {
   const navigate = useNavigate();
   const { register } = useAuth();
@@ -43,11 +74,12 @@ function Register() {
       return;
     }
 
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters.');
+    const failedRule = PASSWORD_RULES.find((rule) => !rule.test(password));
+    if (failedRule) {
+      setError('Please meet all the password requirements.');
       return;
     }
-
+    
     if (password !== confirmPassword) {
       setError('Passwords do not match.');
       return;
@@ -157,6 +189,7 @@ function Register() {
                 {showConfirm ? <Eye size={18} /> : <EyeOff size={18} />}
               </button>
             </div>
+              {password && <PasswordChecklist password={password} />}
 
              <div className="flex items-center justify-center gap-2 mt-1">
               <span

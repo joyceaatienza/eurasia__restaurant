@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, X, Check } from 'lucide-react';
 import heroImage from '../assets/bgHero.jpg';
 import { useAuth } from '../context/AuthContext';
+import { useCart } from '../context/CartContext';
 
 function Account() {
   const navigate = useNavigate();
   const { user, isAuthenticated, loading, logout, updateProfile, changePassword } = useAuth();
+  const { clearCart } = useCart();
 
   const [tab, setTab] = useState('profile');
 
@@ -399,6 +401,7 @@ function Account() {
               </button>
               <button
                 onClick={() => {
+                  clearCart();
                   logout();
                   setShowLogoutConfirm(false);
                   navigate('/');

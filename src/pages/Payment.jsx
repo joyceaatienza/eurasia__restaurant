@@ -15,6 +15,7 @@ import {
 import heroImage from '../assets/bgHero.jpg';
 import { ordersApi } from '../services/ordersApi';
 import { useAuth } from '../context/AuthContext';
+import { useCart } from '../context/CartContext';
 
 const PAYMENT_METHODS = [
   { id: 'cash', label: 'Cash' },
@@ -42,6 +43,18 @@ function fileToBase64(file) {
     reader.onload = () => resolve(reader.result);
     reader.onerror = reject;
     reader.readAsDataURL(file);
+  });
+}
+
+function formatDateTime(value) {
+  if (!value) return '—';
+  const d = new Date(value);
+  return d.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
   });
 }
 
@@ -83,10 +96,16 @@ function OrderHistoryCard({ order }) {
           {payLabel}
         </span>
       </div>
-      <p className="text-[11px] text-neutral-400 mb-4">
+      <p className="text-[11px] text-neutral-400 mb-1" style={{ textAlign: 'left' }}>
         Order #{orderNo}
         {order.table_number ? ` · Table ${order.table_number}` : ''}
       </p>
+      <div className="text-[11px] text-neutral-400 mb-4 space-y-0.5" style={{ textAlign: 'left' }}>
+        <p>Ordered: {formatDateTime(order.created_at)}</p>
+        {paid && order.verified_at && (
+          <p className="text-emerald-700">Payment verified: {formatDateTime(order.verified_at)}</p>
+        )}
+      </div>
 
       {cancelled ? (
         <div className="bg-red-50 text-red-600 text-xs font-medium rounded-lg px-3 py-2 text-center mb-3">
@@ -157,6 +176,7 @@ function OrderHistoryCard({ order }) {
 function Payment() {
   const navigate = useNavigate();
   const { user, isAuthenticated, loading: authLoading } = useAuth();
+  const { clearCart } = useCart();
 
   // 'loading' | 'order' | 'empty' | 'settle'
   const [screen, setScreen] = useState('loading');
@@ -164,9 +184,6 @@ function Payment() {
   // --- Order screen state ---
   const [orderItems, setOrderItems] = useState([]);
   const [isBuyNow, setIsBuyNow] = useState(false);
-  const [method, setMethod] = useState('');
-  const [discount, setDiscount] = useState(null);
-  const [discountIdFile, setDiscountIdFile] = useState(null);
   const [placing, setPlacing] = useState(false);
   const [justOrdered, setJustOrdered] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
@@ -175,6 +192,9 @@ function Payment() {
   // --- Settle screen state ---
   const [unpaidOrders, setUnpaidOrders] = useState([]);
   const [settleLoading, setSettleLoading] = useState(false);
+  const [method, setMethod] = useState('');
+  const [discount, setDiscount] = useState(null);
+  const [discountIdFile, setDiscountIdFile] = useState(null);
   const [receiptFile, setReceiptFile] = useState(null);
   const [settling, setSettling] = useState(false);
   const [justSettled, setJustSettled] = useState(false);
@@ -200,7 +220,7 @@ function Payment() {
       }
     }
 
-     // Only show the tray if the customer finalized it from the tray panel
+    // Only show the tray if the customer finalized it from the tray panel
     const finalized = localStorage.getItem(FINALIZED_KEY) === 'true';
     const savedCart = localStorage.getItem(CART_STORAGE_KEY);
     if (finalized && savedCart) {
@@ -230,21 +250,22 @@ function Payment() {
 
   // ---------------- Order totals ----------------
   const orderSubtotal = orderItems.reduce((sum, item) => sum + item.price * item.qty, 0);
-  const orderServiceFee = Math.round(orderSubtotal * 0.05 * 100) / 100;
-  const orderDiscountAmount = discount ? Math.round(orderSubtotal * 0.20) : 0;
-  const orderTotal = orderSubtotal + orderServiceFee - orderDiscountAmount;
+  const orderServiceFee = Math.round(orderSubtotal * 0.15 * 100) / 100;
+  const orderTotal = orderSubtotal + orderServiceFee;
 
   // ---------------- Settle totals ----------------
-  const settleTotal = unpaidOrders.reduce((sum, o) => sum + Number(o.total || 0), 0);
   const settleItems = unpaidOrders.flatMap((o) =>
     (o.items || []).map((it) => ({ ...it, orderId: o.id }))
   );
-  const settleMethod = unpaidOrders[0]?.payment_method || 'cash';
-  const isCash = settleMethod === 'cash';
-  const settleMethodLabel =
-    PAYMENT_METHODS.find((m) => m.id === settleMethod)?.label || settleMethod;
 
-   const updateItemNote = (index, note) => {
+   const settleSubtotal = unpaidOrders.reduce((sum, o) => sum + Number(o.subtotal || 0), 0);
+  const settleDiscountAmount = discount ? Math.round(settleSubtotal * 0.20) : 0;
+  const settleServiceFee = Math.round((settleSubtotal - settleDiscountAmount) * 0.15 * 100) / 100;
+  const settleFinalTotal = settleSubtotal - settleDiscountAmount + settleServiceFee;
+  const isCash = method === 'cash';
+  const settleMethodLabel = PAYMENT_METHODS.find((m) => m.id === method)?.label || '';
+
+  const updateItemNote = (index, note) => {
     setOrderItems((prev) => {
       const next = prev.map((it, i) => (i === index ? { ...it, note } : it));
       // Keep the saved tray in sync so the note survives a refresh
@@ -260,12 +281,9 @@ function Payment() {
 
   const clearTray = () => {
     localStorage.removeItem(BUY_NOW_KEY);
-    localStorage.removeItem(CART_STORAGE_KEY);
     localStorage.removeItem(FINALIZED_KEY);
+    clearCart();
     setOrderItems([]);
-    setMethod('');
-    setDiscount(null);
-    setDiscountIdFile(null);
   };
 
   // ---------------- Place Order ----------------
@@ -275,30 +293,18 @@ function Payment() {
       return;
     }
 
-    if (!method) {
-      alert("Please select a mode of payment.");
-      return;
-    }
-
-    if (discount && !discountIdFile) {
-      alert(`Please upload a photo of your ${discount.toUpperCase()} ID for verification.`);
-      return;
-    }
-
     try {
       setPlacing(true);
-
-      const discountIdBase64 = discountIdFile ? await fileToBase64(discountIdFile) : null;
 
       const payload = {
         customer_name: user.full_name,
         table_number: null,
-        payment_method: method,
-        discount_type: discount || null,
-        discount_id_image: discountIdBase64,
+        payment_method: null,
+        discount_type: null,
+        discount_id_image: null,
         subtotal: orderSubtotal,
         service_fee: orderServiceFee,
-        discount_amount: orderDiscountAmount,
+        discount_amount: 0,
         total: orderTotal,
         items: orderItems.map((item) => ({
           menu_item_id: item.id,
@@ -311,17 +317,14 @@ function Payment() {
 
       await ordersApi.create(payload);
 
-     if (isBuyNow) {
+      if (isBuyNow) {
         localStorage.removeItem(BUY_NOW_KEY);
       } else {
-        localStorage.removeItem(CART_STORAGE_KEY);
+        clearCart();
         localStorage.removeItem(FINALIZED_KEY);
       }
 
       setOrderItems([]);
-      setDiscount(null);
-      setDiscountIdFile(null);
-      setMethod('');
       setJustOrdered(true);
       setScreen('empty');
 
@@ -361,6 +364,16 @@ function Payment() {
   };
 
   const handleSubmitPayment = async () => {
+    if (!method) {
+      alert('Please select a mode of payment.');
+      return;
+    }
+
+    if (discount && !discountIdFile) {
+      alert(`Please upload a photo of your ${discount.toUpperCase()} ID for verification.`);
+      return;
+    }
+
     if (!receiptFile) {
       alert(isCash
         ? 'Please upload a photo of the receipt given by the cashier.'
@@ -372,17 +385,25 @@ function Payment() {
       setSettling(true);
 
       const receiptBase64 = await fileToBase64(receiptFile);
+      const discountIdBase64 = discountIdFile ? await fileToBase64(discountIdFile) : null;
       const orderIds = unpaidOrders.map((o) => o.id);
 
       await ordersApi.payMultiple(orderIds, {
         receipt_image: receiptBase64,
+        payment_method: method,
+        discount_type: discount || null,
+        discount_id_image: discountIdBase64,
+        discount_amount: settleDiscountAmount,
       });
 
       setUnpaidOrders([]);
       setReceiptFile(null);
+      setMethod('');
+      setDiscount(null);
+      setDiscountIdFile(null);
       setJustSettled(true);
 
-      setToast("Payment submitted! The cashier will verify it shortly.");
+      setToast("Payment proof submitted! The cashier will verify it shortly.");
       setTimeout(() => setToast(""), 5000);
     } catch (err) {
       console.error(err);
@@ -442,7 +463,7 @@ function Payment() {
       <div className="relative h-64 overflow-hidden shrink-0 md:h-60">
         <img src={heroImage} alt="" className="absolute inset-0 h-full w-full object-cover" />
         <div className="absolute inset-0 bg-white/40" />
-                <div className="relative flex h-full items-start justify-center px-4 pt-10 md:pt-14">
+        <div className="relative flex h-full items-start justify-center px-4 pt-10 md:pt-14">
           <h1
             className="font-[Prata] font-bold text-xs md:text-xs text-[#1d080f]"
             style={{ WebkitTextStroke: '0.7px #1d080f', letterSpacing: '1.5px' }}
@@ -458,27 +479,27 @@ function Payment() {
           <div className="bg-white rounded-2xl border border-neutral-200/80 p-12 text-center shadow-xs">
             <p className="text-sm text-neutral-500">Loading...</p>
           </div>
-         ) : !isAuthenticated ? (
+        ) : !isAuthenticated ? (
           <div className="bg-white rounded-2xl border border-neutral-200/80 shadow-xs p-12 text-center">
-              <p className="font-[Prata] text-lg text-[#1d080f] mb-2">Log in to place an order</p>
-              <p className="text-sm text-neutral-500 font-[Prata] mb-8">
-                You need an account to order from our kitchen and settle your bill.
-              </p>
-              <div className="flex flex-col sm:flex-row justify-center gap-3">
-                <button
-                  onClick={() => navigate('/login')}
-                  className="bg-[#1d080f] text-white font-[Prata] font-bold px-10 py-3 rounded-full hover:opacity-90 transition"
-                >
-                  Login
-                </button>
-                <button
-                  onClick={() => navigate('/register')}
-                  className="border border-[#1d080f] text-[#1d080f] font-[Prata] font-bold px-10 py-3 rounded-full hover:bg-[#1d080f] hover:text-white transition"
-                >
-                  Create Account
-                </button>
-              </div>
+            <p className="font-[Prata] text-lg text-[#1d080f] mb-2">Log in to place an order</p>
+            <p className="text-sm text-neutral-500 font-[Prata] mb-8">
+              You need an account to order from our kitchen and settle your bill.
+            </p>
+            <div className="flex flex-col sm:flex-row justify-center gap-3">
+              <button
+                onClick={() => navigate('/login')}
+                className="bg-[#1d080f] text-white font-[Prata] font-bold px-10 py-3 rounded-full hover:opacity-90 transition"
+              >
+                Login
+              </button>
+              <button
+                onClick={() => navigate('/register')}
+                className="border border-[#1d080f] text-[#1d080f] font-[Prata] font-bold px-10 py-3 rounded-full hover:bg-[#1d080f] hover:text-white transition"
+              >
+                Create Account
+              </button>
             </div>
+          </div>
         ) : (
         <>
 
@@ -493,7 +514,7 @@ function Payment() {
             </h2>
             <p className="text-sm text-neutral-500 mx-auto mb-6 text-center">
               {justOrdered
-                ? 'Your food is being prepared. Enjoy your meal, then settle your bill at the counter and upload your receipt here.'
+                ? 'Your food is being prepared. Enjoy your meal, then call your server to settle the bill and upload your proof of payment here.'
                 : 'There are no items ready to order. Browse the menu, or settle a bill from an earlier order.'}
             </p>
             <div className="flex flex-col items-center gap-3">
@@ -534,106 +555,8 @@ function Payment() {
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl border border-neutral-200/80 p-6 shadow-xs">
-              <h4 className="text-[16px] font-bold text-[#b38548] uppercase tracking-wider mb-4">
-                1. Mode of Payment
-              </h4>
-              <div className="relative">
-                <select
-                  value={method}
-                  onChange={(e) => setMethod(e.target.value)}
-                  className={`w-full bg-white border border-neutral-200 rounded-xl px-4 py-3.5 text-sm appearance-none focus:outline-none focus:ring-1 focus:ring-[#1d080f] ${method ? 'text-[#1d080f]' : 'text-neutral-400'}`}
-                >
-                  <option value="" disabled className="text-neutral-400">Mode of Payment *</option>
-                  {PAYMENT_METHODS.map(({ id, label }) => (
-                    <option key={id} value={id} className="text-[#1d080f]">{label}</option>
-                  ))}
-                </select>
-                <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-400" />
-              </div>
-              {!method && (
-                <p className="text-xs text-red-500 mt-2">Please select a mode of payment.</p>
-              )}
-            </div>
-
-            <div className="bg-white rounded-2xl border border-neutral-200/80 p-6 shadow-xs">
-              <h4 className="text-[16px] font-bold text-[#b38548] uppercase tracking-wider mb-4">
-                2. Select Discount (Optional)
-              </h4>
-
-              <div className="grid sm:grid-cols-2 gap-3 mb-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDiscount(discount === 'pwd' ? null : 'pwd');
-                    setDiscountIdFile(null);
-                  }}
-                  className={`flex items-center justify-between p-3.5 rounded-xl border text-xs font-medium transition-all cursor-pointer ${
-                    discount === 'pwd'
-                      ? 'border-[#1d080f] bg-[#1d080f]/5 text-[#1d080f]'
-                      : 'border-neutral-200 text-neutral-700 hover:bg-neutral-50'
-                  }`}
-                >
-                  <span className="flex items-center gap-2">
-                    <ShieldCheck size={16} /> PWD Discount (20%)
-                  </span>
-                  <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                    discount === 'pwd' ? 'border-[#1d080f] bg-[#1d080f]' : 'border-neutral-300'
-                  }`}>
-                    {discount === 'pwd' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDiscount(discount === 'senior' ? null : 'senior');
-                    setDiscountIdFile(null);
-                  }}
-                  className={`flex items-center justify-between p-3.5 rounded-xl border text-xs font-medium transition-all cursor-pointer ${
-                    discount === 'senior'
-                      ? 'border-[#1d080f] bg-[#1d080f]/5 text-[#1d080f]'
-                      : 'border-neutral-200 text-neutral-700 hover:bg-neutral-50'
-                  }`}
-                >
-                  <span className="flex items-center gap-2">
-                    <ShieldCheck size={16} /> Senior Citizen (20%)
-                  </span>
-                  <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                    discount === 'senior' ? 'border-[#1d080f] bg-[#1d080f]' : 'border-neutral-300'
-                  }`}>
-                    {discount === 'senior' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                  </div>
-                </button>
-              </div>
-
-              {discount && (
-                <div className="mt-4 p-4 bg-[#faf8f5] rounded-xl border border-dashed border-amber-800/30">
-                  <label className="flex flex-col items-center justify-center gap-2 cursor-pointer text-center">
-                    <UploadCloud size={24} className="text-[#b38548]" />
-                    <div className="text-xs">
-                      <span className="font-semibold text-[#1d080f]">
-                        Upload Picture of {discount === 'pwd' ? 'PWD ID' : 'Senior Citizen ID'}
-                      </span>
-                      <p className="text-neutral-500 mt-0.5">Attach ID photo to prove discount eligibility</p>
-                    </div>
-                    {discountIdFile ? (
-                      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full mt-1">
-                        <CheckCircle2 size={14} /> {discountIdFile.name}
-                      </span>
-                    ) : (
-                      <span className="text-[10px] text-amber-700 font-medium bg-amber-50 px-2.5 py-0.5 rounded">
-                        ID Photo Required
-                      </span>
-                    )}
-                    <input type="file" accept="image/*" hidden onChange={handleDiscountIdChange} />
-                  </label>
-                </div>
-              )}
-            </div>
-
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-800 text-center">
-              Payment comes later — after your meal, pay at the counter and upload the receipt under Settle Bill.
+              Payment comes later — after your meal, call your server to settle the bill, then upload your proof of payment here.
             </div>
 
             <div className="bg-white rounded-2xl border border-neutral-200/80 p-6 shadow-xs font-mono">
@@ -657,7 +580,7 @@ function Payment() {
                     </div>
 
                     <div className="mt-1.5 font-sans" style={{ textAlign: 'left' }}>
-                                            {openNotes[i] || item.note ? (
+                      {openNotes[i] || item.note ? (
                         <div>
                           <input
                             type="text"
@@ -673,7 +596,7 @@ function Payment() {
                               setOpenNotes((prev) => ({ ...prev, [i]: false }));
                             }}
                             className="mt-1 text-[11px] text-[#c0392b] hover:opacity-70 transition"
-                       >
+                          >
                             Remove note
                           </button>
                         </div>
@@ -697,15 +620,9 @@ function Payment() {
                   <span>₱ {orderSubtotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div className="flex justify-between text-neutral-600">
-                  <span>Service</span>
+                  <span>Service (15%)</span>
                   <span>₱ {orderServiceFee.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                 </div>
-                {discount && (
-                  <div className="flex justify-between text-red-600 font-semibold">
-                    <span>DISCOUNT ({discount === 'pwd' ? 'PWD' : 'SENIOR'})</span>
-                    <span>- ₱ {orderDiscountAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-                  </div>
-                )}
                 <div className="flex justify-between items-baseline text-base font-bold text-[#1d080f] pt-3 border-t border-neutral-800">
                   <span>TOTAL</span>
                   <span>₱ {orderTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
@@ -753,7 +670,7 @@ function Payment() {
                 <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
                   <CheckCircle2 size={28} />
                 </div>
-                <h2 className="font-['Prata'],serif text-xl font-bold mb-3">Payment Submitted!</h2>
+                <h2 className="font-['Prata'],serif text-xl font-bold mb-3">Proof Submitted!</h2>
                 <p className="text-sm text-neutral-500 mb-6">
                   Thank you for dining with Eurasia San Jose. The cashier will verify your payment shortly — you can track it in History.
                 </p>
@@ -787,14 +704,113 @@ function Payment() {
                 </div>
 
                 <div className="bg-white rounded-2xl border border-neutral-200/80 p-6 shadow-xs">
+                  <h4 className="text-[16px] font-bold text-[#b38548] uppercase tracking-wider mb-4">
+                    1. Mode of Payment
+                  </h4>
+                  <div className="relative">
+                    <select
+                      value={method}
+                      onChange={(e) => setMethod(e.target.value)}
+                      className={`w-full bg-white border border-neutral-200 rounded-xl px-4 py-3.5 text-sm appearance-none focus:outline-none focus:ring-1 focus:ring-[#1d080f] ${method ? 'text-[#1d080f]' : 'text-neutral-400'}`}
+                    >
+                      <option value="" disabled className="text-neutral-400">Mode of Payment *</option>
+                      {PAYMENT_METHODS.map(({ id, label }) => (
+                        <option key={id} value={id} className="text-[#1d080f]">{label}</option>
+                      ))}
+                    </select>
+                    <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-400" />
+                  </div>
+                  {!method && (
+                    <p className="text-xs text-red-500 mt-2">Please select how you paid.</p>
+                  )}
+                </div>
+
+                <div className="bg-white rounded-2xl border border-neutral-200/80 p-6 shadow-xs">
+                  <h4 className="text-[16px] font-bold text-[#b38548] uppercase tracking-wider mb-4">
+                    2. Select Discount (Optional)
+                  </h4>
+
+                  <div className="grid sm:grid-cols-2 gap-3 mb-4">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDiscount(discount === 'pwd' ? null : 'pwd');
+                        setDiscountIdFile(null);
+                      }}
+                      className={`flex items-center justify-between p-3.5 rounded-xl border text-xs font-medium transition-all cursor-pointer ${
+                        discount === 'pwd'
+                          ? 'border-[#1d080f] bg-[#1d080f]/5 text-[#1d080f]'
+                          : 'border-neutral-200 text-neutral-700 hover:bg-neutral-50'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <ShieldCheck size={16} /> PWD Discount (20%)
+                      </span>
+                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                        discount === 'pwd' ? 'border-[#1d080f] bg-[#1d080f]' : 'border-neutral-300'
+                      }`}>
+                        {discount === 'pwd' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDiscount(discount === 'senior' ? null : 'senior');
+                        setDiscountIdFile(null);
+                      }}
+                      className={`flex items-center justify-between p-3.5 rounded-xl border text-xs font-medium transition-all cursor-pointer ${
+                        discount === 'senior'
+                          ? 'border-[#1d080f] bg-[#1d080f]/5 text-[#1d080f]'
+                          : 'border-neutral-200 text-neutral-700 hover:bg-neutral-50'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <ShieldCheck size={16} /> Senior Citizen (20%)
+                      </span>
+                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                        discount === 'senior' ? 'border-[#1d080f] bg-[#1d080f]' : 'border-neutral-300'
+                      }`}>
+                        {discount === 'senior' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      </div>
+                    </button>
+                  </div>
+
+                  {discount && (
+                    <div className="mt-4 p-4 bg-[#faf8f5] rounded-xl border border-dashed border-amber-800/30">
+                      <label className="flex flex-col items-center justify-center gap-2 cursor-pointer text-center">
+                        <UploadCloud size={24} className="text-[#b38548]" />
+                        <div className="text-xs">
+                          <span className="font-semibold text-[#1d080f]">
+                            Upload Picture of {discount === 'pwd' ? 'PWD ID' : 'Senior Citizen ID'}
+                          </span>
+                          <p className="text-neutral-500 mt-0.5">Attach ID photo to prove discount eligibility</p>
+                        </div>
+                        {discountIdFile ? (
+                          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full mt-1">
+                            <CheckCircle2 size={14} /> {discountIdFile.name}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-amber-700 font-medium bg-amber-50 px-2.5 py-0.5 rounded">
+                            ID Photo Required
+                          </span>
+                        )}
+                        <input type="file" accept="image/*" hidden onChange={handleDiscountIdChange} />
+                      </label>
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-white rounded-2xl border border-neutral-200/80 p-6 shadow-xs">
                   <h4 className="text-[16px] font-bold text-[#b38548] uppercase tracking-wider mb-2">
-                    {isCash ? 'Upload Receipt from Cashier' : 'Upload Payment Receipt'}
+                    3. {isCash ? 'Upload Receipt from Cashier' : 'Upload Proof of Payment'}
                   </h4>
                   <p className="text-xs text-neutral-500 mb-4">
-                    You chose <span className="font-semibold text-[#1d080f]">{settleMethodLabel}</span> when you ordered.{' '}
-                    {isCash
-                      ? 'After paying at the counter, take a photo of the receipt handed to you by the cashier and attach it here.'
-                      : 'Attach a screenshot of your successful transaction.'}
+                    {!method
+                      ? 'Select how you paid above, then attach your proof of payment.'
+                      : isCash
+                      ? 'Take a photo of the receipt handed to you by your server and attach it here.'
+                      : `Attach a screenshot of your successful ${settleMethodLabel} transaction.`}
                   </p>
 
                   <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-neutral-300 rounded-xl py-6 px-4 text-center cursor-pointer hover:bg-neutral-50 transition">
@@ -837,15 +853,23 @@ function Payment() {
                   </div>
 
                   <div className="mt-4 pt-4 border-t border-dashed border-neutral-300 space-y-2 text-xs">
-                    {unpaidOrders.map((o) => (
-                      <div key={o.id} className="flex justify-between text-neutral-500 text-[11px]">
-                        <span>Order #{o.daily_number ?? o.id}</span>
-                        <span>₱ {Number(o.total).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                    <div className="flex justify-between text-neutral-600">
+                      <span>Subtotal</span>
+                      <span>₱ {settleSubtotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    {discount && (
+                      <div className="flex justify-between text-red-600 font-semibold">
+                        <span>DISCOUNT ({discount === 'pwd' ? 'PWD' : 'SENIOR'})</span>
+                        <span>- ₱ {settleDiscountAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                       </div>
-                    ))}
+                    )}
+                    <div className="flex justify-between text-neutral-600">
+                      <span>Service (15%)</span>
+                      <span>₱ {settleServiceFee.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                    </div>
                     <div className="flex justify-between items-baseline text-base font-bold text-[#1d080f] pt-3 border-t border-neutral-800">
                       <span>TOTAL</span>
-                      <span>₱ {settleTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                      <span>₱ {settleFinalTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                     </div>
                   </div>
 
@@ -863,12 +887,12 @@ function Payment() {
                       disabled={settling}
                       className="flex-1 bg-[#2e5a2e] hover:bg-[#244724] text-white text-sm font-bold py-3 rounded-xl shadow-sm transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {settling ? 'Submitting...' : `Submit Payment • ₱ ${settleTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}`}
+                      {settling ? 'Submitting...' : `Submit Payment Proof • ₱ ${settleFinalTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}`}
                     </button>
                   </div>
                 </div>
               </>
-                       )}
+            )}
           </div>
         )}
 

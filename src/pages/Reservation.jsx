@@ -830,15 +830,28 @@ function Reservation() {
                     </p>
                   )}
 
-                  {reservations.map((r) => {
-                    const remainingDays = daysUntil(r.reservation_date)
+                  {[...reservations]
+                    .sort((a, b) => {
+                      const aClosed = ['cancelled', 'no_show'].includes(a.status) ? 1 : 0;
+                      const bClosed = ['cancelled', 'no_show'].includes(b.status) ? 1 : 0;
+                      return aClosed - bClosed;
+                    })
+                    .map((r) => {
+                      const remainingDays = daysUntil(r.reservation_date)
                     const isClosed = r.status === 'cancelled' || r.status === 'completed' || r.status === 'no_show'
                     const pastCutoff = remainingDays !== null && remainingDays < CANCEL_CUTOFF_DAYS
                     const cancelDisabled = isClosed || pastCutoff
 
                     return (
-                       <div key={r.id} className="bg-white rounded-xl p-6 mb-4 text-left">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm font-[Prata] text-left">
+                      <div
+                        key={r.id}
+                        className={`rounded-xl p-6 mb-4 ${
+                          r.status === 'cancelled' || r.status === 'no_show'
+                            ? 'bg-neutral-100 opacity-60'
+                            : 'bg-white'
+                        }`}
+                        style={{ textAlign: 'left' }}
+                      >                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm font-[Prata] text-left">
                           <div className="flex flex-col gap-3">
                             <div>
                               <span className="block text-xs text-neutral-400">Date</span>

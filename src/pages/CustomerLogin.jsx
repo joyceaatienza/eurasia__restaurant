@@ -122,9 +122,9 @@ function Login() {
               <Link
                 to="/forgot-password"
                 state={{ fullName, identifier }}
-                className="bg-[#c0392b] text-white font-[Prata] font-bold px-12 py-3 rounded-md hover:opacity-90 transition"
+                className="font-[Prata] text-sm text-[#1d080f] underline hover:opacity-70 transition"
               >
-                Forgot Password
+                Forgot Password?
               </Link>
             </div>
           </form>

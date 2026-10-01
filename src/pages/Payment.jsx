@@ -173,6 +173,71 @@ function OrderHistoryCard({ order }) {
   );
 }
 
+/* Compact card for an order the kitchen is still working on */
+function ActiveOrderCard({ order }) {
+  const status = (order.status || 'pending').toLowerCase();
+  const currentStep = FOOD_STEPS.indexOf(status);
+  const orderNo = order.daily_number ?? order.id;
+  const items = order.items || [];
+
+  return (
+    <div className="bg-white rounded-2xl border border-neutral-200/80 p-5 shadow-xs text-left">
+      <div className="flex items-center justify-between mb-1">
+        <span className="font-[Prata] text-sm text-[#1d080f]">Order #{orderNo}</span>
+        <span className="text-[10px] font-semibold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700">
+          {FOOD_STEP_LABELS[status] || 'Received'}
+        </span>
+      </div>
+      <p className="text-[11px] text-neutral-400 mb-4">
+        Ordered: {formatDateTime(order.created_at)}
+      </p>
+
+      <div className="flex items-center justify-between mb-4">
+        {FOOD_STEPS.map((step, i) => {
+          const done = i <= currentStep;
+          return (
+            <div key={step} className="flex-1 flex flex-col items-center relative">
+              {i > 0 && (
+                <span
+                  className={`absolute top-2 right-1/2 w-full h-0.5 z-0 transition-colors duration-500 ${
+                    i <= currentStep ? 'bg-[#2e5a2e]' : 'bg-neutral-200'
+                  }`}
+                />
+              )}
+              <span
+                className={`relative z-10 w-4 h-4 rounded-full border-2 transition-colors duration-500 ${
+                  done ? 'bg-[#2e5a2e] border-[#2e5a2e]' : 'bg-white border-neutral-300'
+                }`}
+              />
+              <span
+                className={`mt-1.5 text-[10px] transition-colors duration-500 ${
+                  done ? 'text-[#2e5a2e] font-semibold' : 'text-neutral-400'
+                }`}
+              >
+                {FOOD_STEP_LABELS[step]}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="border-t border-dashed border-neutral-200 pt-3 space-y-1">
+        {items.map((it, idx) => (
+          <div key={idx} className="flex justify-between items-center text-xs">
+            <span className="flex items-center gap-1.5 text-neutral-600">
+              {it.checked && <Check size={12} className="text-[#2e5a2e] shrink-0" />}
+              {(it.item_name || '').toString()} ×{it.quantity}
+            </span>
+            <span className="text-neutral-600">
+              ₱ {(Number(it.price) * Number(it.quantity)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Payment() {
   const navigate = useNavigate();
   const { user, isAuthenticated, loading: authLoading } = useAuth();
@@ -205,6 +270,8 @@ function Payment() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyOrders, setHistoryOrders] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+    // --- Active orders (still in the kitchen) ---
+  const [activeOrders, setActiveOrders] = useState([]);
 
   // Load cart or buy-now item on mount
   useEffect(() => {
@@ -238,6 +305,34 @@ function Payment() {
 
     setScreen('empty');
   }, []);
+
+    // Pull the orders the kitchen is still working on, and keep them live
+  const fetchActiveOrders = useCallback(async () => {
+    if (!isAuthenticated) {
+      setActiveOrders([]);
+      return;
+    }
+    try {
+      const mine = await ordersApi.getMine();
+      setActiveOrders(
+        mine.filter((o) => ['pending', 'preparing'].includes((o.status || '').toLowerCase()))
+      );
+    } catch (err) {
+      console.error('Failed to load active orders:', err);
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    fetchActiveOrders();
+  }, [fetchActiveOrders, justOrdered]);
+
+  useEffect(() => {
+    if (screen !== 'empty') return;
+    const interval = setInterval(() => {
+      fetchActiveOrders().catch((e) => console.error('Active order poll failed:', e));
+    }, HISTORY_POLL_MS);
+    return () => clearInterval(interval);
+  }, [screen, fetchActiveOrders]);
 
   // Lock page scroll while a modal is open
   useEffect(() => {
@@ -413,10 +508,13 @@ function Payment() {
     }
   };
 
-  // ---------------- History ----------------
+  // History only shows orders the kitchen has finished — anything still cooking
+  // lives on the landing screen instead
   const fetchHistory = useCallback(async () => {
     const mine = await ordersApi.getMine();
-    setHistoryOrders(mine);
+    setHistoryOrders(
+      mine.filter((o) => !['pending', 'preparing'].includes((o.status || '').toLowerCase()))
+    );
   }, []);
 
   const openHistory = async () => {
@@ -505,6 +603,23 @@ function Payment() {
 
         {/* ---------------- EMPTY / LANDING ---------------- */}
         {screen === 'empty' && (
+          <div className="grid gap-6">
+
+          {activeOrders.length > 0 && (
+            <div className="grid gap-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-[Prata] text-sm text-[#1d080f]">In the Kitchen</h3>
+                <span className="flex items-center gap-1.5 text-[10px] text-neutral-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Live
+                </span>
+              </div>
+              {activeOrders.map((o) => (
+                <ActiveOrderCard key={o.id} order={o} />
+              ))}
+            </div>
+          )}
+
           <div className="bg-white rounded-2xl border border-neutral-200/80 p-12 text-center shadow-xs">
             <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${justOrdered ? 'bg-emerald-50 text-emerald-600' : 'bg-neutral-100 text-neutral-400'}`}>
               {justOrdered ? <CheckCircle2 size={28} /> : <ShoppingBag size={28} />}
@@ -537,6 +652,7 @@ function Payment() {
                 <History size={16} /> View Order History
               </button>
             </div>
+          </div>
           </div>
         )}
 

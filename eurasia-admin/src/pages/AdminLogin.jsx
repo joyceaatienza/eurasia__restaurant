@@ -89,8 +89,8 @@ export default function Login() {
           <select
             value={role}
             onChange={(e) => setRole(e.target.value)}
-            className={`w-full px-4 py-3 rounded-md mb-4 text-sm bg-white ${
-              role ? "text-[#1d080f]" : "text-neutral-400"
+             className={`w-full px-4 py-3 rounded-md mb-4 text-sm bg-[#e8e6e3] ${
+              role ? "text-[#1d080f]" : "text-neutral-500"
             }`}
           >
             <option value="">Role</option>
@@ -106,8 +106,8 @@ export default function Login() {
             placeholder="Name"
             value={name}
             onChange={(e) => setName(toTitleCase(e.target.value))}
-            className="w-full px-4 py-3 rounded-md mb-4 text-sm bg-white text-[#1d080f] placeholder-neutral-400"
-          />
+            className="w-full px-4 py-3 rounded-md mb-4 text-sm bg-[#e8e6e3] text-[#1d080f] placeholder-neutral-500"
+            />
 
           <div className="relative w-full mb-4">
             <input
@@ -115,8 +115,7 @@ export default function Login() {
               placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 pr-11 rounded-md text-sm bg-white text-[#1d080f] placeholder-neutral-400"
-            />
+              className="w-full px-4 py-3 pr-11 rounded-md text-sm bg-[#e8e6e3] text-[#1d080f] placeholder-neutral-500"/>
             <button
               type="button"
               onClick={() => setShowPassword((prev) => !prev)}
@@ -128,37 +127,17 @@ export default function Login() {
 
           {error && <p className="text-red-400 text-xs mb-4 text-center">{error}</p>}
 
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "10px",
-              marginTop: "10px",
-              width: "100%",
-              maxWidth: "50%",
-              margin: "10px auto 0",
-              boxSizing: "border-box",
-            }}
-          >
+          <div className="flex justify-center mt-4">
             <button
               type="submit"
               disabled={submitting}
-              className="w-full rounded-md bg-white text-[#1d080f] font-bold text-sm hover:bg-neutral-200 transition disabled:opacity-60"
-              style={{ padding: "12px 16px" }}
-            >
+              className="bg-white text-[#1d080f] font-[Prata] font-bold px-12 py-3 rounded-md hover:bg-neutral-200 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
               {submitting ? "Logging in..." : "Log In"}
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate("/forgot-password")}
-              className="w-full rounded-md bg-[#c0392b] text-white font-bold text-sm hover:bg-[#a5342a] transition"
-              style={{ padding: "12px 16px" }}
-            >
-              Forgot Password
             </button>
           </div>
         </form>
-      </div>
+        </div>
     </div>
   );
 }

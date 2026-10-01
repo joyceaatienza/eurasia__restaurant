@@ -9,8 +9,11 @@ import {
   LogOut,
   Wallet2,
   ShoppingBag,
-  Percent,
   Users,
+  History as HistoryIcon,
+  ChevronLeft,
+  ChevronRight,
+  ArrowUpDown,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -19,34 +22,17 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  LineChart,
-  Line,
   AreaChart,
   Area,
-  PieChart,
-  Pie,
-  Cell,
   Tooltip,
 } from "recharts";
-import logo from "../assets/logopic3.png";
 import logoWord from "../assets/logoword.png";
 import Reservations from "./Reservations";
 import OrderQueue from "./OrderQueue";
 import PaymentTransactions from "./PaymentTransactions";
-import SettingsModal from "../components/SettingsModal";
-import { History as HistoryIcon } from "lucide-react";
-import { getPayments } from "../utils/paymentsStore";
-import { getReservations } from "../utils/reservationsStore";
-import { getOrders } from "../utils/ordersStore";
 import { ordersApi } from "../services/ordersApi";
+import { guestsApi } from "../services/guestsApi";
 import { reservationsApi } from "../services/reservationsApi";
-
-function to12h(time24) {
-  const [h, m] = time24.split(":").map(Number);
-  const period = h >= 12 ? "pm" : "am";
-  const hour12 = h % 12 === 0 ? 12 : h % 12;
-  return `${hour12}:${String(m).padStart(2, "0")} ${period}`;
-}
 
 const C = {
   void: "#1d080f",
@@ -122,26 +108,6 @@ const salesTrendByPeriod = {
     { label: "Jan '26", value: 20 },
   ],
 };
-
-const paymentMethods = [
-  { name: "Cash", value: 50, color: C.azure },
-  { name: "GCash", value: 22.7, color: C.amber },
-  { name: "Bank Transfer", value: 22.7, color: C.violet },
-  { name: "Paymaya", value: 4.5, color: "#f6df6d" },
-];
-
-const topSelling = [
-  { name: "Pizza", amount: "Php. 300" },
-  { name: "Ribs", amount: "Php. 300" },
-  { name: "Cocktail", amount: "Php. 200" },
-];
-
-const orderStats = [
-  { label: "Completed", value: 110, color: C.green },
-  { label: "Pending", value: 4, color: C.amber },
-  { label: "Cancelled", value: 7, color: C.red },
-  { label: "No Shows", value: 2, color: C.inkSoft },
-];
 
 function Btn({ children, variant = "primary", onClick, small }) {
   const base = {
@@ -225,6 +191,90 @@ function Badge({ tone = "green", children }) {
   );
 }
 
+/* ---------------------------------------------------------------- */
+/* Confirmation modal — replaces window.confirm                      */
+/* ---------------------------------------------------------------- */
+function ConfirmModal({ open, title, message, confirmLabel, onConfirm, onCancel, danger }) {
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previous; };
+  }, [open]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      onClick={onCancel}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(23,3,16,0.45)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 9999,
+        padding: 16,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "#fff",
+          borderRadius: 18,
+          padding: 28,
+          width: "100%",
+          maxWidth: 380,
+          fontFamily: "'Prata', serif",
+          textAlign: "center",
+          boxShadow: "0 12px 40px rgba(0,0,0,0.25)",
+        }}
+      >
+        <div style={{ fontSize: 18, color: C.ink, marginBottom: 8 }}>{title}</div>
+        <p style={{ fontSize: 13, color: C.inkSoft, lineHeight: 1.6, margin: "0 0 24px 0" }}>
+          {message}
+        </p>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button
+            onClick={onCancel}
+            style={{
+              flex: 1,
+              padding: "11px 18px",
+              borderRadius: 10,
+              border: `1px solid ${C.hair}`,
+              background: "#fff",
+              color: C.ink,
+              fontSize: 13,
+              fontFamily: "'Prata', serif",
+              cursor: "pointer",
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            style={{
+              flex: 1,
+              padding: "11px 18px",
+              borderRadius: 10,
+              border: "none",
+              background: danger ? "#c0392b" : C.void,
+              color: "#fff",
+              fontSize: 13,
+              fontWeight: 700,
+              fontFamily: "'Prata', serif",
+              cursor: "pointer",
+            }}
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const NAV = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { key: "frontdesk", label: "Front Desk", icon: CalendarCheck2 },
@@ -256,58 +306,16 @@ function TopHeader({ onLogoClick }) {
         <img
           src={logoWord}
           alt="Eurasia Restaurant Logo"
-          style={{
-            height: 45,
-            width: "auto",
-            objectFit: "contain",
-          }}
+          style={{ height: 45, width: "auto", objectFit: "contain" }}
         />
       </button>
     </div>
   );
 }
 
-function Topbar({ title, subtitle }) {
-  return (
-    <div
-      style={{
-        padding: "20px 28px 8px 28px",
-        background: "transparent",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-      }}
-    >
-      <div>
-        <h1
-          style={{
-            fontFamily: "'Prata', serif",
-            fontSize: 39,
-            margin: 0,
-            color: C.ink,
-            WebkitTextStroke: "0.5px " + C.ink,
-          }}
-        >
-          {title}
-        </h1>
-        {subtitle && (
-          <p style={{ margin: "4px 0 0 0", fontSize: 13, color: C.inkSoft }}>
-            {subtitle}
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function Sidebar({ active, setActive, collapsed }) {
-  const navigate = useNavigate();
+function Sidebar({ active, setActive, collapsed, onLogout }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
-  const [showSettings, setShowSettings] = useState(false);
-  const [avatarColor, setAvatarColor] = useState(
-    localStorage.getItem("eurasia_avatar_color") || C.gold
-  );
 
   const savedName = localStorage.getItem("eurasia_name");
   const savedRole = localStorage.getItem("eurasia_role");
@@ -324,100 +332,93 @@ function Sidebar({ active, setActive, collapsed }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem("eurasia_role");
-    localStorage.removeItem("eurasia_name");
-    navigate("/login");
-  };
-
   return (
-   <aside
-  style={{
-    width: collapsed ? 64 : 240,
-    minWidth: collapsed ? 64 : 240,
-    height: "100vh",
-    position: "sticky",
-    top: 0,
-    alignSelf: "flex-start",
-    background: C.void,
-    display: "flex",
-    flexDirection: "column",
-    padding: collapsed ? "24px 12px" : "22px 16px",
-    borderTopRightRadius: 24,
-    transition:
-      "width 0.25s ease, min-width 0.25s ease, padding 0.25s ease",
-  }}
->
+    <aside
+      style={{
+        width: collapsed ? 64 : 240,
+        minWidth: collapsed ? 64 : 240,
+        height: "100vh",
+        position: "sticky",
+        top: 0,
+        alignSelf: "flex-start",
+        background: C.void,
+        display: "flex",
+        flexDirection: "column",
+        padding: collapsed ? "24px 12px" : "22px 16px",
+        borderTopRightRadius: 24,
+        transition: "width 0.25s ease, min-width 0.25s ease, padding 0.25s ease",
+      }}
+    >
       <nav style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {NAV.map((item) => {
-  const Icon = item.icon;
-  const isActive = active === item.key;
-  return (
-    <div key={item.key} style={{ position: "relative" }} className="sidebar-nav-item">
-      <button
-        onClick={() => setActive(item.key)}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          padding: collapsed ? "12px 0" : "11px 14px",
-          justifyContent: collapsed ? "center" : "flex-start",
-          borderRadius: 10,
-          border: "none",
-          cursor: "pointer",
-          background: isActive ? C.flame : "transparent",
-          color: isActive ? "#ffffff" : "rgba(245,233,216,0.75)",
-          fontFamily: "'Prata', serif",
-          fontSize: 14,
-          fontWeight: 600,
-          textAlign: "left",
-          transition: "all 0.15s ease",
-          whiteSpace: "nowrap",
-          width: "100%",
-        }}
-      >
-        <Icon size={17} style={{ flexShrink: 0 }} />
-        <span
-          style={{
-            opacity: collapsed ? 0 : 1,
-            width: collapsed ? 0 : "auto",
-            overflow: "hidden",
-            transition: "opacity 0.2s ease",
-          }}
-        >
-          {item.label}
-        </span>
-      </button>
+          const Icon = item.icon;
+          const isActive = active === item.key;
+          return (
+            <div key={item.key} style={{ position: "relative" }} className="sidebar-nav-item">
+              <button
+                onClick={() => setActive(item.key)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  padding: collapsed ? "12px 0" : "11px 14px",
+                  justifyContent: collapsed ? "center" : "flex-start",
+                  borderRadius: 10,
+                  border: "none",
+                  cursor: "pointer",
+                  background: isActive ? C.flame : "transparent",
+                  color: isActive ? "#ffffff" : "rgba(245,233,216,0.75)",
+                  fontFamily: "'Prata', serif",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  textAlign: "left",
+                  transition: "all 0.15s ease",
+                  whiteSpace: "nowrap",
+                  width: "100%",
+                }}
+              >
+                <Icon size={17} style={{ flexShrink: 0 }} />
+                <span
+                  style={{
+                    opacity: collapsed ? 0 : 1,
+                    width: collapsed ? 0 : "auto",
+                    overflow: "hidden",
+                    transition: "opacity 0.2s ease",
+                  }}
+                >
+                  {item.label}
+                </span>
+              </button>
 
-      {collapsed && (
-        <span
-          className="sidebar-tooltip"
-          style={{
-            position: "absolute",
-            left: "calc(100% + 10px)",
-            top: "50%",
-            transform: "translateY(-50%)",
-            background: C.void,
-            color: "#f5e9d8",
-            fontFamily: "'Prata', serif",
-            fontSize: 12.5,
-            fontWeight: 600,
-            padding: "6px 12px",
-            borderRadius: 6,
-            whiteSpace: "nowrap",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
-            opacity: 0,
-            pointerEvents: "none",
-            transition: "opacity 0.15s ease",
-            zIndex: 50,
-          }}
-        >
-          {item.label}
-        </span>
-      )}
-    </div>
-  );
-})}
+              {collapsed && (
+                <span
+                  className="sidebar-tooltip"
+                  style={{
+                    position: "absolute",
+                    left: "calc(100% + 10px)",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: C.void,
+                    color: "#f5e9d8",
+                    fontFamily: "'Prata', serif",
+                    fontSize: 12.5,
+                    fontWeight: 600,
+                    padding: "6px 12px",
+                    borderRadius: 6,
+                    whiteSpace: "nowrap",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+                    opacity: 0,
+                    pointerEvents: "none",
+                    transition: "opacity 0.15s ease",
+                    zIndex: 50,
+                  }}
+                >
+                  {item.label}
+                </span>
+              )}
+            </div>
+          );
+        })}
       </nav>
 
       <div
@@ -450,12 +451,12 @@ function Sidebar({ active, setActive, collapsed }) {
               width: 34,
               height: 34,
               borderRadius: "50%",
-              background: avatarColor,
+              background: C.gold,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               fontWeight: 700,
-              color: "#fff",
+              color: C.void,
               fontSize: 13,
               flexShrink: 0,
             }}
@@ -481,54 +482,28 @@ function Sidebar({ active, setActive, collapsed }) {
         </button>
 
         {menuOpen && (
-  <div
-    style={{
-      position: "absolute",
-      bottom: collapsed ? "auto" : "100%",
-      top: collapsed ? 0 : "auto",
-      left: collapsed ? "calc(100% + 10px)" : 8,
-      right: collapsed ? "auto" : 8,
-      marginBottom: collapsed ? 0 : 6,
-      width: collapsed ? 160 : "auto",
-      background: "#fff",
-      borderRadius: 10,
-      boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
-      overflow: "hidden",
-      zIndex: 20,
-    }}
-  >
-            <button
-              onClick={() => {
-                setShowSettings(true);
-                setMenuOpen(false);
-              }}
-              style={{
-                width: "100%",
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                padding: "12px 16px",
-                border: "none",
-                background: "#fff",
-                cursor: "pointer",
-                fontFamily: "'Prata', serif",
-                fontSize: 13,
-                color: C.ink,
-                textAlign: "left",
-                borderBottom: "1px solid #eee",
-              }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.background = "#f7f5f6")
-              }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.background = "#fff")
-              }
-            >
-              Settings
-            </button>
+          <div
+            style={{
+              position: "absolute",
+              bottom: collapsed ? "auto" : "100%",
+              top: collapsed ? 0 : "auto",
+              left: collapsed ? "calc(100% + 10px)" : 8,
+              right: collapsed ? "auto" : 8,
+              marginBottom: collapsed ? 0 : 6,
+              width: collapsed ? 160 : "auto",
+              background: "#fff",
+              borderRadius: 10,
+              boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
+              overflow: "hidden",
+              zIndex: 20,
+            }}
+          >
 
             <button
-              onClick={handleLogout}
+              onClick={() => {
+                onLogout();
+                setMenuOpen(false);
+              }}
               style={{
                 width: "100%",
                 display: "flex",
@@ -543,29 +518,14 @@ function Sidebar({ active, setActive, collapsed }) {
                 color: "#c0392b",
                 textAlign: "left",
               }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.background = "#faf2f2")
-              }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.background = "#fff")
-              }
+              onMouseEnter={(e) => (e.currentTarget.style.background = "#faf2f2")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "#fff")}
             >
               <LogOut size={15} /> Log out
             </button>
           </div>
         )}
       </div>
-
-      {showSettings && (
-        <SettingsModal
-          onClose={() => {
-            setShowSettings(false);
-            setAvatarColor(
-              localStorage.getItem("eurasia_avatar_color") || C.gold
-            );
-          }}
-        />
-      )}
     </aside>
   );
 }
@@ -681,12 +641,9 @@ function PeriodDropdown({ value, onChange }) {
                 fontSize: 13,
                 color: C.ink,
               }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.background = C.canvas)
-              }
+              onMouseEnter={(e) => (e.currentTarget.style.background = C.canvas)}
               onMouseLeave={(e) =>
-                (e.currentTarget.style.background =
-                  opt === value ? C.canvas : "#fff")
+                (e.currentTarget.style.background = opt === value ? C.canvas : "#fff")
               }
             >
               {opt}
@@ -698,12 +655,52 @@ function PeriodDropdown({ value, onChange }) {
   );
 }
 
+/* ---------------------------------------------------------------- */
+/* Date range for the selected period, shiftable with the arrows     */
+/* ---------------------------------------------------------------- */
+function getPeriodRange(period, offset) {
+  const now = new Date();
+  let start, end;
+
+  if (period === "Today") {
+    start = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
+    end = new Date(start);
+  } else if (period === "Week") {
+    const base = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset * 7);
+    start = new Date(base);
+    start.setDate(start.getDate() - start.getDay()); // back to Sunday
+    end = new Date(start);
+    end.setDate(end.getDate() + 6);
+  } else if (period === "Month") {
+    start = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+    end = new Date(now.getFullYear(), now.getMonth() + offset + 1, 0);
+  } else {
+    start = new Date(now.getFullYear() + offset, 0, 1);
+    end = new Date(now.getFullYear() + offset, 11, 31);
+  }
+
+  start.setHours(0, 0, 0, 0);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+}
+
+function toISODate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 function DashboardPage() {
   const [period, setPeriod] = useState("Today");
+  const [offset, setOffset] = useState(0);
   const [showExportToast, setShowExportToast] = useState(false);
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState([]);
   const [reservations, setReservations] = useState([]);
+  const [guestCounts, setGuestCounts] = useState({ reserved: 0, walk_in: 0, total: 0 });
+
+  const { start: rangeStart, end: rangeEnd } = getPeriodRange(period, offset);
 
   useEffect(() => {
     Promise.all([ordersApi.getAll(), reservationsApi.getAll()])
@@ -715,48 +712,166 @@ function DashboardPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  function getDateRangeStart(p) {
-    const now = new Date();
-    if (p === "Today") {
-      return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    }
-    if (p === "Week") {
-      const d = new Date(now);
-      d.setDate(d.getDate() - 7);
-      return d;
-    }
-    if (p === "Month") {
-      const d = new Date(now);
-      d.setMonth(d.getMonth() - 1);
-      return d;
-    }
-    const d = new Date(now);
-    d.setFullYear(d.getFullYear() - 1);
-    return d;
-  }
+  // Guest counts come from the server so walk-ins are included in every period
+  useEffect(() => {
+    guestsApi.getCounts(toISODate(rangeStart), toISODate(rangeEnd))
+      .then(setGuestCounts)
+      .catch((err) => console.error("Failed to load guest counts:", err));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [period, offset]);
 
-  const rangeStart = getDateRangeStart(period);
-  const filteredOrders = orders.filter((o) => new Date(o.created_at) >= rangeStart);
-  const filteredReservations = reservations.filter((r) => new Date(r.created_at) >= rangeStart);
+  // Going back to the current period resets the offset
+  const changePeriod = (p) => {
+    setPeriod(p);
+    setOffset(0);
+  };
+
+  const inRange = (value) => {
+    const d = new Date(value);
+    return d >= rangeStart && d <= rangeEnd;
+  };
+
+  const filteredOrders = orders.filter((o) => inRange(o.created_at));
+  const filteredReservations = reservations.filter((r) => inRange(r.created_at));
 
   const trendData = salesTrendByPeriod[period] || salesTrendByPeriod.Year;
 
-  const handleExport = () => {
+  const handleExport = async () => {
+        // Wrap each cell so commas inside names don't break the columns
+    const cell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const row = (cells) => cells.map(cell).join(",");
+
+    const lines = [
+      row(["Eurasia Restaurant — Sales Report"]),
+      row(["Period", period]),
+      row(["Covering", periodLabel]),
+      row(["Generated", new Date().toLocaleString("en-US")]),
+      "",
+      row(["SUMMARY"]),
+      row(["Total Revenue", totalRevenue.toFixed(2)]),
+      row(["Total Orders", totalOrders]),
+      row(["Total Guests", totalGuests]),
+      row(["  Reserved", guestCounts.reserved]),
+      row(["  Walk-in", guestCounts.walk_in]),
+      row(["Estimated Profit (30%)", estimatedProfit.toFixed(2)]),
+      "",
+      row(["RESERVATION STATUS"]),
+      ...computedOrderStats.map((s) => row([s.label, s.value])),
+      "",
+      row(["TOP SELLING ITEMS"]),
+      ...(computedTopSelling.length === 0
+        ? [row(["No orders in this period"])]
+        : computedTopSelling.map((it) => row([it.name, it.amount]))),
+      "",
+      row(["ORDERS"]),
+      row(["Order #", "Customer", "Payment Method", "Subtotal", "Discount", "Service Fee", "Total", "Payment Status", "Date & Time"]),
+      ...(filteredOrders.length === 0
+        ? [row(["No orders in this period"])]
+        : filteredOrders.map((o) =>
+            row([
+              o.daily_number ?? o.id,
+              o.customer_name || "—",
+              o.payment_method || "—",
+              Number(o.subtotal || 0).toFixed(2),
+              Number(o.discount_amount || 0).toFixed(2),
+              Number(o.service_fee || 0).toFixed(2),
+              Number(o.total || 0).toFixed(2),
+              o.payment_status || "pending",
+              formatDBDateTime(o.created_at),
+            ])
+          )),
+      "",
+      row(["RESERVATIONS"]),
+      row(["Date", "Time", "Guest Name", "Pax", "Type", "Downpayment", "Status"]),
+      ...(filteredReservations.length === 0
+        ? [row(["No reservations in this period"])]
+        : filteredReservations.map((r) =>
+            row([
+              formatDBDate(r.reservation_date),
+              to12hFromDBTime(r.reservation_time),
+              r.guest_name,
+              r.party_size,
+              r.reservation_type === "event" ? "Event" : "Table",
+              Number(r.downpayment_amount || 0).toFixed(2),
+              r.status,
+            ])
+          )),
+    ];
+
+    // The BOM keeps Excel from mangling the peso sign and accented names
+       // The BOM keeps Excel from mangling the peso sign and accented names
+    const csv = "\uFEFF" + lines.join("\n");
+    const fileName = `eurasia-sales-${toISODate(rangeStart)}-to-${toISODate(rangeEnd)}.csv`;
+
+    // Chrome and Edge can open a real folder picker; other browsers fall back to a plain download
+    if (window.showSaveFilePicker) {
+      try {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: fileName,
+          types: [
+            {
+              description: "CSV file (opens in Excel)",
+              accept: { "text/csv": [".csv"] },
+            },
+          ],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(csv);
+        await writable.close();
+
+        setShowExportToast(true);
+        setTimeout(() => setShowExportToast(false), 3000);
+        return;
+      } catch (err) {
+        // The person closed the picker — nothing to report
+        if (err.name === "AbortError") return;
+        console.error("Save picker failed, falling back to download:", err);
+      }
+    }
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
     setShowExportToast(true);
     setTimeout(() => setShowExportToast(false), 3000);
   };
 
-  // --- Real computed stats (filtered by selected period) ---
+  // Label describing exactly what the figures cover
+  const periodLabel = (() => {
+    const long = (d) =>
+      d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+
+    if (period === "Today") {
+      return rangeStart.toLocaleDateString("en-US", {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      });
+    }
+    if (period === "Month") {
+      return rangeStart.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+    }
+    if (period === "Year") {
+      return String(rangeStart.getFullYear());
+    }
+    return `${long(rangeStart)} – ${long(rangeEnd)}`;
+  })();
+
+  // --- Real computed stats (filtered by the selected range) ---
   const totalRevenue = filteredOrders
     .filter((o) => o.payment_status === "verified")
     .reduce((sum, o) => sum + Number(o.total), 0);
 
   const totalOrders = filteredOrders.length;
-
-  const totalDiscounts = filteredOrders.reduce((sum, o) => sum + Number(o.discount_amount || 0), 0);
-
-  const activeReservations = filteredReservations.filter((r) => r.status !== "cancelled");
-  const totalGuests = activeReservations.reduce((sum, r) => sum + Number(r.party_size || 0), 0);
+  const totalGuests = guestCounts.total;
 
   const reservationStatusCounts = {
     Completed: filteredReservations.filter((r) => r.status === "completed").length,
@@ -783,20 +898,21 @@ function DashboardPage() {
     .slice(0, 3)
     .map(([name, amount]) => ({ name, amount: `Php. ${amount.toLocaleString()}` }));
 
-  const methodLabels = { cash: "Cash", gcash: "GCash", paymaya: "PayMaya", bank: "Bank Transfer", pay_later: "Pay Later" };
-  const methodColors = { cash: C.azure, gcash: C.amber, bank: C.violet, paymaya: "#f6df6d", pay_later: C.orange };
-  const nonCancelledOrders = filteredOrders.filter((o) => o.status !== "cancelled");
-  const methodCounts = {};
-  nonCancelledOrders.forEach((o) => {
-    methodCounts[o.payment_method] = (methodCounts[o.payment_method] || 0) + 1;
-  });
-  const computedPaymentMethods = Object.entries(methodCounts).map(([key, count]) => ({
-    name: methodLabels[key] || key,
-    value: nonCancelledOrders.length > 0 ? Math.round((count / nonCancelledOrders.length) * 1000) / 10 : 0,
-    color: methodColors[key] || C.inkSoft,
-  }));
-
   const estimatedProfit = totalRevenue * 0.3;
+
+  const arrowStyle = (disabled) => ({
+    border: `1px solid ${C.hair}`,
+    background: "#fff",
+    borderRadius: 8,
+    width: 32,
+    height: 32,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: disabled ? "not-allowed" : "pointer",
+    opacity: disabled ? 0.4 : 1,
+    color: C.ink,
+  });
 
   return (
     <div style={{ padding: 28 }}>
@@ -828,37 +944,58 @@ function DashboardPage() {
             boxShadow: "0 4px 24px rgba(23,3,16,0.06)",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-            <PeriodDropdown value={period} onChange={setPeriod} />
-            <Btn variant="dark" small onClick={handleExport}>
-              <Download size={14} /> Export
-            </Btn>
-          </div>
-
           <div
             style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(4, 1fr)",
-              gap: 16,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
+              flexWrap: "wrap",
             }}
           >
-            <StatCard label="Total Revenue" value={`₱ ${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2 })}`} icon={Wallet2} />
-            <StatCard label="Total Orders" value={totalOrders} icon={ShoppingBag} />
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <button onClick={() => setOffset((o) => o - 1)} style={arrowStyle(false)}>
+                <ChevronLeft size={15} />
+              </button>
+              <div
+                style={{
+                  fontSize: 13.5,
+                  color: C.ink,
+                  fontFamily: "'Prata', serif",
+                  minWidth: 200,
+                  textAlign: "center",
+                }}
+              >
+                {periodLabel}
+              </div>
+              <button
+                onClick={() => setOffset((o) => Math.min(0, o + 1))}
+                disabled={offset >= 0}
+                style={arrowStyle(offset >= 0)}
+              >
+                <ChevronRight size={15} />
+              </button>
+            </div>
+
+            <div style={{ display: "flex", gap: 10 }}>
+              <PeriodDropdown value={period} onChange={changePeriod} />
+              <Btn variant="dark" small onClick={handleExport}>
+                <Download size={14} /> Export
+              </Btn>
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
             <StatCard
-              label="Total Amount Deducted (Discounts)"
-              value={`₱ ${totalDiscounts.toLocaleString('en-US', { minimumFractionDigits: 2 })}`}
-              icon={Percent}
+              label="Total Revenue"
+              value={`₱ ${totalRevenue.toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
+              icon={Wallet2}
             />
+            <StatCard label="Total Orders" value={totalOrders} icon={ShoppingBag} />
             <StatCard label="Total Guests" value={totalGuests} icon={Users} />
           </div>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1.6fr 1fr",
-              gap: 16,
-            }}
-          >
+          <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 16 }}>
             <Card>
               <SectionTitle>Category Breakdown</SectionTitle>
               <p style={{ fontSize: 11.5, color: C.inkSoft, marginTop: -8, marginBottom: 12 }}>
@@ -876,11 +1013,7 @@ function DashboardPage() {
                     textAnchor="end"
                     interval={0}
                   />
-                  <YAxis
-                    tick={{ fontSize: 11, fill: C.inkSoft }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
+                  <YAxis tick={{ fontSize: 11, fill: C.inkSoft }} axisLine={false} tickLine={false} />
                   <Tooltip />
                   <Bar dataKey="value" fill={C.azure} radius={[6, 6, 0, 0]} />
                 </BarChart>
@@ -891,20 +1024,14 @@ function DashboardPage() {
               <SectionTitle>Top Selling Items</SectionTitle>
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 {computedTopSelling.length === 0 ? (
-                  <p style={{ fontSize: 13, color: C.inkSoft }}>No orders yet.</p>
+                  <p style={{ fontSize: 13, color: C.inkSoft }}>No orders in this period.</p>
                 ) : (
                   computedTopSelling.map((it) => (
                     <div
                       key={it.name}
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        fontSize: 14,
-                      }}
+                      style={{ display: "flex", justifyContent: "space-between", fontSize: 14 }}
                     >
-                      <span style={{ color: C.ink, fontWeight: 600 }}>
-                        {it.name}
-                      </span>
+                      <span style={{ color: C.ink, fontWeight: 600 }}>{it.name}</span>
                       <span style={{ color: C.inkSoft }}>{it.amount}</span>
                     </div>
                   ))
@@ -913,13 +1040,7 @@ function DashboardPage() {
             </Card>
           </div>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1.6fr 1fr",
-              gap: 16,
-            }}
-          >
+          <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 16 }}>
             <Card>
               <div
                 style={{
@@ -955,18 +1076,10 @@ function DashboardPage() {
                   >
                     {trendData[trendData.length - 1].value}K
                   </div>
-                  <div
-                    style={{
-                      color: C.green,
-                      fontSize: 11.5,
-                      fontWeight: 700,
-                      marginTop: 2,
-                    }}
-                  >
+                  <div style={{ color: C.green, fontSize: 11.5, fontWeight: 700, marginTop: 2 }}>
                     +{" "}
                     {(
-                      ((trendData[trendData.length - 1].value -
-                        trendData[trendData.length - 2].value) /
+                      ((trendData[trendData.length - 1].value - trendData[trendData.length - 2].value) /
                         trendData[trendData.length - 2].value) *
                       100
                     ).toFixed(1)}
@@ -976,38 +1089,21 @@ function DashboardPage() {
               </div>
 
               <ResponsiveContainer width="100%" height={200}>
-                <AreaChart
-                  data={trendData}
-                  margin={{ top: 5, right: 5, left: -20, bottom: 0 }}
-                >
+                <AreaChart data={trendData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
                   <defs>
-                    <linearGradient
-                      id="salesGradient"
-                      x1="0"
-                      y1="0"
-                      x2="0"
-                      y2="1"
-                    >
+                    <linearGradient id="salesGradient" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor={C.azure} stopOpacity={0.35} />
                       <stop offset="95%" stopColor={C.azure} stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid
-                    vertical={false}
-                    stroke={C.hair}
-                    strokeDasharray="4 4"
-                  />
+                  <CartesianGrid vertical={false} stroke={C.hair} strokeDasharray="4 4" />
                   <XAxis
                     dataKey="label"
                     tick={{ fontSize: 10, fill: C.inkSoft }}
                     axisLine={false}
                     tickLine={false}
                   />
-                  <YAxis
-                    tick={{ fontSize: 11, fill: C.inkSoft }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
+                  <YAxis tick={{ fontSize: 11, fill: C.inkSoft }} axisLine={false} tickLine={false} />
                   <Tooltip />
                   <Area
                     type="monotone"
@@ -1031,52 +1127,21 @@ function DashboardPage() {
                 {computedOrderStats.map((s) => (
                   <div
                     key={s.label}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                    }}
+                    style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
                   >
-                    <span
-                      style={{
-                        fontSize: 13.5,
-                        color: C.ink,
-                        fontWeight: 600,
-                      }}
-                    >
-                      {s.label}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: 15,
-                        fontWeight: 700,
-                        color: s.color,
-                      }}
-                    >
-                      {s.value}
-                    </span>
+                    <span style={{ fontSize: 13.5, color: C.ink, fontWeight: 600 }}>{s.label}</span>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: s.color }}>{s.value}</span>
                   </div>
                 ))}
               </div>
             </Card>
           </div>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: 16,
-            }}
-          >
-
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
             <Card>
               <SectionTitle>Revenue &amp; Profit Summary</SectionTitle>
               <div style={{ marginBottom: 18 }}>
-                <div
-                  style={{ color: C.inkSoft, fontSize: 12.5, fontWeight: 600 }}
-                >
-                  Total Revenue
-                </div>
+                <div style={{ color: C.inkSoft, fontSize: 12.5, fontWeight: 600 }}>Total Revenue</div>
                 <div
                   style={{
                     fontFamily: "'Prata', serif",
@@ -1085,13 +1150,11 @@ function DashboardPage() {
                     WebkitTextStroke: "0.4px " + C.green,
                   }}
                 >
-                  ₱ {totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  ₱ {totalRevenue.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                 </div>
               </div>
               <div>
-                <div
-                  style={{ color: C.inkSoft, fontSize: 12.5, fontWeight: 600 }}
-                >
+                <div style={{ color: C.inkSoft, fontSize: 12.5, fontWeight: 600 }}>
                   Estimated Profit (30% margin)
                 </div>
                 <div
@@ -1102,7 +1165,7 @@ function DashboardPage() {
                     WebkitTextStroke: "0.4px " + C.green,
                   }}
                 >
-                  ₱ {estimatedProfit.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  ₱ {estimatedProfit.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                 </div>
               </div>
             </Card>
@@ -1163,54 +1226,63 @@ function CashierPage() {
 }
 
 function to12hFromDBTime(timeStr) {
-  if (!timeStr) return '';
-  // Handle Date object (from db.js without dateStrings) or "HH:MM:SS" string
+  if (!timeStr) return "";
   if (timeStr instanceof Date) {
     timeStr = timeStr.toTimeString().slice(0, 8);
   }
-  const [h, m] = String(timeStr).split(':').map(Number);
-  if (isNaN(h)) return '';
-  const period = h >= 12 ? 'pm' : 'am';
+  const [h, m] = String(timeStr).split(":").map(Number);
+  if (isNaN(h)) return "";
+  const period = h >= 12 ? "pm" : "am";
   const hour12 = h % 12 === 0 ? 12 : h % 12;
-  return `${hour12}:${String(m).padStart(2, '0')} ${period}`;
+  return `${hour12}:${String(m).padStart(2, "0")} ${period}`;
 }
 
 function formatDBDate(isoDate) {
-  if (!isoDate) return '';
+  if (!isoDate) return "";
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   let y, m, d;
-  // Handle Date object (from db.js without dateStrings) or "YYYY-MM-DD" string
   if (isoDate instanceof Date) {
     y = isoDate.getFullYear();
     m = isoDate.getMonth() + 1;
     d = isoDate.getDate();
   } else {
-    [y, m, d] = String(isoDate).slice(0, 10).split('-').map(Number);
+    [y, m, d] = String(isoDate).slice(0, 10).split("-").map(Number);
   }
   if (!y || !m || !d) return String(isoDate);
   return `${months[m - 1]} ${d}, ${y}`;
 }
 
 function formatDBDateTime(isoString) {
-  if (!isoString) return '';
+  if (!isoString) return "";
   const d = new Date(isoString);
   if (isNaN(d.getTime())) return String(isoString);
-  return d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+  return d.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 function HistoryPage() {
   const [tab, setTab] = useState("reservations");
-  const [completedReservations, setCompletedReservations] = useState([]);
+  const [pastReservations, setPastReservations] = useState([]);
   const [completedOrders, setCompletedOrders] = useState([]);
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [sortNewest, setSortNewest] = useState(true);
 
   useEffect(() => {
     Promise.all([reservationsApi.getAll(), ordersApi.getAll()])
       .then(([reservationsData, ordersData]) => {
-        setCompletedReservations(reservationsData.filter((r) => r.status === "completed"));
+        setPastReservations(
+          reservationsData.filter((r) => ["completed", "cancelled", "no_show"].includes(r.status))
+        );
         setCompletedOrders(ordersData.filter((o) => ["ready", "served", "completed"].includes(o.status)));
-        setPayments(ordersData.filter((o) => o.payment_status === "verified" || o.payment_status === "failed"));
+        setPayments(
+          ordersData.filter((o) => o.payment_status === "verified" || o.payment_status === "failed")
+        );
       })
       .catch((err) => console.error("Failed to load history:", err))
       .finally(() => setLoading(false));
@@ -1222,13 +1294,45 @@ function HistoryPage() {
     { key: "payments", label: "Payments" },
   ];
 
+    // Newest first by default; the toggle flips it
+  const sortByDate = (list, dateKey) =>
+    [...list].sort((a, b) => {
+      const diff = new Date(b[dateKey]) - new Date(a[dateKey]);
+      return sortNewest ? diff : -diff;
+    });
+
+  const sortedReservations = sortByDate(pastReservations, "reservation_date");
+  const sortedOrders = sortByDate(completedOrders, "created_at");
+  const sortedPayments = sortByDate(payments, "created_at");
+
+  const cellStyle = { padding: "12px 20px", borderBottom: `1px solid ${C.hair}` };
+
   return (
     <div style={{ padding: 28 }}>
-      <div style={{ fontFamily: "'Prata', serif", fontSize: 39, color: C.ink, WebkitTextStroke: "0.4px " + C.ink, marginBottom: 20 }}>
+      <div
+        style={{
+          fontFamily: "'Prata', serif",
+          fontSize: 39,
+          color: C.ink,
+          WebkitTextStroke: "0.4px " + C.ink,
+          marginBottom: 20,
+        }}
+      >
         History
       </div>
 
-      <div style={{ display: "flex", gap: 6, background: "#fff", padding: 4, borderRadius: 10, width: "fit-content", marginBottom: 20, boxShadow: "0 1px 3px rgba(23,3,16,0.06)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+        <div
+          style={{
+            display: "flex",
+            gap: 6,
+            background: "#fff",
+            padding: 4,
+            borderRadius: 10,
+            width: "fit-content",
+            boxShadow: "0 1px 3px rgba(23,3,16,0.06)",
+          }}
+        >
         {tabs.map((t) => (
           <button
             key={t.key}
@@ -1247,6 +1351,27 @@ function HistoryPage() {
             {t.label}
           </button>
         ))}
+        </div>
+
+        <button
+          onClick={() => setSortNewest((prev) => !prev)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            border: `1px solid ${C.hair}`,
+            borderRadius: 10,
+            padding: "9px 16px",
+            fontSize: 13,
+            fontFamily: "'Prata', serif",
+            background: "#fff",
+            color: C.ink,
+            cursor: "pointer",
+          }}
+        >
+          {sortNewest ? "Newest first" : "Oldest first"}
+          <ArrowUpDown size={14} />
+        </button>
       </div>
 
       {loading ? (
@@ -1255,25 +1380,35 @@ function HistoryPage() {
         <>
           {tab === "reservations" && (
             <Card style={{ padding: 0 }}>
-              {completedReservations.length === 0 ? (
-                <div style={{ padding: 32, textAlign: "center", color: C.inkSoft, fontSize: 13 }}>No completed reservations yet.</div>
+              {sortedReservations.length === 0 ? (
+                <div style={{ padding: 32, textAlign: "center", color: C.inkSoft, fontSize: 13 }}>
+                  No reservation history yet.
+                </div>
               ) : (
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
                   <thead>
                     <tr style={{ textAlign: "left", fontSize: 12, color: C.inkSoft }}>
-                      {["Date", "Time", "Name", "Table", "Pax"].map((h) => (
-                        <th key={h} style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{h}</th>
+                      {["Date", "Time", "Name", "Pax", "Status"].map((h) => (
+                        <th key={h} style={cellStyle}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {completedReservations.map((r) => (
+                    {sortedReservations.map((r) => (
                       <tr key={r.id} style={{ fontSize: 13.5 }}>
-                        <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{formatDBDate(r.reservation_date)}</td>
-                        <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{to12hFromDBTime(r.reservation_time)}</td>
-                        <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{r.guest_name}</td>
-                        <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{r.table_number || '—'}</td>
-                        <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{r.party_size}</td>
+                        <td style={cellStyle}>{formatDBDate(r.reservation_date)}</td>
+                        <td style={cellStyle}>{to12hFromDBTime(r.reservation_time)}</td>
+                        <td style={cellStyle}>{r.guest_name}</td>
+                        <td style={cellStyle}>{r.party_size}</td>
+                        <td style={cellStyle}>
+                          <Badge tone={r.status === "completed" ? "green" : "red"}>
+                            {r.status === "completed"
+                              ? "Completed"
+                              : r.status === "no_show"
+                              ? "No Show"
+                              : "Cancelled"}
+                          </Badge>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1284,24 +1419,26 @@ function HistoryPage() {
 
           {tab === "orders" && (
             <Card style={{ padding: 0 }}>
-              {completedOrders.length === 0 ? (
-                <div style={{ padding: 32, textAlign: "center", color: C.inkSoft, fontSize: 13 }}>No completed orders yet.</div>
+              {sortedOrders.length === 0 ? (
+                <div style={{ padding: 32, textAlign: "center", color: C.inkSoft, fontSize: 13 }}>
+                  No completed orders yet.
+                </div>
               ) : (
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
                   <thead>
                     <tr style={{ textAlign: "left", fontSize: 12, color: C.inkSoft }}>
-                      {["Order #", "Table", "Total", "Date & Time"].map((h) => (
-                        <th key={h} style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{h}</th>
+                      {["Order #", "Customer", "Total", "Date & Time"].map((h) => (
+                        <th key={h} style={cellStyle}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {completedOrders.map((o) => (
+                    {sortedOrders.map((o) => (
                       <tr key={o.id} style={{ fontSize: 13.5 }}>
-                        <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{o.id}</td>
-                        <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{o.table_number}</td>
-                        <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>Php. {Number(o.total).toLocaleString()}</td>
-                        <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}`, color: C.inkSoft }}>{formatDBDateTime(o.created_at)}</td>
+                        <td style={cellStyle}>{o.daily_number ?? o.id}</td>
+                        <td style={cellStyle}>{o.customer_name || "—"}</td>
+                        <td style={cellStyle}>Php. {Number(o.total).toLocaleString()}</td>
+                        <td style={{ ...cellStyle, color: C.inkSoft }}>{formatDBDateTime(o.created_at)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1312,30 +1449,34 @@ function HistoryPage() {
 
           {tab === "payments" && (
             <Card style={{ padding: 0 }}>
-              {payments.length === 0 ? (
-                <div style={{ padding: 32, textAlign: "center", color: C.inkSoft, fontSize: 13 }}>No payment history yet.</div>
+              {sortedPayments.length === 0 ? (
+                <div style={{ padding: 32, textAlign: "center", color: C.inkSoft, fontSize: 13 }}>
+                  No payment history yet.
+                </div>
               ) : (
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
                   <thead>
                     <tr style={{ textAlign: "left", fontSize: 12, color: C.inkSoft }}>
-                      {["Order #", "Table", "Method", "Amount", "Status", "Date & Time"].map((h) => (
-                        <th key={h} style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{h}</th>
+                      {["Order #", "Customer", "Method", "Amount", "Status", "Date & Time"].map((h) => (
+                        <th key={h} style={cellStyle}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {payments.map((p) => (
+                    {sortedPayments.map((p) => (
                       <tr key={p.id} style={{ fontSize: 13.5 }}>
-                        <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{p.id}</td>
-                        <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>{p.table_number}</td>
-                        <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}`, textTransform: "capitalize" }}>{p.payment_method}</td>
-                        <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>Php. {Number(p.total).toLocaleString()}</td>
-                        <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}` }}>
+                        <td style={cellStyle}>{p.daily_number ?? p.id}</td>
+                        <td style={cellStyle}>{p.customer_name || "—"}</td>
+                        <td style={{ ...cellStyle, textTransform: "capitalize" }}>
+                          {p.payment_method || "—"}
+                        </td>
+                        <td style={cellStyle}>Php. {Number(p.total).toLocaleString()}</td>
+                        <td style={cellStyle}>
                           <Badge tone={p.payment_status === "verified" ? "green" : "red"}>
                             {p.payment_status === "verified" ? "Completed" : "Failed"}
                           </Badge>
                         </td>
-                        <td style={{ padding: "12px 20px", borderBottom: `1px solid ${C.hair}`, color: C.inkSoft }}>{formatDBDateTime(p.created_at)}</td>
+                        <td style={{ ...cellStyle, color: C.inkSoft }}>{formatDBDateTime(p.created_at)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1358,6 +1499,7 @@ const PAGES = {
 };
 
 export default function EurasiaAdmin() {
+  const navigate = useNavigate();
   const [active, setActiveState] = useState(
     () => localStorage.getItem("eurasia_admin_active_tab") || "dashboard"
   );
@@ -1366,36 +1508,55 @@ export default function EurasiaAdmin() {
     localStorage.setItem("eurasia_admin_active_tab", key);
   };
   const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+  const handleLogout = () => {
+    localStorage.removeItem("eurasia_role");
+    localStorage.removeItem("eurasia_name");
+    localStorage.removeItem("eurasia_token");
+    navigate("/login");
+  };
+
   const page = PAGES[active];
   const Page = page.Comp;
 
   return (
     <div style={{ fontFamily: "'Prata', serif", textAlign: "left" }}>
       <style>{`
-  ${FONT_IMPORT}
-  * { box-sizing: border-box; }
-  .sidebar-nav-item:hover .sidebar-tooltip {
-    opacity: 1 !important;
-  }
-`}</style>
-      <div
-        style={{ minHeight: "100vh", background: C.canvas, textAlign: "left" }}
-      >
+        ${FONT_IMPORT}
+        * { box-sizing: border-box; }
+        .sidebar-nav-item:hover .sidebar-tooltip {
+          opacity: 1 !important;
+        }
+      `}</style>
+
+      <div style={{ minHeight: "100vh", background: C.canvas, textAlign: "left" }}>
         <TopHeader onLogoClick={() => setSidebarOpen((prev) => !prev)} />
         <div style={{ display: "flex" }}>
           <Sidebar
             active={active}
             setActive={setActive}
             collapsed={!sidebarOpen}
+            onLogout={() => setShowLogoutConfirm(true)}
           />
           <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-            <Topbar setActive={setActive} />
             <div style={{ flex: 1, overflow: "auto" }}>
               <Page />
             </div>
           </div>
         </div>
       </div>
+
+      <ConfirmModal
+        open={showLogoutConfirm}
+        title="Log out?"
+        message="You'll need to log in again to access the admin panel."
+        confirmLabel="Log Out"
+        danger
+        onConfirm={handleLogout}
+        onCancel={() => setShowLogoutConfirm(false)}
+      />
     </div>
   );
 }

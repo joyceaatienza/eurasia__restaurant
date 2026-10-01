@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import { ChevronLeft, ChevronRight, ChevronDown, X } from "lucide-react";
 import { reservationsApi } from "../services/reservationsApi";
+import { guestsApi } from "../services/guestsApi";
 import StaffHeader from "../components/StaffHeader";
 
 /* ---------------------------------------------------------------- */
@@ -511,6 +512,79 @@ function HistoryView({ reservations, onViewProof }) {
 }
 
 /* ---------------------------------------------------------------- */
+/* Guests today — reserved arrivals plus walk-ins                    */
+/* ---------------------------------------------------------------- */
+function GuestCard({ counts, onAddWalkIn, busy }) {
+  const [input, setInput] = useState("");
+
+  const handleAdd = async () => {
+    const value = Number(input);
+    if (!value || value < 1) return;
+    await onAddWalkIn(value);
+    setInput("");
+  };
+
+  return (
+    <Card style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
+      <div style={{ textAlign: "left" }}>
+        <div style={{ fontSize: 12, color: C.inkSoft, fontFamily: FONT, marginBottom: 4 }}>
+          Guests Today
+        </div>
+        <div
+          style={{ fontSize: 34, fontFamily: FONT, color: C.ink, lineHeight: 1.1, WebkitTextStroke: "0.5px " + C.ink }}
+        >
+          {counts.total}
+        </div>
+        <div style={{ fontSize: 11.5, color: C.inkSoft, fontFamily: FONT, marginTop: 4 }}>
+          {counts.reserved} reserved · {counts.walk_in} walk-in
+        </div>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ fontSize: 12, color: C.inkSoft, fontFamily: FONT }}>Walk-in guests</span>
+        <input
+          type="number"
+          min="1"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+          placeholder="0"
+          style={{
+            width: 70,
+            padding: "8px 12px",
+            borderRadius: 8,
+            border: `1px solid ${C.hair}`,
+            fontSize: 13,
+            fontFamily: FONT,
+            color: C.ink,
+            textAlign: "center",
+            outline: "none",
+          }}
+        />
+        <button
+          onClick={handleAdd}
+          disabled={busy || !input}
+          style={{
+            border: "none",
+            borderRadius: 8,
+            padding: "9px 20px",
+            fontSize: 12.5,
+            fontWeight: 700,
+            fontFamily: FONT,
+            background: C.void,
+            color: "#f5e9d8",
+            cursor: busy || !input ? "not-allowed" : "pointer",
+            opacity: busy || !input ? 0.5 : 1,
+          }}
+        >
+          {busy ? "Adding..." : "Add"}
+        </button>
+      </div>
+    </Card>
+  );
+}
+
+/* ---------------------------------------------------------------- */
 /* Day view                                                           */
 /* ---------------------------------------------------------------- */
 function DayView({ selectedISO, reservations, markStatus, highlightId, highlightRef, onViewProof }) {
@@ -631,6 +705,8 @@ export default function Reservations({ embedded = false, highlightTarget = null 
   const [loading, setLoading] = useState(true);
   const [highlightId, setHighlightId] = useState(null);
   const [proofTarget, setProofTarget] = useState(null);
+  const [guestCounts, setGuestCounts] = useState({ reserved: 0, walk_in: 0, total: 0 });
+  const [addingWalkIn, setAddingWalkIn] = useState(false);
   const highlightRef = useRef(null);
 
   const loadReservations = useCallback(() => {
@@ -644,6 +720,29 @@ export default function Reservations({ embedded = false, highlightTarget = null 
   useEffect(() => {
     loadReservations();
   }, [loadReservations]);
+
+    const loadGuestCounts = useCallback(() => {
+    guestsApi.getToday()
+      .then(setGuestCounts)
+      .catch((err) => console.error("Failed to load guest counts:", err));
+  }, []);
+
+  useEffect(() => {
+    loadGuestCounts();
+  }, [loadGuestCounts]);
+
+  const handleAddWalkIn = async (count) => {
+    try {
+      setAddingWalkIn(true);
+      await guestsApi.addWalkIn(count);
+      loadGuestCounts();
+    } catch (err) {
+      console.error(err);
+      alert(err.message || "Failed to record walk-in guests.");
+    } finally {
+      setAddingWalkIn(false);
+    }
+  };
 
   // Jump to and highlight a reservation when arriving from a notification
   useEffect(() => {
@@ -674,8 +773,9 @@ export default function Reservations({ embedded = false, highlightTarget = null 
 
     const backendStatus = STATUS_TO_BACKEND[status] || "pending";
     try {
-      await reservationsApi.updateStatus(id, backendStatus);
+       await reservationsApi.updateStatus(id, backendStatus);
       setReservations((prev) => prev.map((r) => (r.id === id ? { ...r, status } : r)));
+      loadGuestCounts();
     } catch (err) {
       console.error("Failed to update status:", err);
       alert("Failed to update reservation status. Please try again.");
@@ -745,6 +845,10 @@ export default function Reservations({ embedded = false, highlightTarget = null 
             ))}
           </div>
         </div>
+
+         {!isHistory && (
+          <GuestCard counts={guestCounts} onAddWalkIn={handleAddWalkIn} busy={addingWalkIn} />
+        )}
 
         {loading ? (
           <Card style={{ textAlign: "center", padding: 40, color: C.inkSoft, fontFamily: FONT }}>Loading reservations...</Card>

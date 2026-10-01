@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { UserRound, LogOut, Settings, Bell } from "lucide-react";
 import logo from "../assets/logopic3.png";
-import SettingsModal from "./SettingsModal";
 import { ordersApi } from "../services/ordersApi";
 import { reservationsApi } from "../services/reservationsApi";
 

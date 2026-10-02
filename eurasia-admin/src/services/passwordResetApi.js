@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:5000/api/password-reset';
+const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000') + '/api/password-reset';
 
 async function handle(res) {
   const data = await res.json().catch(() => ({}));

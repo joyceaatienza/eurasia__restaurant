@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:5000/api/reservations';
+const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000') + '/api/reservations';
 
 // Reads the error message sent by the backend (if any),
 // so the browser console shows the real reason instead of a generic message

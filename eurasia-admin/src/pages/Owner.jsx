@@ -56,6 +56,8 @@ const C = {
 const FONT_IMPORT =
   "@import url('https://fonts.googleapis.com/css2?family=Prata&display=swap');";
 
+const POLL_MS = 10000;
+
 const categoryBreakdown = [
   { name: "Appetizers", value: 2400 },
   { name: "Main Courses", value: 3800 },
@@ -108,6 +110,50 @@ const salesTrendByPeriod = {
     { label: "Jan '26", value: 20 },
   ],
 };
+
+/* ---------------------------------------------------------------- */
+/* Date helpers                                                      */
+/* ---------------------------------------------------------------- */
+// The API sends dates as UTC timestamps, so parse them into local date
+// parts — slicing the raw string lands on the previous day in UTC+8
+function to12hFromDBTime(timeStr) {
+  if (!timeStr) return "";
+  if (timeStr instanceof Date) {
+    timeStr = timeStr.toTimeString().slice(0, 8);
+  }
+  const [h, m] = String(timeStr).split(":").map(Number);
+  if (isNaN(h)) return "";
+  const period = h >= 12 ? "pm" : "am";
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return `${hour12}:${String(m).padStart(2, "0")} ${period}`;
+}
+
+function formatDBDate(value) {
+  if (!value) return "";
+  const d = value instanceof Date ? value : new Date(value);
+  if (isNaN(d.getTime())) return String(value);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function formatDBDateTime(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return String(value);
+  return d.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function toISODate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 
 function Btn({ children, variant = "primary", onClick, small }) {
   const base = {
@@ -498,7 +544,6 @@ function Sidebar({ active, setActive, collapsed, onLogout }) {
               zIndex: 20,
             }}
           >
-
             <button
               onClick={() => {
                 onLogout();
@@ -684,13 +729,6 @@ function getPeriodRange(period, offset) {
   return { start, end };
 }
 
-function toISODate(d) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
 function DashboardPage() {
   const [period, setPeriod] = useState("Today");
   const [offset, setOffset] = useState(0);
@@ -720,6 +758,24 @@ function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [period, offset]);
 
+  // Keep the figures current while the owner is watching — no spinner on polls
+  useEffect(() => {
+    const interval = setInterval(() => {
+      Promise.all([ordersApi.getAll(), reservationsApi.getAll()])
+        .then(([ordersData, reservationsData]) => {
+          setOrders(ordersData);
+          setReservations(reservationsData);
+        })
+        .catch((err) => console.error("Dashboard poll failed:", err));
+
+      guestsApi.getCounts(toISODate(rangeStart), toISODate(rangeEnd))
+        .then(setGuestCounts)
+        .catch((err) => console.error("Guest count poll failed:", err));
+    }, POLL_MS);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [period, offset]);
+
   // Going back to the current period resets the offset
   const changePeriod = (p) => {
     setPeriod(p);
@@ -736,8 +792,65 @@ function DashboardPage() {
 
   const trendData = salesTrendByPeriod[period] || salesTrendByPeriod.Year;
 
+  // Label describing exactly what the figures cover
+  const periodLabel = (() => {
+    const long = (d) =>
+      d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+
+    if (period === "Today") {
+      return rangeStart.toLocaleDateString("en-US", {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      });
+    }
+    if (period === "Month") {
+      return rangeStart.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+    }
+    if (period === "Year") {
+      return String(rangeStart.getFullYear());
+    }
+    return `${long(rangeStart)} – ${long(rangeEnd)}`;
+  })();
+
+  // --- Real computed stats (filtered by the selected range) ---
+  const totalRevenue = filteredOrders
+    .filter((o) => o.payment_status === "verified")
+    .reduce((sum, o) => sum + Number(o.total), 0);
+
+  const totalOrders = filteredOrders.length;
+  const totalGuests = guestCounts.total;
+
+  const reservationStatusCounts = {
+    Completed: filteredReservations.filter((r) => r.status === "completed").length,
+    Pending: filteredReservations.filter((r) => ["pending", "confirmed", "seated"].includes(r.status)).length,
+    Cancelled: filteredReservations.filter((r) => r.status === "cancelled").length,
+    "No Shows": filteredReservations.filter((r) => r.status === "no_show").length,
+  };
+  const computedOrderStats = [
+    { label: "Completed", value: reservationStatusCounts.Completed, color: C.green },
+    { label: "Pending", value: reservationStatusCounts.Pending, color: C.amber },
+    { label: "Cancelled", value: reservationStatusCounts.Cancelled, color: C.red },
+    { label: "No Shows", value: reservationStatusCounts["No Shows"], color: C.inkSoft },
+  ];
+
+  const itemTotals = {};
+  filteredOrders.forEach((o) => {
+    (o.items || []).forEach((it) => {
+      const key = it.item_name;
+      itemTotals[key] = (itemTotals[key] || 0) + Number(it.price) * Number(it.quantity);
+    });
+  });
+  const computedTopSelling = Object.entries(itemTotals)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([name, amount]) => ({ name, amount: `Php. ${amount.toLocaleString()}` }));
+
+  const estimatedProfit = totalRevenue * 0.3;
+
   const handleExport = async () => {
-        // Wrap each cell so commas inside names don't break the columns
+    // Wrap each cell so commas inside names don't break the columns
     const cell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
     const row = (cells) => cells.map(cell).join(",");
 
@@ -799,7 +912,6 @@ function DashboardPage() {
     ];
 
     // The BOM keeps Excel from mangling the peso sign and accented names
-       // The BOM keeps Excel from mangling the peso sign and accented names
     const csv = "\uFEFF" + lines.join("\n");
     const fileName = `eurasia-sales-${toISODate(rangeStart)}-to-${toISODate(rangeEnd)}.csv`;
 
@@ -842,63 +954,6 @@ function DashboardPage() {
     setShowExportToast(true);
     setTimeout(() => setShowExportToast(false), 3000);
   };
-
-  // Label describing exactly what the figures cover
-  const periodLabel = (() => {
-    const long = (d) =>
-      d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-
-    if (period === "Today") {
-      return rangeStart.toLocaleDateString("en-US", {
-        weekday: "long",
-        month: "long",
-        day: "numeric",
-        year: "numeric",
-      });
-    }
-    if (period === "Month") {
-      return rangeStart.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-    }
-    if (period === "Year") {
-      return String(rangeStart.getFullYear());
-    }
-    return `${long(rangeStart)} – ${long(rangeEnd)}`;
-  })();
-
-  // --- Real computed stats (filtered by the selected range) ---
-  const totalRevenue = filteredOrders
-    .filter((o) => o.payment_status === "verified")
-    .reduce((sum, o) => sum + Number(o.total), 0);
-
-  const totalOrders = filteredOrders.length;
-  const totalGuests = guestCounts.total;
-
-  const reservationStatusCounts = {
-    Completed: filteredReservations.filter((r) => r.status === "completed").length,
-    Pending: filteredReservations.filter((r) => ["pending", "confirmed", "seated"].includes(r.status)).length,
-    Cancelled: filteredReservations.filter((r) => r.status === "cancelled").length,
-    "No Shows": filteredReservations.filter((r) => r.status === "no_show").length,
-  };
-  const computedOrderStats = [
-    { label: "Completed", value: reservationStatusCounts.Completed, color: C.green },
-    { label: "Pending", value: reservationStatusCounts.Pending, color: C.amber },
-    { label: "Cancelled", value: reservationStatusCounts.Cancelled, color: C.red },
-    { label: "No Shows", value: reservationStatusCounts["No Shows"], color: C.inkSoft },
-  ];
-
-  const itemTotals = {};
-  filteredOrders.forEach((o) => {
-    (o.items || []).forEach((it) => {
-      const key = it.item_name;
-      itemTotals[key] = (itemTotals[key] || 0) + Number(it.price) * Number(it.quantity);
-    });
-  });
-  const computedTopSelling = Object.entries(itemTotals)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3)
-    .map(([name, amount]) => ({ name, amount: `Php. ${amount.toLocaleString()}` }));
-
-  const estimatedProfit = totalRevenue * 0.3;
 
   const arrowStyle = (disabled) => ({
     border: `1px solid ${C.hair}`,
@@ -1225,46 +1280,6 @@ function CashierPage() {
   return <PaymentTransactions embedded />;
 }
 
-function to12hFromDBTime(timeStr) {
-  if (!timeStr) return "";
-  if (timeStr instanceof Date) {
-    timeStr = timeStr.toTimeString().slice(0, 8);
-  }
-  const [h, m] = String(timeStr).split(":").map(Number);
-  if (isNaN(h)) return "";
-  const period = h >= 12 ? "pm" : "am";
-  const hour12 = h % 12 === 0 ? 12 : h % 12;
-  return `${hour12}:${String(m).padStart(2, "0")} ${period}`;
-}
-
-function formatDBDate(isoDate) {
-  if (!isoDate) return "";
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  let y, m, d;
-  if (isoDate instanceof Date) {
-    y = isoDate.getFullYear();
-    m = isoDate.getMonth() + 1;
-    d = isoDate.getDate();
-  } else {
-    [y, m, d] = String(isoDate).slice(0, 10).split("-").map(Number);
-  }
-  if (!y || !m || !d) return String(isoDate);
-  return `${months[m - 1]} ${d}, ${y}`;
-}
-
-function formatDBDateTime(isoString) {
-  if (!isoString) return "";
-  const d = new Date(isoString);
-  if (isNaN(d.getTime())) return String(isoString);
-  return d.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
 function HistoryPage() {
   const [tab, setTab] = useState("reservations");
   const [pastReservations, setPastReservations] = useState([]);
@@ -1294,7 +1309,7 @@ function HistoryPage() {
     { key: "payments", label: "Payments" },
   ];
 
-    // Newest first by default; the toggle flips it
+  // Newest first by default; the toggle flips it
   const sortByDate = (list, dateKey) =>
     [...list].sort((a, b) => {
       const diff = new Date(b[dateKey]) - new Date(a[dateKey]);
@@ -1333,24 +1348,24 @@ function HistoryPage() {
             boxShadow: "0 1px 3px rgba(23,3,16,0.06)",
           }}
         >
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            style={{
-              border: "none",
-              borderRadius: 8,
-              padding: "9px 18px",
-              fontSize: 13,
-              fontFamily: "'Prata', serif",
-              cursor: "pointer",
-              background: tab === t.key ? C.void : "transparent",
-              color: tab === t.key ? "#f5e9d8" : C.ink,
-            }}
-          >
-            {t.label}
-          </button>
-        ))}
+          {tabs.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              style={{
+                border: "none",
+                borderRadius: 8,
+                padding: "9px 18px",
+                fontSize: 13,
+                fontFamily: "'Prata', serif",
+                cursor: "pointer",
+                background: tab === t.key ? C.void : "transparent",
+                color: tab === t.key ? "#f5e9d8" : C.ink,
+              }}
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
 
         <button
@@ -1508,7 +1523,6 @@ export default function EurasiaAdmin() {
     localStorage.setItem("eurasia_admin_active_tab", key);
   };
   const [sidebarOpen, setSidebarOpen] = useState(true);
-
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const handleLogout = () => {

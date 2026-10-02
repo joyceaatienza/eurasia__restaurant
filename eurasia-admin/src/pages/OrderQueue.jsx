@@ -15,6 +15,7 @@ const REVERSE_STATUS_MAP = {
   Preparing: 'preparing',
   Ready: 'ready',
 };
+const POLL_MS = 10000;
 
 function normalizeOrder(o) {
   const createdAt = new Date(o.created_at);
@@ -60,7 +61,7 @@ function assignDailyNumbers(orders) {
 export default function OrderQueue({ embedded = false }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [toast, setToast] = useState("");
+  const [toast, setToast] = useState({ message: "", tone: "success" });
   const [view, setView] = useState("active");
 
   const loadOrders = useCallback(() => {
@@ -71,14 +72,25 @@ export default function OrderQueue({ embedded = false }) {
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => {
+   useEffect(() => {
     loadOrders();
   }, [loadOrders]);
 
-  const showToast = (message) => {
-    setToast(message);
-    setTimeout(() => setToast(""), 2500);
+  // New orders should land on the kitchen screen on their own
+  useEffect(() => {
+    const interval = setInterval(() => {
+      ordersApi.getAll({ today_only: 'true' })
+        .then((data) => setOrders(assignDailyNumbers(data.map(normalizeOrder))))
+        .catch((err) => console.error('Order poll failed:', err));
+    }, POLL_MS);
+    return () => clearInterval(interval);
+  }, []);
+
+  const showToast = (message, tone = "success") => {
+    setToast({ message, tone });
+    setTimeout(() => setToast({ message: "", tone }), 3000);
   };
+  const showError = (message) => showToast(message, "error");
 
   const handleToggleItem = async (orderId, itemId) => {
     try {
@@ -92,7 +104,7 @@ export default function OrderQueue({ embedded = false }) {
       );
     } catch (err) {
       console.error(err);
-      alert("Failed to update item. Please try again.");
+      showError("Failed to update item. Please try again.");
     }
   };
 
@@ -106,7 +118,7 @@ export default function OrderQueue({ embedded = false }) {
       showToast(nextStatus === 'Preparing' ? `Order ${order.displayNo} is now preparing` : `Order ${order.displayNo} marked as ready`);
     } catch (err) {
       console.error(err);
-      alert("Failed to update order status. Please try again.");
+      showError("Failed to update order status. Please try again.");
     }
   };
 
@@ -194,7 +206,7 @@ export default function OrderQueue({ embedded = false }) {
                         </div>
 
                         <div className="text-xs text-gray-600 mb-4 space-y-0.5 font-[Prata]">
-                          <p>{order.customer} | {order.table}</p>
+                          <p>{order.customer}</p>
                           <p className="text-gray-500">{order.time}</p>
                         </div>
 
@@ -268,7 +280,7 @@ export default function OrderQueue({ embedded = false }) {
                   <table className="w-full text-left">
                     <thead>
                       <tr className="text-xs text-gray-500 border-b border-gray-100">
-                        {["Order #", "Customer", "Table", "Total", "Date & Time"].map((h) => (
+                        {["Order #", "Customer", "Total", "Date & Time"].map((h) => (
                           <th key={h} className="px-6 py-4 font-[Prata] font-normal">{h}</th>
                         ))}
                       </tr>
@@ -278,7 +290,6 @@ export default function OrderQueue({ embedded = false }) {
                         <tr key={o.id} className="border-b border-gray-100 last:border-0 text-sm">
                           <td className="px-6 py-4" style={{ WebkitTextStroke: "0.3px #1d080f" }}>{o.displayNo}</td>
                           <td className="px-6 py-4">{o.customer}</td>
-                          <td className="px-6 py-4">{o.table}</td>
                           <td className="px-6 py-4">Php. {o.total?.toLocaleString?.() ?? o.total}</td>
                           <td className="px-6 py-4 text-gray-500">{o.date} · {o.time}</td>
                         </tr>
@@ -292,13 +303,13 @@ export default function OrderQueue({ embedded = false }) {
         )}
       </main>
 
-      {toast && (
+      {toast.message && (
         <div
           style={{
             position: "fixed",
             bottom: 28,
             right: 28,
-            background: "#1d080f",
+            background: toast.tone === "error" ? "#c0392b" : "#1d080f",
             color: "#fff",
             padding: "14px 20px",
             borderRadius: 10,
@@ -307,14 +318,27 @@ export default function OrderQueue({ embedded = false }) {
             display: "flex",
             alignItems: "center",
             gap: 10,
-            zIndex: 100,
+            zIndex: 300,
+            maxWidth: 340,
           }}
           className="font-[Prata]"
         >
-          <span style={{ background: "#296c39", borderRadius: "50%", width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12 }}>
-            ✓
+          <span
+            style={{
+              background: toast.tone === "error" ? "rgba(255,255,255,0.25)" : "#296c39",
+              borderRadius: "50%",
+              width: 20,
+              height: 20,
+              flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 12,
+            }}
+          >
+            {toast.tone === "error" ? "!" : "✓"}
           </span>
-          {toast}
+          {toast.message}
         </div>
       )}
     </div>

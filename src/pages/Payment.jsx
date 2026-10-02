@@ -24,6 +24,9 @@ const PAYMENT_METHODS = [
   { id: 'bank', label: 'Bank Transfer' },
 ];
 
+// Senior Citizens and PWDs get the same statutory discount, so they share one option
+const SENIOR_PWD = 'senior_pwd';
+
 const CART_STORAGE_KEY = 'eurasia_cart';
 const BUY_NOW_KEY = 'eurasia_buy_now';
 const FINALIZED_KEY = 'eurasia_finalized';
@@ -258,13 +261,19 @@ function Payment() {
   const [unpaidOrders, setUnpaidOrders] = useState([]);
   const [settleLoading, setSettleLoading] = useState(false);
   const [method, setMethod] = useState('');
-  const [discount, setDiscount] = useState(null);
+  const [hasDiscount, setHasDiscount] = useState(false);
   const [discountIdFile, setDiscountIdFile] = useState(null);
   const [receiptFile, setReceiptFile] = useState(null);
   const [settling, setSettling] = useState(false);
   const [justSettled, setJustSettled] = useState(false);
 
-  const [toast, setToast] = useState("");
+  const [toast, setToast] = useState({ message: '', tone: 'success' });
+
+  const showToast = (message, tone = 'success') => {
+    setToast({ message, tone });
+    setTimeout(() => setToast({ message: '', tone }), 5000);
+  };
+  const showError = (message) => showToast(message, 'error');
 
   // --- History modal state ---
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -354,7 +363,7 @@ function Payment() {
   );
 
    const settleSubtotal = unpaidOrders.reduce((sum, o) => sum + Number(o.subtotal || 0), 0);
-  const settleDiscountAmount = discount ? Math.round(settleSubtotal * 0.20) : 0;
+  const settleDiscountAmount = hasDiscount ? Math.round(settleSubtotal * 0.20) : 0;
   const settleServiceFee = Math.round((settleSubtotal - settleDiscountAmount) * 0.15 * 100) / 100;
   const settleFinalTotal = settleSubtotal - settleDiscountAmount + settleServiceFee;
   const isCash = method === 'cash';
@@ -423,11 +432,10 @@ function Payment() {
       setJustOrdered(true);
       setScreen('empty');
 
-      setToast("Order sent to the kitchen! Settle your bill after your meal.");
-      setTimeout(() => setToast(""), 5000);
+      showToast("Order sent to the kitchen! Settle your bill after your meal.");
     } catch (err) {
       console.error(err);
-      alert(err.message || "Sorry, something went wrong while placing your order. Please try again.");
+      showError(err.message || "Sorry, something went wrong while placing your order. Please try again.");
     } finally {
       setPlacing(false);
     }
@@ -460,18 +468,18 @@ function Payment() {
 
   const handleSubmitPayment = async () => {
     if (!method) {
-      alert('Please select a mode of payment.');
+      showError('Please select how you paid.');
       return;
     }
 
-    if (discount && !discountIdFile) {
-      alert(`Please upload a photo of your ${discount.toUpperCase()} ID for verification.`);
+    if (hasDiscount && !discountIdFile) {
+      showError('Please upload a photo of your Senior Citizen or PWD ID for verification.');
       return;
     }
 
     if (!receiptFile) {
-      alert(isCash
-        ? 'Please upload a photo of the receipt given by the cashier.'
+      showError(isCash
+        ? 'Please upload a photo of the receipt given by your server.'
         : 'Please upload a screenshot of your payment.');
       return;
     }
@@ -480,13 +488,13 @@ function Payment() {
       setSettling(true);
 
       const receiptBase64 = await fileToBase64(receiptFile);
-      const discountIdBase64 = discountIdFile ? await fileToBase64(discountIdFile) : null;
+      const discountIdBase64 = hasDiscount && discountIdFile ? await fileToBase64(discountIdFile) : null;
       const orderIds = unpaidOrders.map((o) => o.id);
 
       await ordersApi.payMultiple(orderIds, {
         receipt_image: receiptBase64,
         payment_method: method,
-        discount_type: discount || null,
+        discount_type: hasDiscount ? SENIOR_PWD : null,
         discount_id_image: discountIdBase64,
         discount_amount: settleDiscountAmount,
       });
@@ -494,15 +502,14 @@ function Payment() {
       setUnpaidOrders([]);
       setReceiptFile(null);
       setMethod('');
-      setDiscount(null);
+      setHasDiscount(false);
       setDiscountIdFile(null);
       setJustSettled(true);
 
-      setToast("Payment proof submitted! The cashier will verify it shortly.");
-      setTimeout(() => setToast(""), 5000);
+      showToast("Payment proof submitted! The cashier will verify it shortly.");
     } catch (err) {
       console.error(err);
-      alert("Sorry, something went wrong while submitting your payment. Please try again.");
+      showError("Sorry, something went wrong while submitting your payment. Please try again.");
     } finally {
       setSettling(false);
     }
@@ -843,62 +850,37 @@ function Payment() {
 
                 <div className="bg-white rounded-2xl border border-neutral-200/80 p-6 shadow-xs">
                   <h4 className="text-[16px] font-bold text-[#b38548] uppercase tracking-wider mb-4">
-                    2. Select Discount (Optional)
+                    2. Discount (Optional)
                   </h4>
 
-                  <div className="grid sm:grid-cols-2 gap-3 mb-4">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDiscount(discount === 'pwd' ? null : 'pwd');
+                  <label
+                    className={`flex items-center gap-3 p-3.5 rounded-xl border text-xs font-medium transition-all cursor-pointer ${
+                      hasDiscount
+                        ? 'border-[#1d080f] bg-[#1d080f]/5 text-[#1d080f]'
+                        : 'border-neutral-200 text-neutral-700 hover:bg-neutral-50'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={hasDiscount}
+                      onChange={(e) => {
+                        setHasDiscount(e.target.checked);
                         setDiscountIdFile(null);
                       }}
-                      className={`flex items-center justify-between p-3.5 rounded-xl border text-xs font-medium transition-all cursor-pointer ${
-                        discount === 'pwd'
-                          ? 'border-[#1d080f] bg-[#1d080f]/5 text-[#1d080f]'
-                          : 'border-neutral-200 text-neutral-700 hover:bg-neutral-50'
-                      }`}
-                    >
-                      <span className="flex items-center gap-2">
-                        <ShieldCheck size={16} /> PWD Discount (20%)
-                      </span>
-                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                        discount === 'pwd' ? 'border-[#1d080f] bg-[#1d080f]' : 'border-neutral-300'
-                      }`}>
-                        {discount === 'pwd' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                      </div>
-                    </button>
+                      className="w-4 h-4 shrink-0 accent-[#1d080f] cursor-pointer"
+                    />
+                    <span className="flex items-center gap-2">
+                      <ShieldCheck size={16} /> Senior Citizen / PWD Discount (20%)
+                    </span>
+                  </label>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDiscount(discount === 'senior' ? null : 'senior');
-                        setDiscountIdFile(null);
-                      }}
-                      className={`flex items-center justify-between p-3.5 rounded-xl border text-xs font-medium transition-all cursor-pointer ${
-                        discount === 'senior'
-                          ? 'border-[#1d080f] bg-[#1d080f]/5 text-[#1d080f]'
-                          : 'border-neutral-200 text-neutral-700 hover:bg-neutral-50'
-                      }`}
-                    >
-                      <span className="flex items-center gap-2">
-                        <ShieldCheck size={16} /> Senior Citizen (20%)
-                      </span>
-                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                        discount === 'senior' ? 'border-[#1d080f] bg-[#1d080f]' : 'border-neutral-300'
-                      }`}>
-                        {discount === 'senior' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                      </div>
-                    </button>
-                  </div>
-
-                  {discount && (
+                  {hasDiscount && (
                     <div className="mt-4 p-4 bg-[#faf8f5] rounded-xl border border-dashed border-amber-800/30">
                       <label className="flex flex-col items-center justify-center gap-2 cursor-pointer text-center">
                         <UploadCloud size={24} className="text-[#b38548]" />
                         <div className="text-xs">
                           <span className="font-semibold text-[#1d080f]">
-                            Upload Picture of {discount === 'pwd' ? 'PWD ID' : 'Senior Citizen ID'}
+                            Upload Picture of Senior Citizen or PWD ID
                           </span>
                           <p className="text-neutral-500 mt-0.5">Attach ID photo to prove discount eligibility</p>
                         </div>
@@ -973,9 +955,9 @@ function Payment() {
                       <span>Subtotal</span>
                       <span>₱ {settleSubtotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                     </div>
-                    {discount && (
+                    {hasDiscount && (
                       <div className="flex justify-between text-red-600 font-semibold">
-                        <span>DISCOUNT ({discount === 'pwd' ? 'PWD' : 'SENIOR'})</span>
+                        <span>DISCOUNT (SENIOR/PWD)</span>
                         <span>- ₱ {settleDiscountAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                       </div>
                     )}
@@ -1103,23 +1085,21 @@ function Payment() {
         </div>
       )}
 
-      {toast && (
+      {toast.message && (
         <div
           style={{
             position: "fixed",
             bottom: 28,
             right: 28,
-            background: "rgba(26, 122, 76, 0.6)",
-            backdropFilter: "blur(8px)",
-            WebkitBackdropFilter: "blur(8px)",
+            background: toast.tone === 'error' ? "#c0392b" : "#2e5a2e",
             color: "#fff",
             padding: "16px 20px",
             borderRadius: 14,
-            boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
             display: "flex",
             alignItems: "flex-start",
             gap: 12,
-            zIndex: 100,
+            zIndex: 140,
             maxWidth: 340,
           }}
           className="font-sans"
@@ -1136,11 +1116,13 @@ function Payment() {
               justifyContent: "center",
             }}
           >
-            <CheckCircle2 size={20} className="text-white" />
+            {toast.tone === 'error' ? <X size={20} /> : <CheckCircle2 size={20} />}
           </span>
           <div>
-            <div className="text-sm font-bold leading-tight">Success</div>
-            <div className="text-xs text-white/85 leading-snug mt-0.5">{toast}</div>
+            <div className="text-sm font-bold leading-tight">
+              {toast.tone === 'error' ? 'Please check' : 'Success'}
+            </div>
+            <div className="text-xs text-white/85 leading-snug mt-0.5">{toast.message}</div>
           </div>
         </div>
       )}

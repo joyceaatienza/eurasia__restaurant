@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import 'flag-icons/css/flag-icons.min.css'
 import heroImage from '../assets/bgHero.jpg'
@@ -85,12 +85,25 @@ import pizzetoChoco from '../assets/pizzeto.png'
 import marisco from '../assets/marisco.png'
 import negra from '../assets/negra.png'
 import valenciana from '../assets/valenciana.png'
+import amaro from '../assets/amaro.png'
+import mayora from '../assets/dona.png'
+import amareto from '../assets/amareto.png'
+import pamana from '../assets/pamana.png'
+import ginBerry from '../assets/ginberry.png'
+import mojito from '../assets/mojito.png'
+import margarita from '../assets/margarita.png'
+import summer from '../assets/summerblush.png'
+import alta from '../assets/alta.png'
+import sangria from '../assets/sangria.png'
+import luna from '../assets/luna.png'
+import likas from '../assets/likas.png'
 import { useCart } from '../context/CartContext'
 import { getDishRatings } from '../utils/reviewsStore'
+import BeverageMenu from '../components/BeverageMenu'
 
 const categories = [
   'Best Sellers',
-  ['Appetizers'],
+  'Appetizers',
   'Main Courses',
   'Soup',
   'Salad',
@@ -944,6 +957,92 @@ const menuItems = [
     category: "Chef's Special",
   },
 
+  //Beverage
+  {
+    id: 83,
+    name: 'Amaro Arancia',
+    price: 170,
+    image: amaro,
+    category: 'Beverage',
+  },
+  {
+    id: 84,
+    name: 'Summer Blush',
+    price: 170,
+    image: summer,
+    category: 'Beverage',
+  },
+   {
+    id: 85,
+    name: 'Doña Mayora',
+    price: 225,
+    image: mayora,
+    category: 'Beverage',
+  },
+  {
+    id: 86,
+    name: 'Amareto Sour',
+    price: 200,
+    image: amareto,
+    category: 'Beverage',
+  },
+   {
+    id: 87,
+    name: 'Pamana',
+    price: 165,
+    image: pamana,
+    category: 'Beverage',
+  },
+  {
+    id: 88,
+    name: 'Gin Berry',
+    price: 200,
+    image: ginBerry,
+    category: 'Beverage',
+  },
+   {
+    id: 89,
+    name: 'Mojito Spritz',
+    price: 185,
+    image: mojito,
+    category: 'Beverage',
+  },
+  {
+    id: 90,
+    name: 'Maria Margarita',
+    price: 160,
+    image: margarita,
+    category: 'Beverage',
+  },
+   {
+    id: 91,
+    name: 'Alta Rosa',
+    price: 175,
+    image: alta,
+    category: 'Beverage',
+  },
+  {
+    id: 92,
+    name: 'Sinta Sangria',
+    price: 255,
+    image: sangria,
+    category: "Beverage",
+  },
+   {
+    id: 93,
+    name: 'Luna Lychee',
+    price: 200,
+    image: luna,
+    category: "Beverage",
+  },
+  {
+    id: 94,
+    name: 'Likas Verde',
+    price: 185,
+    image: likas,
+    category: "Beverage",
+  },
+
 
 ]
 
@@ -975,11 +1074,12 @@ function DishRating({ average, count }) {
 }
 
 function Menu() {
-  const [activeCategory, setActiveCategory] = useState(categories[0]) // Appetizers
+  const [activeCategory, setActiveCategory] = useState(categories[0]) // Best Sellers
   const [dishRatings, setDishRatings] = useState({})
   const filteredItems = menuItems.filter((item) => item.category.includes(activeCategory))
   const { addToCart, flyToCart } = useCart()
   const navigate = useNavigate()
+  const beverageBoardRef = useRef(null)
 
   useEffect(() => {
     setDishRatings(getDishRatings())
@@ -998,6 +1098,24 @@ function Menu() {
     })
   }
 
+  // Drinks from the beverage board have no photo, so the tray icon stands in for one
+  const handleAddBeverage = (bev, event) => {
+    if (event?.currentTarget) {
+      flyToCart(trayIcon, event.currentTarget.getBoundingClientRect())
+    }
+    addToCart({
+      id: bev.id,
+      name: bev.name,
+      price: bev.price,
+      image: trayIcon,
+    })
+  }
+
+  // Jumps past the cocktail cards to the full drinks list
+  const scrollToBeverageBoard = () => {
+    beverageBoardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   const BUY_NOW_KEY = 'eurasia_buy_now'
 
 const handleBuyNow = (item) => {
@@ -1014,6 +1132,11 @@ const handleBuyNow = (item) => {
   localStorage.setItem(BUY_NOW_KEY, JSON.stringify(buyNowItem))
   navigate('/payment')
 }
+
+  // Buy Now for a drink from the beverage board — same flow as the food cards
+  const handleBuyNowBeverage = (bev) => {
+    handleBuyNow({ ...bev, image: trayIcon })
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-white text-[#1d080f] font-['Prata'],serif">
@@ -1068,6 +1191,21 @@ const handleBuyNow = (item) => {
                 Each variety takes 30–45 minutes serving time. Good for 3–4 persons each serving.
                 Pre-ordering is highly recommended.
               </p>
+            </div>
+          )}
+
+          {activeCategory === 'Beverage' && (
+            <div className="mb-6 text-left">
+              <h2 className="font-['Prata'] text-2xl md:text-3xl text-[#1d080f] text-left">
+                Cocktails
+              </h2>
+              <button
+                type="button"
+                onClick={scrollToBeverageBoard}
+                className="mt-2 font-['Prata'] text-sm text-neutral-500 underline underline-offset-4 hover:text-[#1d080f] transition-colors"
+              >
+                See coffee, tea, beer & wine ↓
+              </button>
             </div>
           )}
 
@@ -1151,6 +1289,12 @@ const handleBuyNow = (item) => {
             <p className="col-span-full py-12 text-center text-neutral-400 font-['Prata']">
               No items in this category yet.
             </p>
+          )}
+
+          {activeCategory === 'Beverage' && (
+            <div ref={beverageBoardRef} className="mt-12 scroll-mt-32">
+              <BeverageMenu onAdd={handleAddBeverage} onBuyNow={handleBuyNowBeverage} />
+            </div>
           )}
         </main>
       </div>

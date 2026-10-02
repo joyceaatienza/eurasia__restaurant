@@ -58,11 +58,18 @@ function getDefaultTime() {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 }
 
-function daysUntil(isoDate) {
-  if (!isoDate) return null
-  const [y, m, d] = String(isoDate).slice(0, 10).split('-').map(Number)
-  if (!y || !m || !d) return null
-  const target = new Date(y, m - 1, d)
+// The API sends dates as UTC timestamps, so parse them into local date parts —
+// slicing the raw string lands on the previous day here in UTC+8
+function toLocalDate(value) {
+  if (!value) return null
+  const d = value instanceof Date ? value : new Date(value)
+  if (isNaN(d.getTime())) return null
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate())
+}
+
+function daysUntil(value) {
+  const target = toLocalDate(value)
+  if (!target) return null
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   return Math.round((target - today) / (1000 * 60 * 60 * 24))
@@ -93,18 +100,27 @@ const MONTH_NAMES = [
   "July", "August", "September", "October", "November", "December",
 ]
 
-function formatDateDisplay(isoDate) {
-  if (!isoDate) return ''
-  const [y, m, d] = String(isoDate).slice(0, 10).split('-').map(Number)
-  return `${MONTH_NAMES[m - 1]} ${d}, ${y}`
+function formatDateDisplay(value) {
+  const d = toLocalDate(value)
+  if (!d) return ''
+  return `${MONTH_NAMES[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`
 }
 
 function formatTimeDisplay(timeStr) {
   if (!timeStr) return ''
-  const [h, m] = timeStr.split(':').map(Number)
+  const [h, m] = String(timeStr).split(':').map(Number)
+  if (isNaN(h)) return ''
   const ampm = h >= 12 ? 'pm' : 'am'
   const hour12 = h % 12 === 0 ? 12 : h % 12
   return `${hour12}:${m.toString().padStart(2, '0')} ${ampm}`
+}
+
+// The database stores payment statuses in mixed casing ('Pending', 'verified'),
+// so tidy them up for display: 'verified' → 'Verified'
+function formatPaymentStatus(status) {
+  if (!status) return 'Pending'
+  const s = String(status)
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase()
 }
 
 function StatusBadge({ status }) {
@@ -364,6 +380,77 @@ function WheelTimePicker({ value, onChange }) {
   )
 }
 
+/* Small banner for validation messages and errors */
+function Toast({ message, tone = 'error', onClose }) {
+  useEffect(() => {
+    if (!message) return
+    const timer = setTimeout(onClose, 4000)
+    return () => clearTimeout(timer)
+  }, [message, onClose])
+
+  if (!message) return null
+
+  const palette =
+    tone === 'error'
+      ? 'bg-[#c0392b] text-white'
+      : 'bg-[#2e5a2e] text-white'
+
+  return (
+    <div
+      className={`fixed bottom-7 right-7 z-[140] rounded-xl px-5 py-4 shadow-2xl flex items-start gap-3 max-w-sm ${palette}`}
+    >
+      <span className="w-8 h-8 shrink-0 rounded-lg bg-white/20 flex items-center justify-center">
+        {tone === 'error' ? <X size={18} /> : <Check size={18} />}
+      </span>
+      <span className="text-sm font-[Prata] leading-snug">{message}</span>
+    </div>
+  )
+}
+
+/* Confirmation dialog — replaces window.confirm */
+function ConfirmDialog({ open, title, message, confirmLabel, onConfirm, onCancel }) {
+  useEffect(() => {
+    if (!open) return
+    const previous = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = previous }
+  }, [open])
+
+  if (!open) return null
+
+  return (
+    <div
+      onClick={onCancel}
+      className="fixed inset-0 z-[130] flex items-center justify-center bg-black/30 px-4"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white rounded-2xl p-8 max-w-sm w-full text-center shadow-2xl"
+      >
+        <div className="mx-auto mb-4 w-14 h-14 rounded-full bg-red-50 flex items-center justify-center">
+          <X size={26} className="text-red-500" />
+        </div>
+        <h3 className="font-[Prata] text-lg text-[#1d080f] mb-2">{title}</h3>
+        <p className="text-sm text-neutral-500 mb-6 leading-relaxed">{message}</p>
+        <div className="flex gap-3">
+          <button
+            onClick={onCancel}
+            className="flex-1 border border-neutral-300 text-neutral-700 font-[Prata] text-xs py-2.5 rounded-xl hover:bg-neutral-50 transition"
+          >
+            Keep Reservation
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 bg-[#c0392b] text-white font-[Prata] text-xs font-bold py-2.5 rounded-xl hover:opacity-90 transition"
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function Reservation() {
   const navigate = useNavigate()
   const { user, isAuthenticated, loading: authLoading } = useAuth()
@@ -383,6 +470,11 @@ function Reservation() {
 
   const [reservations, setReservations] = useState([])
   const [loadingReservations, setLoadingReservations] = useState(false)
+  const [toast, setToast] = useState({ message: '', tone: 'error' })
+  const [cancelTarget, setCancelTarget] = useState(null)
+
+  const showError = (message) => setToast({ message, tone: 'error' })
+  const closeToast = () => setToast({ message: '', tone: 'error' })
 
   const isoDate = `${viewDate.getFullYear()}-${String(viewDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDay).padStart(2, '0')}`
 
@@ -437,23 +529,24 @@ function Reservation() {
     const time = formData.get('time')
 
     if (!time) {
-      alert("Please select a time.")
+      showError("Please select a time.")
       return
     }
 
     if (!paymentMethod) {
-      alert("Please select a mode of payment.")
+      showError("Please select a mode of payment.")
       return
     }
 
-    if (!paymentProofPreview) {
-      alert("Please upload your proof of payment.")
+    // Cash is handed over at the restaurant, so there's nothing to upload yet
+    if (paymentMethod !== "Cash" && !paymentProofPreview) {
+      showError("Please upload your proof of payment.")
       return
     }
 
     const [hh, mm] = time.split(':').map(Number)
     if (!isTimeAllowed(hh, mm)) {
-      alert("Please choose a time between 11:00 AM and 10:00 PM.")
+      showError("Please choose a time between 11:00 AM and 10:00 PM.")
       return
     }
 
@@ -490,20 +583,24 @@ function Reservation() {
       setShowConfirm(true)
     } catch (err) {
       console.error(err)
-      alert(err.message || "Sorry, something went wrong while submitting your reservation. Please try again.")
+      showError(err.message || "Sorry, something went wrong while submitting your reservation. Please try again.")
     } finally {
       setSubmitting(false)
     }
   }
 
-  const handleCancelReservation = async (id) => {
-    if (!window.confirm("Are you sure you want to cancel this reservation?")) return
+  const handleCancelReservation = async () => {
+    const id = cancelTarget
+    setCancelTarget(null)
+    if (!id) return
+
     try {
       await reservationsApi.updateStatus(id, 'cancelled')
       setReservations((prev) => prev.map((r) => (r.id === id ? { ...r, status: 'cancelled' } : r)))
+      setToast({ message: 'Your reservation has been cancelled.', tone: 'success' })
     } catch (err) {
       console.error(err)
-      alert("Failed to cancel reservation. Please try again.")
+      showError("Failed to cancel reservation. Please try again.")
     }
   }
 
@@ -722,11 +819,10 @@ function Reservation() {
                       {!paymentMethod && (
                         <p className="text-xs text-red-500 font-[Prata] mt-2">Please select a mode of payment.</p>
                       )}
-
                       {paymentMethod === "Cash" && (
                         <div className="mt-4 bg-[#f7f5f0] rounded-lg p-4">
                           <p className="text-xs font-[Prata] text-neutral-600 leading-relaxed">
-                            Please pay your Php. {(tab === "event" ? DOWNPAYMENT.event : DOWNPAYMENT.table).toLocaleString()} downpayment in cash at the restaurant, then upload the photo of your receipt below.
+                            Pay your Php. {(tab === "event" ? DOWNPAYMENT.event : DOWNPAYMENT.table).toLocaleString()} downpayment in cash at the restaurant. Our cashier will mark it as received, and your reservation will be confirmed after that.
                           </p>
                         </div>
                       )}
@@ -753,7 +849,7 @@ function Reservation() {
                         </div>
                       )}
 
-                      {paymentMethod && (
+                      {paymentMethod && paymentMethod !== "Cash" && (
                         <div className="mt-4 border-t border-neutral-200 pt-4">
                           <label className="font-[Prata] text-sm text-neutral-600 block mb-2">
                             Proof of Payment *
@@ -832,112 +928,128 @@ function Reservation() {
 
                   {[...reservations]
                     .sort((a, b) => {
-                      const aClosed = ['cancelled', 'no_show'].includes(a.status) ? 1 : 0;
-                      const bClosed = ['cancelled', 'no_show'].includes(b.status) ? 1 : 0;
-                      return aClosed - bClosed;
+                      const aClosed = ['cancelled', 'no_show'].includes(a.status) ? 1 : 0
+                      const bClosed = ['cancelled', 'no_show'].includes(b.status) ? 1 : 0
+                      return aClosed - bClosed
                     })
                     .map((r) => {
                       const remainingDays = daysUntil(r.reservation_date)
-                    const isClosed = r.status === 'cancelled' || r.status === 'completed' || r.status === 'no_show'
-                    const pastCutoff = remainingDays !== null && remainingDays < CANCEL_CUTOFF_DAYS
-                    const cancelDisabled = isClosed || pastCutoff
+                      const isClosed = r.status === 'cancelled' || r.status === 'completed' || r.status === 'no_show'
+                      const pastCutoff = remainingDays !== null && remainingDays < CANCEL_CUTOFF_DAYS
+                      const cancelDisabled = isClosed || pastCutoff
 
-                    return (
-                      <div
-                        key={r.id}
-                        className={`rounded-xl p-6 mb-4 ${
-                          r.status === 'cancelled' || r.status === 'no_show'
-                            ? 'bg-neutral-100 opacity-60'
-                            : 'bg-white'
-                        }`}
-                        style={{ textAlign: 'left' }}
-                      >                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm font-[Prata] text-left">
-                          <div className="flex flex-col gap-3">
-                            <div>
-                              <span className="block text-xs text-neutral-400">Date</span>
-                              <span>{formatDateDisplay(r.reservation_date)}</span>
+                      return (
+                        <div
+                          key={r.id}
+                          className={`rounded-xl p-6 mb-4 ${
+                            r.status === 'cancelled' || r.status === 'no_show'
+                              ? 'bg-neutral-100 opacity-60'
+                              : 'bg-white'
+                          }`}
+                          style={{ textAlign: 'left' }}
+                        >
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm font-[Prata] text-left">
+                            <div className="flex flex-col gap-3">
+                              <div>
+                                <span className="block text-xs text-neutral-400">Date</span>
+                                <span>{formatDateDisplay(r.reservation_date)}</span>
+                              </div>
+                              <div>
+                                <span className="block text-xs text-neutral-400">Name</span>
+                                <span>{r.guest_name}</span>
+                              </div>
+                              <div>
+                                <span className="block text-xs text-neutral-400">Contact No.</span>
+                                <span>{r.contact_number}</span>
+                              </div>
+                              <div>
+                                <span className="block text-xs text-neutral-400">Email Address</span>
+                                <span>{r.email}</span>
+                              </div>
+                              <div>
+                                <span className="block text-xs text-neutral-400">Occasion</span>
+                                <span>{r.occasion || '—'}</span>
+                              </div>
                             </div>
-                            <div>
-                              <span className="block text-xs text-neutral-400">Name</span>
-                              <span>{r.guest_name}</span>
-                            </div>
-                            <div>
-                              <span className="block text-xs text-neutral-400">Contact No.</span>
-                              <span>{r.contact_number}</span>
-                            </div>
-                            <div>
-                              <span className="block text-xs text-neutral-400">Email Address</span>
-                              <span>{r.email}</span>
-                            </div>
-                            <div>
-                              <span className="block text-xs text-neutral-400">Occasion</span>
-                              <span>{r.occasion || '—'}</span>
+                            <div className="flex flex-col gap-3">
+                              <div>
+                                <span className="block text-xs text-neutral-400">Time</span>
+                                <span>{formatTimeDisplay(r.reservation_time)}</span>
+                              </div>
+                              <div>
+                                <span className="block text-xs text-neutral-400">Number of Pax</span>
+                                <span>{r.party_size}</span>
+                              </div>
+                              <div>
+                                <span className="block text-xs text-neutral-400">Downpayment</span>
+                                <span>
+                                  {r.downpayment_amount ? `Php. ${Number(r.downpayment_amount).toLocaleString()} (${formatPaymentStatus(r.payment_status)})` : '—'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="block text-xs text-neutral-400">Payment Method</span>
+                                <span>{r.payment_method || '—'}</span>
+                              </div>
+                              <div>
+                                <span className="block text-xs text-neutral-400 mb-1">Status</span>
+                                <StatusBadge status={r.status} />
+                              </div>
+
+                              <div>
+                                <button
+                                  onClick={() => setCancelTarget(r.id)}
+                                  disabled={cancelDisabled}
+                                  className="w-full bg-[#c0392b] text-white font-[Prata] font-bold py-3 rounded-full hover:opacity-90 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                                >
+                                  Cancel Reservation
+                                </button>
+                                {pastCutoff && !isClosed && (
+                                  <p className="text-[11px] text-neutral-500 font-[Prata] mt-2 text-center leading-relaxed">
+                                    Cancellations must be made at least {CANCEL_CUTOFF_DAYS} days before your reservation date.
+                                  </p>
+                                )}
+                              </div>
                             </div>
                           </div>
-                          <div className="flex flex-col gap-3">
-                            <div>
-                              <span className="block text-xs text-neutral-400">Time</span>
-                              <span>{formatTimeDisplay(r.reservation_time)}</span>
-                            </div>
-                            <div>
-                              <span className="block text-xs text-neutral-400">Number of Pax</span>
-                              <span>{r.party_size}</span>
-                            </div>
-                            <div>
-                              <span className="block text-xs text-neutral-400">Downpayment</span>
-                              <span>
-                                {r.downpayment_amount ? `Php. ${Number(r.downpayment_amount).toLocaleString()} (${r.payment_status || 'Pending'})` : '—'}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="block text-xs text-neutral-400 mb-1">Status</span>
-                              <StatusBadge status={r.status} />
-                            </div>
 
-                            <div>
-                              <button
-                                onClick={() => handleCancelReservation(r.id)}
-                                disabled={cancelDisabled}
-                                className="w-full bg-[#c0392b] text-white font-[Prata] font-bold py-3 rounded-full hover:opacity-90 transition disabled:opacity-40 disabled:cursor-not-allowed"
-                              >
-                                Cancel Reservation
-                              </button>
-                              {pastCutoff && !isClosed && (
-                                <p className="text-[11px] text-neutral-500 font-[Prata] mt-2 text-center leading-relaxed">
-                                  Cancellations must be made at least {CANCEL_CUTOFF_DAYS} days before your reservation date.
-                                </p>
-                              )}
+                          {r.payment_proof && (
+                            <div className="mt-4">
+                              <span className="block text-xs text-neutral-400 font-[Prata] mb-2">Proof of Payment</span>
+                              <img
+                                src={r.payment_proof}
+                                alt="Proof of payment"
+                                className="w-full max-h-48 object-contain rounded-md bg-neutral-50"
+                              />
                             </div>
-                          </div>
-                        </div>
+                          )}
 
-                        {r.payment_proof && (
-                          <div className="mt-4">
-                            <span className="block text-xs text-neutral-400 font-[Prata] mb-2">Proof of Payment</span>
+                          {r.theme_image && (
                             <img
-                              src={r.payment_proof}
-                              alt="Proof of payment"
-                              className="w-full max-h-48 object-contain rounded-md bg-neutral-50"
+                              src={r.theme_image}
+                              alt="Theme inspiration"
+                              className="mt-4 w-full max-h-48 object-cover rounded-md"
                             />
-                          </div>
-                        )}
-
-                        {r.theme_image && (
-                          <img
-                            src={r.theme_image}
-                            alt="Theme inspiration"
-                            className="mt-4 w-full max-h-48 object-cover rounded-md"
-                          />
-                        )}
-                      </div>
-                    )
-                  })}
+                          )}
+                        </div>
+                      )
+                    })}
                 </div>
               )}
             </>
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={Boolean(cancelTarget)}
+        title="Cancel this reservation?"
+        message="Your downpayment is non-refundable. This cannot be undone."
+        confirmLabel="Yes, Cancel"
+        onConfirm={handleCancelReservation}
+        onCancel={() => setCancelTarget(null)}
+      />
+
+      <Toast message={toast.message} tone={toast.tone} onClose={closeToast} />
 
       {showConfirm && (
         <div
@@ -968,5 +1080,5 @@ function Reservation() {
     </div>
   )
 }
-
+ 
 export default Reservation

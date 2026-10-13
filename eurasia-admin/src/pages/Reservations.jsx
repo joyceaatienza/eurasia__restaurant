@@ -32,7 +32,7 @@ const FONT_IMPORT =
 const FONT = "'Prata', serif";
 
 const HIGHLIGHT_MS = 3000;
-const POLL_MS = 10000;
+const POLL_MS = 8000;
 
 const DAY_LABELS = ["SUN", "MON", "TUES", "WED", "THU", "FRI", "SAT"];
 const HOURS = [11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]; // 11am–10pm

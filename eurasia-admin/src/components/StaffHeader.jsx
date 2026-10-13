@@ -1,15 +1,15 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { UserRound, LogOut, Settings, Bell } from "lucide-react";
+import { UserRound, LogOut, Bell } from "lucide-react";
 import logo from "../assets/logopic3.png";
 import { ordersApi } from "../services/ordersApi";
 import { reservationsApi } from "../services/reservationsApi";
 
 const FONT = "'Prata', serif";
 const INK = "#1d080f";
-const MUTED = "#7a756c";
+const MUTED = "#6b6560";
 
-const NOTIF_POLL_MS = 20000;
+const NOTIF_POLL_MS = 8000;
 const READ_IDS_KEY = "eurasia_read_notifications";
 
 // Friendly labels for each role (the raw values stored in localStorage are lowercase)
@@ -70,8 +70,6 @@ export default function StaffHeader({ name, role, onNotificationClick }) {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
-  const [showSettings, setShowSettings] = useState(false);
-  const [avatarColor, setAvatarColor] = useState(localStorage.getItem("eurasia_avatar_color") || INK);
 
   const savedName = localStorage.getItem("eurasia_name");
   const savedRole = localStorage.getItem("eurasia_role");
@@ -87,7 +85,8 @@ export default function StaffHeader({ name, role, onNotificationClick }) {
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
-  // Build the notification list from real orders / reservations for this role
+  // Build the notification list from real orders / reservations for this role.
+  // Each role only sees what it can act on.
   const loadNotifications = useCallback(async () => {
     const readIds = getReadIds();
 
@@ -97,15 +96,10 @@ export default function StaffHeader({ name, role, onNotificationClick }) {
       if (resolvedRole === "reception") {
         const data = await reservationsApi.getAll();
         built = data
-          .filter((r) => r.status !== "cancelled" && r.status !== "no_show")
+          .filter((r) => r.status === "pending")
           .map((r) => ({
             id: `res-${r.id}`,
-            message:
-              r.status === "completed"
-                ? `Reservation for ${r.guest_name} marked as Completed`
-                : r.status === "seated"
-                ? `${r.guest_name} has arrived — Table ${r.table_number || "—"}`
-                : `New reservation from ${r.guest_name} at ${to12h(r.reservation_time)}`,
+            message: `New reservation from ${r.guest_name} at ${to12h(r.reservation_time)}`,
             createdAt: r.created_at,
             target: {
               page: "reception",
@@ -117,57 +111,72 @@ export default function StaffHeader({ name, role, onNotificationClick }) {
       } else if (resolvedRole === "kitchen") {
         const data = await ordersApi.getAll({ today_only: "true" });
         built = data
-          .filter((o) => ["pending", "preparing", "ready"].includes(o.status))
+          .filter((o) => o.status === "pending")
           .map((o) => {
             const no = o.daily_number ?? o.id;
             return {
-              id: `ord-${o.id}-${o.status}`,
-              message:
-                o.status === "ready"
-                  ? `Order ${no} marked as Ready`
-                  : o.status === "preparing"
-                  ? `Order ${no} is now Preparing`
-                  : `New order received — Order ${no} (Table ${o.table_number})`,
+              id: `ord-${o.id}`,
+              message: `New order received — Order ${no} (${o.customer_name || "Guest"})`,
               createdAt: o.created_at,
               target: { page: "kitchen", type: "order", id: o.id },
             };
           });
       } else if (resolvedRole === "cashier") {
-        const data = await ordersApi.getAll({ today_only: "true" });
-        built = data
-          .filter((o) => o.has_receipt || o.receipt_image || o.payment_status !== "pending")
+        const [orders, reservations] = await Promise.all([
+          ordersApi.getAll({ today_only: "true" }),
+          reservationsApi.getAll(),
+        ]);
+
+        const orderPayments = orders
+          .filter(
+            (o) =>
+              (Number(o.has_receipt) || o.receipt_image) &&
+              (o.payment_status || "pending") === "pending"
+          )
           .map((o) => {
             const no = o.daily_number ?? o.id;
             return {
-              id: `pay-${o.id}-${o.payment_status}`,
-              message:
-                o.payment_status === "verified"
-                  ? `Payment for Order ${no} confirmed`
-                  : o.payment_status === "failed"
-                  ? `Payment for Order ${no} marked as Failed`
-                  : `Payment submitted for Order ${no} — awaiting verification`,
+              id: `pay-${o.id}`,
+              message: `Payment to verify — Order ${no} (${o.customer_name || "Guest"})`,
               createdAt: o.created_at,
-              target: { page: "cashier", type: "order", id: o.id },
+              target: { page: "cashier", type: "payment", id: o.id },
             };
           });
+
+        const downpayments = reservations
+          .filter(
+            (r) =>
+              Number(r.downpayment_amount) > 0 &&
+              (r.payment_status || "pending") === "pending"
+          )
+          .map((r) => ({
+            id: `dp-${r.id}`,
+            message: `Downpayment to verify — ${r.guest_name} (Php. ${Number(r.downpayment_amount).toLocaleString()})`,
+            createdAt: r.created_at,
+            target: { page: "cashier", type: "downpayment", id: r.id },
+          }));
+
+        built = [...orderPayments, ...downpayments];
       } else {
-        // Owner sees both kitchen and front-desk activity
+        // Owner sees everything that needs attention
         const [orders, reservations] = await Promise.all([
           ordersApi.getAll({ today_only: "true" }),
           reservationsApi.getAll(),
         ]);
         built = [
-          ...orders.map((o) => ({
-            id: `ord-${o.id}-${o.status}`,
-            message: `Order ${o.daily_number ?? o.id} — Table ${o.table_number} (${o.status})`,
-            createdAt: o.created_at,
-            target: { page: "kitchen", type: "order", id: o.id },
-          })),
+          ...orders
+            .filter((o) => o.status === "pending")
+            .map((o) => ({
+              id: `ord-${o.id}`,
+              message: `New order — Order ${o.daily_number ?? o.id} (${o.customer_name || "Guest"})`,
+              createdAt: o.created_at,
+              target: { page: "kitchen", type: "order", id: o.id },
+            })),
           ...reservations
-            .filter((r) => r.status !== "cancelled")
+            .filter((r) => r.status === "pending")
             .map((r) => ({
               id: `res-${r.id}`,
-              message: `Reservation — ${r.guest_name} (${r.status})`,
+              message: `New reservation — ${r.guest_name}`,
               createdAt: r.created_at,
               target: {
                 page: "reception",
@@ -215,6 +224,7 @@ export default function StaffHeader({ name, role, onNotificationClick }) {
   const handleLogout = () => {
     localStorage.removeItem("eurasia_role");
     localStorage.removeItem("eurasia_name");
+    localStorage.removeItem("eurasia_token");
     navigate("/login");
   };
 
@@ -280,15 +290,25 @@ export default function StaffHeader({ name, role, onNotificationClick }) {
               <span
                 style={{
                   position: "absolute",
-                  top: 4,
-                  right: 5,
-                  width: 9,
-                  height: 9,
-                  borderRadius: "50%",
+                  top: -4,
+                  right: -4,
+                  minWidth: 20,
+                  height: 20,
+                  padding: "0 5px",
+                  borderRadius: 999,
                   background: "#c0392b",
+                  color: "#fff",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  fontFamily: FONT,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                   border: "2px solid #fff",
                 }}
-              />
+              >
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
             )}
           </button>
 
@@ -298,15 +318,13 @@ export default function StaffHeader({ name, role, onNotificationClick }) {
                 position: "absolute",
                 top: 50,
                 right: 0,
-                background: "rgba(255, 255, 255, 0.55)",
-                backdropFilter: "blur(14px)",
-                WebkitBackdropFilter: "blur(14px)",
+                background: "#fff",
                 border: "1px solid rgba(0, 0, 0, 0.08)",
-                borderRadius: 12,
-                boxShadow: "0 6px 20px rgba(0,0,0,0.14)",
+                borderRadius: 14,
+                boxShadow: "0 12px 32px rgba(0,0,0,0.16)",
                 overflow: "hidden",
-                width: 320,
-                zIndex: 30,
+                width: 340,
+                zIndex: 500,
               }}
             >
               <div
@@ -315,7 +333,7 @@ export default function StaffHeader({ name, role, onNotificationClick }) {
                   alignItems: "center",
                   justifyContent: "space-between",
                   padding: "14px 16px",
-                  borderBottom: "1px solid rgba(0, 0, 0, 0.06)",
+                  borderBottom: "1px solid rgba(0, 0, 0, 0.08)",
                 }}
               >
                 <span style={{ fontFamily: FONT, fontSize: 15, fontWeight: 700, color: INK, textAlign: "left" }}>
@@ -329,9 +347,9 @@ export default function StaffHeader({ name, role, onNotificationClick }) {
                       background: "transparent",
                       cursor: "pointer",
                       fontFamily: FONT,
-                      fontSize: 11.5,
-                      color: MUTED,
-                      textDecoration: "underline",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: "#8a6228",
                     }}
                   >
                     Mark all read
@@ -339,10 +357,10 @@ export default function StaffHeader({ name, role, onNotificationClick }) {
                 )}
               </div>
 
-              <div style={{ maxHeight: 320, overflowY: "auto" }}>
+              <div style={{ maxHeight: 340, overflowY: "auto" }}>
                 {notifications.length === 0 ? (
-                  <div style={{ padding: "24px 16px", textAlign: "center", color: MUTED, fontFamily: FONT, fontSize: 13 }}>
-                    No notifications yet.
+                  <div style={{ padding: "32px 16px", textAlign: "center", color: MUTED, fontFamily: FONT, fontSize: 13 }}>
+                    Nothing needs your attention right now.
                   </div>
                 ) : (
                   notifications.map((n) => (
@@ -350,18 +368,18 @@ export default function StaffHeader({ name, role, onNotificationClick }) {
                       key={n.id}
                       onClick={() => handleNotifClick(n)}
                       style={{
-                        padding: "12px 16px",
-                        borderBottom: "1px solid rgba(0, 0, 0, 0.05)",
-                        background: n.read ? "transparent" : "rgba(250, 246, 242, 0.5)",
+                        padding: "13px 16px",
+                        borderBottom: "1px solid rgba(0, 0, 0, 0.06)",
+                        background: n.read ? "#fff" : "#fffdf7",
                         display: "flex",
                         gap: 10,
                         alignItems: "flex-start",
                         cursor: "pointer",
                         transition: "background 0.15s ease",
                       }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(0, 0, 0, 0.04)")}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "#f4f2f6")}
                       onMouseLeave={(e) =>
-                        (e.currentTarget.style.background = n.read ? "transparent" : "rgba(250, 246, 242, 0.5)")
+                        (e.currentTarget.style.background = n.read ? "#fff" : "#fffdf7")
                       }
                     >
                       {!n.read && (
@@ -371,16 +389,16 @@ export default function StaffHeader({ name, role, onNotificationClick }) {
                             height: 7,
                             borderRadius: "50%",
                             background: "#c0392b",
-                            marginTop: 5,
+                            marginTop: 6,
                             flexShrink: 0,
                           }}
                         />
                       )}
                       <div style={{ flex: 1, textAlign: "left" }}>
-                        <div style={{ fontFamily: FONT, fontSize: 13, color: INK, lineHeight: 1.4, textAlign: "left" }}>
+                        <div style={{ fontFamily: FONT, fontSize: 13, color: INK, lineHeight: 1.45, textAlign: "left" }}>
                           {n.message}
                         </div>
-                        <div style={{ fontFamily: FONT, fontSize: 11, color: MUTED, marginTop: 3, textAlign: "left" }}>
+                        <div style={{ fontFamily: FONT, fontSize: 11.5, color: MUTED, marginTop: 4, textAlign: "left" }}>
                           {n.time}
                         </div>
                       </div>
@@ -409,7 +427,7 @@ export default function StaffHeader({ name, role, onNotificationClick }) {
               width: 42,
               height: 42,
               borderRadius: "50%",
-              background: avatarColor,
+              background: INK,
               border: "none",
               cursor: "pointer",
               display: "flex",
@@ -435,32 +453,6 @@ export default function StaffHeader({ name, role, onNotificationClick }) {
               }}
             >
               <button
-                onClick={() => {
-                  setShowSettings(true);
-                  setMenuOpen(false);
-                }}
-                style={{
-                  width: "100%",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  padding: "12px 16px",
-                  border: "none",
-                  background: "#fff",
-                  cursor: "pointer",
-                  fontFamily: FONT,
-                  fontSize: 13,
-                  color: INK,
-                  textAlign: "left",
-                  borderBottom: "1px solid #eee",
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#f7f5f6")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "#fff")}
-              >
-                <Settings size={15} /> Settings
-              </button>
-
-              <button
                 onClick={handleLogout}
                 style={{
                   width: "100%",
@@ -485,15 +477,6 @@ export default function StaffHeader({ name, role, onNotificationClick }) {
           )}
         </div>
       </div>
-
-      {showSettings && (
-        <SettingsModal
-          onClose={() => {
-            setShowSettings(false);
-            setAvatarColor(localStorage.getItem("eurasia_avatar_color") || INK);
-          }}
-        />
-      )}
     </div>
   );
 }

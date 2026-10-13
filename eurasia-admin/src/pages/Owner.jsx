@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -14,6 +14,8 @@ import {
   ChevronLeft,
   ChevronRight,
   ArrowUpDown,
+  Bell,
+  X,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -56,7 +58,8 @@ const C = {
 const FONT_IMPORT =
   "@import url('https://fonts.googleapis.com/css2?family=Prata&display=swap');";
 
-const POLL_MS = 10000;
+const POLL_MS = 8000;
+const READ_KEY = "eurasia_read_notifications";
 
 const categoryBreakdown = [
   { name: "Appetizers", value: 2400 },
@@ -146,6 +149,19 @@ function formatDBDateTime(value) {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+// "3 minutes ago" reads better than a timestamp for something that just happened
+function timeAgo(value) {
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return "";
+  const mins = Math.floor((Date.now() - d.getTime()) / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} hour${hours > 1 ? "s" : ""} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days > 1 ? "s" : ""} ago`;
 }
 
 function toISODate(d) {
@@ -321,6 +337,297 @@ function ConfirmModal({ open, title, message, confirmLabel, onConfirm, onCancel,
   );
 }
 
+/* ---------------------------------------------------------------- */
+/* Notifications — what needs someone's attention right now          */
+/* ---------------------------------------------------------------- */
+const NOTIF_STYLES = {
+  reservation: { bg: "#e9eefb", fg: "#3b5ba8", Icon: CalendarCheck2, page: "frontdesk" },
+  order: { bg: "#fdf6df", fg: "#9c7a1f", Icon: ChefHat, page: "kitchen" },
+  payment: { bg: "#e5f0e6", fg: C.green, Icon: Wallet, page: "cashier" },
+  downpayment: { bg: "#f3e3e6", fg: "#9b4a5e", Icon: Wallet2, page: "cashier" },
+};
+
+// Turns the raw order and reservation rows into things a person can act on
+function buildNotifications(orders, reservations) {
+  const list = [];
+
+  reservations.forEach((r) => {
+    if (r.status === "pending") {
+      list.push({
+        id: `reservation-${r.id}`,
+        kind: "reservation",
+        title: "New reservation",
+        detail: `${r.guest_name} · ${r.party_size} pax · ${formatDBDate(r.reservation_date)} ${to12hFromDBTime(r.reservation_time)}`,
+        at: r.created_at,
+        target: { type: "reservation", id: r.id, date: r.reservation_date },
+      });
+    }
+
+    if (Number(r.downpayment_amount) > 0 && (r.payment_status || "pending") === "pending") {
+      list.push({
+        id: `downpayment-${r.id}`,
+        kind: "downpayment",
+        title: "Downpayment to verify",
+        detail: `${r.guest_name} · Php. ${Number(r.downpayment_amount).toLocaleString()} · ${r.payment_method || "—"}`,
+        at: r.created_at,
+        target: { type: "downpayment", id: r.id },
+      });
+    }
+  });
+
+  orders.forEach((o) => {
+    if (o.status === "pending") {
+      list.push({
+        id: `order-${o.id}`,
+        kind: "order",
+        title: "New order",
+        detail: `Order #${o.daily_number ?? o.id} · ${o.customer_name || "Guest"} · Php. ${Number(o.total).toLocaleString()}`,
+        at: o.created_at,
+        target: { type: "order", id: o.id },
+      });
+    }
+
+    const hasProof = Boolean(o.has_receipt ?? o.receipt_image);
+    if (hasProof && (o.payment_status || "pending") === "pending") {
+      list.push({
+        id: `payment-${o.id}`,
+        kind: "payment",
+        title: "Payment to verify",
+        detail: `Order #${o.daily_number ?? o.id} · ${o.customer_name || "Guest"} · Php. ${Number(o.total).toLocaleString()}`,
+        at: o.created_at,
+        target: { type: "payment", id: o.id },
+      });
+    }
+  });
+
+  return list.sort((a, b) => new Date(b.at) - new Date(a.at));
+}
+
+function NotificationBell({ notifications, readIds, onOpenItem, onMarkAllRead }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  const unread = notifications.filter((n) => !readIds.includes(n.id));
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    <div style={{ position: "relative" }} ref={ref}>
+      <button
+        onClick={() => setOpen((prev) => !prev)}
+        title="Notifications"
+        style={{
+          position: "relative",
+          border: `1px solid ${C.hair}`,
+          background: "#fff",
+          borderRadius: 12,
+          width: 42,
+          height: 42,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "pointer",
+          color: C.ink,
+          boxShadow: "0 1px 3px rgba(23,3,16,0.06)",
+        }}
+      >
+        <Bell size={19} />
+        {unread.length > 0 && (
+          <span
+            style={{
+              position: "absolute",
+              top: -5,
+              right: -5,
+              minWidth: 20,
+              height: 20,
+              padding: "0 5px",
+              borderRadius: 999,
+              background: "#c0392b",
+              color: "#fff",
+              fontSize: 11,
+              fontWeight: 700,
+              fontFamily: "'Prata', serif",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              border: "2px solid #f0eff3",
+            }}
+          >
+            {unread.length > 9 ? "9+" : unread.length}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div
+          style={{
+            position: "absolute",
+            top: "calc(100% + 10px)",
+            right: 0,
+            width: 360,
+            maxHeight: 440,
+            background: "#fff",
+            borderRadius: 16,
+            boxShadow: "0 12px 40px rgba(23,3,16,0.18)",
+            overflow: "hidden",
+            zIndex: 500,
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "16px 18px",
+              borderBottom: `1px solid ${C.hair}`,
+            }}
+          >
+            <div style={{ fontFamily: "'Prata', serif", fontSize: 15, color: C.ink }}>
+              Notifications
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {unread.length > 0 && (
+                <button
+                  onClick={onMarkAllRead}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    color: "#8a6228",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    fontFamily: "'Prata', serif",
+                    cursor: "pointer",
+                  }}
+                >
+                  Mark all read
+                </button>
+              )}
+              <button
+                onClick={() => setOpen(false)}
+                style={{ border: "none", background: "transparent", cursor: "pointer", color: C.inkSoft, display: "flex" }}
+              >
+                <X size={17} />
+              </button>
+            </div>
+          </div>
+
+          <div style={{ overflowY: "auto" }}>
+            {notifications.length === 0 ? (
+              <div
+                style={{
+                  padding: "40px 20px",
+                  textAlign: "center",
+                  color: C.inkSoft,
+                  fontSize: 13,
+                  fontFamily: "'Prata', serif",
+                }}
+              >
+                Nothing needs your attention right now.
+              </div>
+            ) : (
+              notifications.map((n) => {
+                const style = NOTIF_STYLES[n.kind];
+                const Icon = style.Icon;
+                const isUnread = !readIds.includes(n.id);
+
+                return (
+                  <button
+                    key={n.id}
+                    onClick={() => {
+                      onOpenItem(n);
+                      setOpen(false);
+                    }}
+                    style={{
+                      width: "100%",
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 12,
+                      padding: "14px 18px",
+                      border: "none",
+                      borderBottom: `1px solid ${C.hair}`,
+                      background: isUnread ? "#fffdf7" : "#fff",
+                      cursor: "pointer",
+                      textAlign: "left",
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = C.canvas)}
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.background = isUnread ? "#fffdf7" : "#fff")
+                    }
+                  >
+                    <span
+                      style={{
+                        width: 34,
+                        height: 34,
+                        borderRadius: 10,
+                        background: style.bg,
+                        color: style.fg,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Icon size={16} />
+                    </span>
+
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <span
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                          fontFamily: "'Prata', serif",
+                          fontSize: 13.5,
+                          color: C.ink,
+                        }}
+                      >
+                        {n.title}
+                        {isUnread && (
+                          <span
+                            style={{
+                              width: 7,
+                              height: 7,
+                              borderRadius: "50%",
+                              background: "#c0392b",
+                              flexShrink: 0,
+                            }}
+                          />
+                        )}
+                      </span>
+                      <span
+                        style={{
+                          display: "block",
+                          fontSize: 12,
+                          color: "#5a4a4f",
+                          marginTop: 3,
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        {n.detail}
+                      </span>
+                      <span style={{ display: "block", fontSize: 11, color: C.inkSoft, marginTop: 4 }}>
+                        {timeAgo(n.at)}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const NAV = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { key: "frontdesk", label: "Front Desk", icon: CalendarCheck2 },
@@ -329,12 +636,13 @@ const NAV = [
   { key: "history", label: "History", icon: HistoryIcon },
 ];
 
-function TopHeader({ onLogoClick }) {
+function TopHeader({ onLogoClick, children }) {
   return (
     <div
       style={{
         display: "flex",
         alignItems: "center",
+        justifyContent: "space-between",
         gap: 12,
         padding: "14px 32px",
       }}
@@ -355,6 +663,7 @@ function TopHeader({ onLogoClick }) {
           style={{ height: 45, width: "auto", objectFit: "contain" }}
         />
       </button>
+      {children}
     </div>
   );
 }
@@ -1268,18 +1577,6 @@ function DashboardPage() {
   );
 }
 
-function FrontDeskPage() {
-  return <Reservations embedded />;
-}
-
-function KitchenPage() {
-  return <OrderQueue embedded />;
-}
-
-function CashierPage() {
-  return <PaymentTransactions embedded />;
-}
-
 function HistoryPage() {
   const [tab, setTab] = useState("reservations");
   const [pastReservations, setPastReservations] = useState([]);
@@ -1505,14 +1802,6 @@ function HistoryPage() {
   );
 }
 
-const PAGES = {
-  dashboard: { Comp: DashboardPage },
-  frontdesk: { Comp: FrontDeskPage },
-  kitchen: { Comp: KitchenPage },
-  cashier: { Comp: CashierPage },
-  history: { Comp: HistoryPage },
-};
-
 export default function EurasiaAdmin() {
   const navigate = useNavigate();
   const [active, setActiveState] = useState(
@@ -1525,6 +1814,59 @@ export default function EurasiaAdmin() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
+  // --- Notifications ---
+  const [notifications, setNotifications] = useState([]);
+  const [readIds, setReadIds] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(READ_KEY)) || [];
+    } catch {
+      return [];
+    }
+  });
+  // What the notification click asked the page to jump to
+  const [highlight, setHighlight] = useState(null);
+
+  // Orders are fetched for today only, to match what the Kitchen and Cashier
+  // screens actually show — otherwise a notification points at a row that
+  // isn't on the page
+  const loadNotifications = useCallback(() => {
+    return Promise.all([
+      ordersApi.getAll({ today_only: "true" }),
+      reservationsApi.getAll(),
+    ])
+      .then(([orders, reservations]) => {
+        setNotifications(buildNotifications(orders, reservations));
+      })
+      .catch((err) => console.error("Failed to load notifications:", err));
+  }, []);
+
+  useEffect(() => {
+    loadNotifications();
+    const interval = setInterval(loadNotifications, POLL_MS);
+    return () => clearInterval(interval);
+  }, [loadNotifications]);
+
+  const markRead = (ids) => {
+    setReadIds((prev) => {
+      const next = Array.from(new Set([...prev, ...ids]));
+      try {
+        localStorage.setItem(READ_KEY, JSON.stringify(next));
+      } catch (e) {
+        console.error("Failed to save read notifications:", e);
+      }
+      return next;
+    });
+  };
+
+  const openNotification = (n) => {
+    console.log("Notification clicked:", n.kind, "→ page:", NOTIF_STYLES[n.kind].page, "target:", n.target);
+    markRead([n.id]);
+    setActive(NOTIF_STYLES[n.kind].page);
+    setHighlight(n.target);
+    // The highlight is a one-shot cue, so clear it once the page has used it
+    setTimeout(() => setHighlight(null), 4000);
+  };
+
   const handleLogout = () => {
     localStorage.removeItem("eurasia_role");
     localStorage.removeItem("eurasia_name");
@@ -1532,8 +1874,20 @@ export default function EurasiaAdmin() {
     navigate("/login");
   };
 
-  const page = PAGES[active];
-  const Page = page.Comp;
+  const renderPage = () => {
+    switch (active) {
+      case "frontdesk":
+        return <Reservations embedded highlightTarget={highlight} />;
+      case "kitchen":
+        return <OrderQueue embedded highlightTarget={highlight} />;
+      case "cashier":
+        return <PaymentTransactions embedded highlightTarget={highlight} />;
+      case "history":
+        return <HistoryPage />;
+      default:
+        return <DashboardPage />;
+    }
+  };
 
   return (
     <div style={{ fontFamily: "'Prata', serif", textAlign: "left" }}>
@@ -1546,7 +1900,15 @@ export default function EurasiaAdmin() {
       `}</style>
 
       <div style={{ minHeight: "100vh", background: C.canvas, textAlign: "left" }}>
-        <TopHeader onLogoClick={() => setSidebarOpen((prev) => !prev)} />
+        <TopHeader onLogoClick={() => setSidebarOpen((prev) => !prev)}>
+          <NotificationBell
+            notifications={notifications}
+            readIds={readIds}
+            onOpenItem={openNotification}
+            onMarkAllRead={() => markRead(notifications.map((n) => n.id))}
+          />
+        </TopHeader>
+
         <div style={{ display: "flex" }}>
           <Sidebar
             active={active}
@@ -1555,9 +1917,7 @@ export default function EurasiaAdmin() {
             onLogout={() => setShowLogoutConfirm(true)}
           />
           <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-            <div style={{ flex: 1, overflow: "auto" }}>
-              <Page />
-            </div>
+            <div style={{ flex: 1, overflow: "auto" }}>{renderPage()}</div>
           </div>
         </div>
       </div>

@@ -1,16 +1,18 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import { X, Check, Ban, Eye } from "lucide-react";
 import StaffHeader from "../components/StaffHeader";
 import { ordersApi } from "../services/ordersApi";
 import { reservationsApi } from "../services/reservationsApi";
 
-const POLL_MS = 10000;
+const POLL_MS = 8000;
+const HIGHLIGHT_MS = 4000;
 const STATUS_LABEL = { pending: "Pending", verified: "Completed", failed: "Failed" };
 
 function StatCard({ label, value }) {
   return (
     <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-      <div className="text-xs text-gray-500 font-[Prata] mb-2">{label}</div>
+      <div className="text-xs text-gray-600 font-[Prata] mb-2">{label}</div>
       <div
         className="text-2xl font-[Prata] text-[#1d080f]"
         style={{ WebkitTextStroke: "0.6px #1d080f" }}
@@ -75,7 +77,7 @@ function ValidateModal({ transaction, busy, onClose, onConfirm, onFail }) {
       >
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 text-gray-400 hover:text-gray-600"
+          className="absolute top-5 right-5 text-gray-500 hover:text-gray-700"
         >
           <X size={18} />
         </button>
@@ -86,24 +88,24 @@ function ValidateModal({ transaction, busy, onClose, onConfirm, onFail }) {
         >
           Validate Payment
         </h3>
-        <p className="text-xs text-gray-500 mb-5">Verify and confirm the payment.</p>
+        <p className="text-xs text-gray-600 mb-5">Verify and confirm the payment.</p>
 
         <div className="space-y-3 text-sm mb-5">
           <div className="flex justify-between">
-            <span className="text-gray-500">Customer</span>
+            <span className="text-gray-600">Customer</span>
             <span className="text-[#1d080f]">{transaction.customer}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-500">Order #</span>
+            <span className="text-gray-600">Order #</span>
             <span className="text-[#1d080f]">{transaction.displayNo}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-500">Payment Method</span>
+            <span className="text-gray-600">Payment Method</span>
             <span className="text-[#1d080f] capitalize">{transaction.method || "—"}</span>
           </div>
           {transaction.discount && (
             <div className="flex justify-between">
-              <span className="text-gray-500">Discount</span>
+              <span className="text-gray-600">Discount</span>
               <span className="text-[#1d080f] capitalize">
                 {transaction.discount}
                 {transaction.discountAmount
@@ -113,13 +115,13 @@ function ValidateModal({ transaction, busy, onClose, onConfirm, onFail }) {
             </div>
           )}
           <div className="flex justify-between">
-            <span className="text-gray-500">Amount</span>
+            <span className="text-gray-600">Amount</span>
             <span className="text-[#1d080f]">Php. {transaction.amount.toLocaleString()}</span>
           </div>
         </div>
 
         <div className="mb-4">
-          <p className="text-xs text-gray-500 mb-2">Proof of Payment</p>
+          <p className="text-xs text-gray-600 mb-2">Proof of Payment</p>
           {transaction.receiptImage ? (
             <a href={transaction.receiptImage} target="_blank" rel="noreferrer">
               <img
@@ -129,7 +131,7 @@ function ValidateModal({ transaction, busy, onClose, onConfirm, onFail }) {
               />
             </a>
           ) : (
-            <div className="border border-dashed border-gray-300 rounded-lg p-4 text-center text-xs text-gray-500">
+            <div className="border border-dashed border-gray-300 rounded-lg p-4 text-center text-xs text-gray-600">
               No proof of payment uploaded.
             </div>
           )}
@@ -137,7 +139,7 @@ function ValidateModal({ transaction, busy, onClose, onConfirm, onFail }) {
 
         {transaction.discountIdImage && (
           <div className="mb-4">
-            <p className="text-xs text-gray-500 mb-2">Discount ID</p>
+            <p className="text-xs text-gray-600 mb-2">Discount ID</p>
             <a href={transaction.discountIdImage} target="_blank" rel="noreferrer">
               <img
                 src={transaction.discountIdImage}
@@ -209,7 +211,7 @@ function DownpaymentModal({ reservation, busy, onClose, onConfirm, onFail }) {
       >
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 text-gray-400 hover:text-gray-600"
+          className="absolute top-5 right-5 text-gray-500 hover:text-gray-700"
         >
           <X size={18} />
         </button>
@@ -220,46 +222,46 @@ function DownpaymentModal({ reservation, busy, onClose, onConfirm, onFail }) {
         >
           {reservation.isCash ? "Cash Downpayment" : "Verify Downpayment"}
         </h3>
-        <p className="text-xs text-gray-500 mb-5">
+        <p className="text-xs text-gray-600 mb-5">
           Once verified, the front desk can confirm this reservation.
         </p>
 
         <div className="space-y-3 text-sm mb-5">
           <div className="flex justify-between">
-            <span className="text-gray-500">Guest</span>
+            <span className="text-gray-600">Guest</span>
             <span className="text-[#1d080f]">{reservation.guestName}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-500">Reservation</span>
+            <span className="text-gray-600">Reservation</span>
             <span className="text-[#1d080f] capitalize">
               {reservation.type === "event" ? "Event" : "Table"} · {reservation.pax} pax
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-500">Date &amp; Time</span>
+            <span className="text-gray-600">Date &amp; Time</span>
             <span className="text-[#1d080f]">{reservation.date} · {reservation.time}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-500">Payment Method</span>
+            <span className="text-gray-600">Payment Method</span>
             <span className="text-[#1d080f] capitalize">{reservation.method || "—"}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-500">Amount</span>
+            <span className="text-gray-600">Amount</span>
             <span className="text-[#1d080f]">Php. {reservation.amount.toLocaleString()}</span>
           </div>
         </div>
 
         <div className="mb-4">
-          <p className="text-xs text-gray-500 mb-2">
+          <p className="text-xs text-gray-600 mb-2">
             {reservation.isCash ? "Cash Payment" : "Proof of Payment"}
           </p>
           {reservation.isCash ? (
-            <div className="bg-[#f7f5f0] rounded-lg p-4 text-xs text-gray-600 leading-relaxed">
+            <div className="bg-[#f7f5f0] rounded-lg p-4 text-xs text-gray-700 leading-relaxed">
               The guest is paying in cash at the restaurant. Only mark this as received once you
               have the Php. {reservation.amount.toLocaleString()} in hand.
             </div>
           ) : loading ? (
-            <div className="border border-dashed border-gray-300 rounded-lg p-8 text-center text-xs text-gray-500">
+            <div className="border border-dashed border-gray-300 rounded-lg p-8 text-center text-xs text-gray-600">
               Loading proof...
             </div>
           ) : proof ? (
@@ -271,7 +273,7 @@ function DownpaymentModal({ reservation, busy, onClose, onConfirm, onFail }) {
               />
             </a>
           ) : (
-            <div className="border border-dashed border-gray-300 rounded-lg p-4 text-center text-xs text-gray-500">
+            <div className="border border-dashed border-gray-300 rounded-lg p-4 text-center text-xs text-gray-600">
               No proof of payment uploaded.
             </div>
           )}
@@ -374,7 +376,8 @@ function assignDailyNumbers(list) {
   }));
 }
 
-export default function PaymentTransactions({ embedded = false }) {
+export default function PaymentTransactions({ embedded = false, highlightTarget = null }) {
+  const location = useLocation();
   const [transactions, setTransactions] = useState([]);
   const [downpayments, setDownpayments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -386,6 +389,9 @@ export default function PaymentTransactions({ embedded = false }) {
   // Which row is loading its photo, and whether a Confirm/Fail is being saved
   const [loadingId, setLoadingId] = useState(null);
   const [saving, setSaving] = useState(false);
+  // A notification click asks this page to surface one row
+  const [highlight, setHighlight] = useState(null);
+  const highlightRef = useRef(null);
 
   const fetchAll = useCallback(() => {
     return Promise.all([
@@ -413,6 +419,32 @@ export default function PaymentTransactions({ embedded = false }) {
     const interval = setInterval(fetchAll, POLL_MS);
     return () => clearInterval(interval);
   }, [fetchAll]);
+
+  // Jump to the right tab and flag the row the notification pointed at. The
+  // target arrives as a prop inside the Owner shell, or through router state
+  // on the standalone page.
+  useEffect(() => {
+    const target = highlightTarget || location.state?.highlight;
+    if (!target) return;
+    if (target.type === "payment") {
+      setView("pending");
+      setHighlight({ kind: "payment", id: target.id });
+    } else if (target.type === "downpayment") {
+      setView("downpayments");
+      setHighlight({ kind: "downpayment", id: target.id });
+    } else {
+      return;
+    }
+    const timer = setTimeout(() => setHighlight(null), HIGHLIGHT_MS);
+    return () => clearTimeout(timer);
+  }, [highlightTarget, location.state]);
+
+  // Scroll the highlighted row into view once it renders
+  useEffect(() => {
+    if (highlight && highlightRef.current) {
+      highlightRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [highlight, transactions, downpayments]);
 
   const showToast = (message, tone = "success") => {
     setToast({ message, tone });
@@ -528,7 +560,16 @@ export default function PaymentTransactions({ embedded = false }) {
   const cellClass = "px-6 py-4 align-top text-left";
 
   const viewButtonClass =
-    "inline-flex items-center gap-1.5 text-xs font-[Prata] px-3 py-1.5 rounded-lg border border-gray-200 text-[#1d080f] hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-wait";
+    "inline-flex items-center gap-1.5 text-xs font-[Prata] px-3 py-1.5 rounded-lg border border-gray-300 text-[#1d080f] hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-wait";
+
+  // A highlighted row gets an amber wash so the eye lands on it immediately
+  const rowClass = (kind, id) =>
+    highlight && highlight.kind === kind && highlight.id === id
+      ? "border-b border-gray-100 last:border-0 text-sm bg-[#fff8e1] transition-colors duration-500"
+      : "border-b border-gray-100 last:border-0 text-sm transition-colors duration-500";
+
+  const rowRef = (kind, id) =>
+    highlight && highlight.kind === kind && highlight.id === id ? highlightRef : null;
 
   const tabs = embedded
     ? [
@@ -579,21 +620,21 @@ export default function PaymentTransactions({ embedded = false }) {
         </div>
 
         {loading ? (
-          <div className="bg-white rounded-xl p-12 text-center text-gray-400 font-[Prata] text-sm shadow-sm border border-gray-100">
+          <div className="bg-white rounded-xl p-12 text-center text-gray-500 font-[Prata] text-sm shadow-sm border border-gray-100">
             Loading transactions...
           </div>
         ) : (
           <>
             {view === "pending" && (
               pendingTransactions.length === 0 ? (
-                <div className="bg-white rounded-xl p-12 text-center text-gray-400 font-[Prata] text-sm shadow-sm border border-gray-100">
+                <div className="bg-white rounded-xl p-12 text-center text-gray-500 font-[Prata] text-sm shadow-sm border border-gray-100">
                   No pending order payments.
                 </div>
               ) : (
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
                   <table className="w-full text-left" style={{ minWidth: 800 }}>
                     <thead>
-                      <tr className="text-xs text-gray-500 border-b border-gray-100">
+                      <tr className="text-xs text-gray-600 border-b border-gray-100">
                         {["Order #", "Customer", "Method", "Amount", "Receipt", "Status", "Date & Time"].map((h) => (
                           <th key={h} className="px-6 py-4 font-[Prata] font-normal text-left">{h}</th>
                         ))}
@@ -601,11 +642,11 @@ export default function PaymentTransactions({ embedded = false }) {
                     </thead>
                     <tbody>
                       {pendingTransactions.map((t) => (
-                        <tr key={t.id} className="border-b border-gray-100 last:border-0 text-sm">
+                        <tr key={t.id} ref={rowRef("payment", t.id)} className={rowClass("payment", t.id)}>
                           <td className={cellClass} style={{ WebkitTextStroke: "0.3px #1d080f" }}>{t.displayNo}</td>
                           <td className={cellClass}>{t.customer}</td>
                           <td className={`${cellClass} capitalize`}>
-                            {t.method || <span className="text-gray-400">—</span>}
+                            {t.method || <span className="text-gray-500">—</span>}
                           </td>
                           <td className={cellClass}>Php. {t.amount.toLocaleString()}</td>
                           <td className={cellClass}>
@@ -619,7 +660,7 @@ export default function PaymentTransactions({ embedded = false }) {
                                 {loadingId === t.id ? "Loading..." : "View"}
                               </button>
                             ) : (
-                              <span className="text-xs text-gray-400">—</span>
+                              <span className="text-xs text-gray-500">—</span>
                             )}
                           </td>
                           <td className={cellClass}>
@@ -632,10 +673,10 @@ export default function PaymentTransactions({ embedded = false }) {
                                 {loadingId === t.id ? "Loading..." : "Verify Payment"}
                               </button>
                             ) : (
-                              <span className="text-xs text-gray-400 italic">Awaiting payment</span>
+                              <span className="text-xs text-gray-500 italic">Awaiting payment</span>
                             )}
                           </td>
-                          <td className={`${cellClass} text-gray-500`}>
+                          <td className={`${cellClass} text-gray-600`}>
                             {t.date}<br />{t.time}
                           </td>
                         </tr>
@@ -648,14 +689,14 @@ export default function PaymentTransactions({ embedded = false }) {
 
             {view === "downpayments" && (
               pendingDownpayments.length === 0 ? (
-                <div className="bg-white rounded-xl p-12 text-center text-gray-400 font-[Prata] text-sm shadow-sm border border-gray-100">
+                <div className="bg-white rounded-xl p-12 text-center text-gray-500 font-[Prata] text-sm shadow-sm border border-gray-100">
                   No downpayments waiting for verification.
                 </div>
               ) : (
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
                   <table className="w-full text-left" style={{ minWidth: 800 }}>
                     <thead>
-                      <tr className="text-xs text-gray-500 border-b border-gray-100">
+                      <tr className="text-xs text-gray-600 border-b border-gray-100">
                         {["Guest", "Reservation", "Pax", "Method", "Amount", "Status", "Date & Time"].map((h) => (
                           <th key={h} className="px-6 py-4 font-[Prata] font-normal text-left">{h}</th>
                         ))}
@@ -663,7 +704,7 @@ export default function PaymentTransactions({ embedded = false }) {
                     </thead>
                     <tbody>
                       {pendingDownpayments.map((d) => (
-                        <tr key={d.id} className="border-b border-gray-100 last:border-0 text-sm">
+                        <tr key={d.id} ref={rowRef("downpayment", d.id)} className={rowClass("downpayment", d.id)}>
                           <td className={cellClass} style={{ WebkitTextStroke: "0.3px #1d080f" }}>{d.guestName}</td>
                           <td className={cellClass}>
                             <span className={`text-xs font-[Prata] px-3 py-1 rounded-lg ${
@@ -676,7 +717,7 @@ export default function PaymentTransactions({ embedded = false }) {
                           </td>
                           <td className={cellClass}>{d.pax}</td>
                           <td className={`${cellClass} capitalize`}>
-                            {d.method || <span className="text-gray-400">—</span>}
+                            {d.method || <span className="text-gray-500">—</span>}
                           </td>
                           <td className={cellClass}>Php. {d.amount.toLocaleString()}</td>
                           <td className={cellClass}>
@@ -688,10 +729,10 @@ export default function PaymentTransactions({ embedded = false }) {
                                 {d.isCash ? "Mark as Received" : "Verify Downpayment"}
                               </button>
                             ) : (
-                              <span className="text-xs text-gray-400 italic">No proof uploaded</span>
+                              <span className="text-xs text-gray-500 italic">No proof uploaded</span>
                             )}
                           </td>
-                          <td className={`${cellClass} text-gray-500`}>
+                          <td className={`${cellClass} text-gray-600`}>
                             {d.date}<br />{d.time}
                           </td>
                         </tr>
@@ -705,13 +746,13 @@ export default function PaymentTransactions({ embedded = false }) {
             {view === "history" && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
                 {historyTransactions.length === 0 ? (
-                  <div className="p-12 text-center text-gray-400 font-[Prata] text-sm">
+                  <div className="p-12 text-center text-gray-500 font-[Prata] text-sm">
                     No payment history yet.
                   </div>
                 ) : (
                   <table className="w-full text-left" style={{ minWidth: 800 }}>
                     <thead>
-                      <tr className="text-xs text-gray-500 border-b border-gray-100">
+                      <tr className="text-xs text-gray-600 border-b border-gray-100">
                         {["Order #", "Customer", "Method", "Amount", "Receipt", "Status", "Date & Time"].map((h) => (
                           <th key={h} className="px-6 py-4 font-[Prata] font-normal text-left">{h}</th>
                         ))}
@@ -723,7 +764,7 @@ export default function PaymentTransactions({ embedded = false }) {
                           <td className={cellClass} style={{ WebkitTextStroke: "0.3px #1d080f" }}>{t.displayNo}</td>
                           <td className={cellClass}>{t.customer}</td>
                           <td className={`${cellClass} capitalize`}>
-                            {t.method || <span className="text-gray-400">—</span>}
+                            {t.method || <span className="text-gray-500">—</span>}
                           </td>
                           <td className={cellClass}>Php. {t.amount.toLocaleString()}</td>
                           <td className={cellClass}>
@@ -737,7 +778,7 @@ export default function PaymentTransactions({ embedded = false }) {
                                 {loadingId === t.id ? "Loading..." : "View"}
                               </button>
                             ) : (
-                              <span className="text-xs text-gray-400">—</span>
+                              <span className="text-xs text-gray-500">—</span>
                             )}
                           </td>
                           <td className={cellClass}>
@@ -749,7 +790,7 @@ export default function PaymentTransactions({ embedded = false }) {
                               <StatusBadge status={t.status} />
                             )}
                           </td>
-                          <td className={`${cellClass} text-gray-500`}>
+                          <td className={`${cellClass} text-gray-600`}>
                             {t.date}<br />{t.time}
                           </td>
                         </tr>

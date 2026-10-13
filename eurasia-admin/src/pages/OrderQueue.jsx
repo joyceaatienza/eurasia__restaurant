@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import StaffHeader from "../components/StaffHeader";
 import { ordersApi } from "../services/ordersApi";
 
@@ -15,7 +16,8 @@ const REVERSE_STATUS_MAP = {
   Preparing: 'preparing',
   Ready: 'ready',
 };
-const POLL_MS = 10000;
+const POLL_MS = 8000;
+const HIGHLIGHT_MS = 4000;
 
 function normalizeOrder(o) {
   const createdAt = new Date(o.created_at);
@@ -58,33 +60,50 @@ function assignDailyNumbers(orders) {
   }));
 }
 
-export default function OrderQueue({ embedded = false }) {
+export default function OrderQueue({ embedded = false, highlightTarget = null }) {
+  const location = useLocation();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState({ message: "", tone: "success" });
   const [view, setView] = useState("active");
+  const [highlightId, setHighlightId] = useState(null);
+  const highlightRef = useRef(null);
 
-  const loadOrders = useCallback(() => {
-    setLoading(true);
-    ordersApi.getAll({ today_only: 'true' })
+  const loadOrders = useCallback((showSpinner = false) => {
+    if (showSpinner) setLoading(true);
+    return ordersApi.getAll({ today_only: 'true' })
       .then((data) => setOrders(assignDailyNumbers(data.map(normalizeOrder))))
       .catch((err) => console.error('Failed to load orders:', err))
-      .finally(() => setLoading(false));
+      .finally(() => { if (showSpinner) setLoading(false); });
   }, []);
 
-   useEffect(() => {
-    loadOrders();
+  useEffect(() => {
+    loadOrders(true);
   }, [loadOrders]);
 
   // New orders should land on the kitchen screen on their own
   useEffect(() => {
-    const interval = setInterval(() => {
-      ordersApi.getAll({ today_only: 'true' })
-        .then((data) => setOrders(assignDailyNumbers(data.map(normalizeOrder))))
-        .catch((err) => console.error('Order poll failed:', err));
-    }, POLL_MS);
+    const interval = setInterval(() => loadOrders(), POLL_MS);
     return () => clearInterval(interval);
-  }, []);
+  }, [loadOrders]);
+
+  // A notification click asks this page to surface one order. It arrives as a
+  // prop inside the Owner shell, or through router state on the standalone page.
+  useEffect(() => {
+    const target = highlightTarget || location.state?.highlight;
+    if (!target || target.type !== "order") return;
+    setView("active");
+    setHighlightId(target.id);
+    const timer = setTimeout(() => setHighlightId(null), HIGHLIGHT_MS);
+    return () => clearTimeout(timer);
+  }, [highlightTarget, location.state]);
+
+  // Scroll the highlighted card into view once it renders
+  useEffect(() => {
+    if (highlightId && highlightRef.current) {
+      highlightRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [highlightId, orders]);
 
   const showToast = (message, tone = "success") => {
     setToast({ message, tone });
@@ -125,7 +144,7 @@ export default function OrderQueue({ embedded = false }) {
   const activeOrders = orders.filter((order) => order.status !== 'Ready');
   const completedOrders = [...orders]
     .filter((order) => order.status === 'Ready')
-    .sort((a, b) => (a.date + a.time < b.date + b.time ? 1 : -1));
+    .sort((a, b) => b.createdAt - a.createdAt);
 
   return (
     <div className="min-h-screen bg-[#f0eff3] font-[Prata] text-[#1d080f] text-left">
@@ -160,112 +179,120 @@ export default function OrderQueue({ embedded = false }) {
         </div>
 
         {loading ? (
-          <div className="bg-white rounded-xl p-12 text-center text-gray-400 font-[Prata] text-sm shadow-sm border border-gray-100">
+          <div className="bg-white rounded-xl p-12 text-center text-gray-500 font-[Prata] text-sm shadow-sm border border-gray-100">
             Loading orders...
           </div>
         ) : (
           <>
             {view === "active" && (
               activeOrders.length === 0 ? (
-                <div className="bg-white rounded-xl p-12 text-center text-gray-400 font-[Prata] text-sm shadow-sm border border-gray-100">
+                <div className="bg-white rounded-xl p-12 text-center text-gray-500 font-[Prata] text-sm shadow-sm border border-gray-100">
                   No orders yet.
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-                  {activeOrders.map((order) => (
-                    <div
-                      key={order.id}
-                      className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex flex-col justify-between text-left"
-                    >
-                      <div>
-                        <div className="flex justify-between items-start mb-1">
-                          <div className="flex items-center gap-3">
-                            <h2
-                              className="font-[Prata] text-2xl text-[#1d080f]"
-                              style={{ WebkitTextStroke: "0.7px #1d080f" }}
-                            >
-                              Order {order.displayNo}
-                            </h2>
-                            {order.status === 'Preparing' && (
-                              <span className="bg-[#f5e79e] text-[#5e5113] text-xs font-[Prata] px-3 py-1 rounded-md">
-                                Preparing
-                              </span>
-                            )}
-                            {order.status === 'Waiting' && (
-                              <span className="bg-[#e2e2e2] text-[#555] text-xs font-[Prata] px-3 py-1 rounded-md">
-                                Waiting
-                              </span>
-                            )}
-                          </div>
-                          <div
-                            className="font-[Prata] text-xl text-[#1d080f]"
-                            style={{ WebkitTextStroke: "0.5px #1d080f" }}
-                          >
-                            Php. {order.total?.toLocaleString?.() ?? order.total}
-                          </div>
-                        </div>
-
-                        <div className="text-xs text-gray-600 mb-4 space-y-0.5 font-[Prata]">
-                          <p>{order.customer}</p>
-                          <p className="text-gray-500">{order.time}</p>
-                        </div>
-
-                        <div className="space-y-2 mb-6 my-4">
-                          {order.items.map((item) => {
-                            const canCheck = order.status === 'Preparing';
-                            return (
-                              <div
-                                key={item.id}
-                                onClick={() => canCheck && handleToggleItem(order.id, item.id)}
-                                className={`flex justify-between items-center text-sm p-1 rounded transition font-[Prata] ${
-                                  canCheck ? 'cursor-pointer hover:bg-gray-50' : 'cursor-not-allowed opacity-50'
-                                }`}
+                  {activeOrders.map((order) => {
+                    const isHighlighted = order.id === highlightId;
+                    return (
+                      <div
+                        key={order.id}
+                        ref={isHighlighted ? highlightRef : null}
+                        className={`bg-white rounded-xl p-6 shadow-sm flex flex-col justify-between text-left transition-all duration-500 ${
+                          isHighlighted
+                            ? 'border-2 border-[#f2c14e] ring-4 ring-[#f2c14e]/25'
+                            : 'border border-gray-100'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex justify-between items-start mb-1">
+                            <div className="flex items-center gap-3">
+                              <h2
+                                className="font-[Prata] text-2xl text-[#1d080f]"
+                                style={{ WebkitTextStroke: "0.7px #1d080f" }}
                               >
-                                <div className="flex items-center gap-2">
-                                  <span className="text-xs text-gray-600">
-                                    [{item.checked ? 'X' : ' '}]
-                                  </span>
-                                  <span className={item.checked ? 'line-through text-gray-400' : 'text-[#1d080f]'}>
-                                    ({item.qty}) {item.name} {item.note && <span className="text-gray-600">- {item.note}</span>}
+                                Order {order.displayNo}
+                              </h2>
+                              {order.status === 'Preparing' && (
+                                <span className="bg-[#f5e79e] text-[#5e5113] text-xs font-[Prata] px-3 py-1 rounded-md">
+                                  Preparing
+                                </span>
+                              )}
+                              {order.status === 'Waiting' && (
+                                <span className="bg-[#e2e2e2] text-[#555] text-xs font-[Prata] px-3 py-1 rounded-md">
+                                  Waiting
+                                </span>
+                              )}
+                            </div>
+                            <div
+                              className="font-[Prata] text-xl text-[#1d080f]"
+                              style={{ WebkitTextStroke: "0.5px #1d080f" }}
+                            >
+                              Php. {order.total?.toLocaleString?.() ?? order.total}
+                            </div>
+                          </div>
+
+                          <div className="text-xs text-gray-700 mb-4 space-y-0.5 font-[Prata]">
+                            <p>{order.customer}</p>
+                            <p className="text-gray-600">{order.time}</p>
+                          </div>
+
+                          <div className="space-y-2 mb-6 my-4">
+                            {order.items.map((item) => {
+                              const canCheck = order.status === 'Preparing';
+                              return (
+                                <div
+                                  key={item.id}
+                                  onClick={() => canCheck && handleToggleItem(order.id, item.id)}
+                                  className={`flex justify-between items-center text-sm p-1 rounded transition font-[Prata] ${
+                                    canCheck ? 'cursor-pointer hover:bg-gray-50' : 'cursor-not-allowed opacity-60'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-gray-700">
+                                      [{item.checked ? 'X' : ' '}]
+                                    </span>
+                                    <span className={item.checked ? 'line-through text-gray-500' : 'text-[#1d080f]'}>
+                                      ({item.qty}) {item.name} {item.note ? <span className="text-gray-700">- {item.note}</span> : null}
+                                    </span>
+                                  </div>
+                                  <span className="text-xs text-gray-800 tabular-nums">
+                                    Php. {item.price}
                                   </span>
                                 </div>
-                                <span className="text-xs text-gray-800 tabular-nums">
-                                  Php. {item.price}
-                                </span>
-                              </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div className="mt-2">
+                          {order.status === 'Preparing' && (() => {
+                            const allChecked = order.items.every((item) => item.checked);
+                            return (
+                              <button
+                                onClick={() => allChecked && handleStatusChange(order.id)}
+                                disabled={!allChecked}
+                                className={`w-full py-2.5 rounded-lg font-[Prata] text-sm transition ${
+                                  allChecked
+                                    ? 'bg-[#296c39] text-white hover:bg-[#1f5129] cursor-pointer'
+                                    : 'bg-[#e0e0e0] text-[#777777] cursor-not-allowed'
+                                }`}
+                              >
+                                Mark as Ready
+                              </button>
                             );
-                          })}
+                          })()}
+                          {order.status === 'Waiting' && (
+                            <button
+                              onClick={() => handleStatusChange(order.id)}
+                              className="w-full py-2.5 rounded-lg bg-[#1d080f] text-white font-[Prata] text-sm hover:bg-[#3a1420] transition"
+                            >
+                              Start Preparing
+                            </button>
+                          )}
                         </div>
                       </div>
-
-                      <div className="mt-2">
-                        {order.status === 'Preparing' && (() => {
-                          const allChecked = order.items.every((item) => item.checked);
-                          return (
-                            <button
-                              onClick={() => allChecked && handleStatusChange(order.id)}
-                              disabled={!allChecked}
-                              className={`w-full py-2.5 rounded-lg font-[Prata] text-sm transition ${
-                                allChecked
-                                  ? 'bg-[#296c39] text-white hover:bg-[#1f5129] cursor-pointer'
-                                  : 'bg-[#e0e0e0] text-[#888888] cursor-not-allowed'
-                              }`}
-                            >
-                              Mark as Ready
-                            </button>
-                          );
-                        })()}
-                        {order.status === 'Waiting' && (
-                          <button
-                            onClick={() => handleStatusChange(order.id)}
-                            className="w-full py-2.5 rounded-lg bg-[#1d080f] text-white font-[Prata] text-sm hover:bg-[#3a1420] transition"
-                          >
-                            Start Preparing
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )
             )}
@@ -273,13 +300,13 @@ export default function OrderQueue({ embedded = false }) {
             {view === "history" && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
                 {completedOrders.length === 0 ? (
-                  <div className="p-12 text-center text-gray-400 font-[Prata] text-sm">
+                  <div className="p-12 text-center text-gray-500 font-[Prata] text-sm">
                     No completed orders yet.
                   </div>
                 ) : (
                   <table className="w-full text-left">
                     <thead>
-                      <tr className="text-xs text-gray-500 border-b border-gray-100">
+                      <tr className="text-xs text-gray-600 border-b border-gray-100">
                         {["Order #", "Customer", "Total", "Date & Time"].map((h) => (
                           <th key={h} className="px-6 py-4 font-[Prata] font-normal">{h}</th>
                         ))}
@@ -291,7 +318,7 @@ export default function OrderQueue({ embedded = false }) {
                           <td className="px-6 py-4" style={{ WebkitTextStroke: "0.3px #1d080f" }}>{o.displayNo}</td>
                           <td className="px-6 py-4">{o.customer}</td>
                           <td className="px-6 py-4">Php. {o.total?.toLocaleString?.() ?? o.total}</td>
-                          <td className="px-6 py-4 text-gray-500">{o.date} · {o.time}</td>
+                          <td className="px-6 py-4 text-gray-600">{o.date} · {o.time}</td>
                         </tr>
                       ))}
                     </tbody>

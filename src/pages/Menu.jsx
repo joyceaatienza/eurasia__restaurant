@@ -878,7 +878,7 @@ const menuItems = [
     description: 'Ripe mango meets coconut-glazed sticky rice',
     price: 240,
     image: mango,
-    category: 'Desserts',
+    category: 'Dessert',
   },
    {
     id: 75,
@@ -888,7 +888,7 @@ const menuItems = [
     description: 'A soft, purple yam cake with a light, sweet flavor and creamy frosting',
     price: 275,
     image: lilaSucre,
-    category: 'Desserts',
+    category: 'Dessert',
   },
   {
     id: 76,
@@ -898,7 +898,7 @@ const menuItems = [
     description: 'Homemade spanish donuts sprinkled with cinnamon powder served with chocolate dip',
     price: 275,
     image: sansRival,
-    category: 'Desserts',
+    category: 'Dessert',
   },
    {
     id: 77,
@@ -908,7 +908,7 @@ const menuItems = [
     description: 'Slow cooked rice cake topped with vanilla ice cream and coconut cream sauce, garnished with desiccated coconut',
     price: 195,
     image: suman,
-    category: 'Desserts',
+    category: 'Dessert',
   },
   {
     id: 78,
@@ -918,7 +918,7 @@ const menuItems = [
     description: 'A chocolate parfait is a layered dessert served chilled in a tall glass, it combines creamy textures and deep chocolate flavor for a decadent treat',
     price: 268,
     image: parfaitDeluxe,
-    category: 'Desserts',
+    category: 'Dessert',
   },
    {
     id: 79,
@@ -928,7 +928,7 @@ const menuItems = [
     description: 'Toasted mini pizza spread with chocolate ganache, choice of Choco chips or white chocolate',
     price: 288,
     image: pizzetoChoco,
-    category: 'Desserts',
+    category: 'Dessert',
   },
 
   //Chef's Special

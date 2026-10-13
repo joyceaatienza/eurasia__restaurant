@@ -61,6 +61,34 @@ function formatDateTime(value) {
   });
 }
 
+/* Shows the picked photo so the customer can catch a wrong file before submitting */
+function ImagePreview({ file, previewUrl, onRemove, label }) {
+  if (!previewUrl) return null;
+
+  return (
+    <div className="mt-3">
+      <div className="relative rounded-xl overflow-hidden border border-neutral-200 bg-neutral-50">
+        <img
+          src={previewUrl}
+          alt={label}
+          className="w-full max-h-56 object-contain"
+        />
+        <button
+          type="button"
+          onClick={onRemove}
+          title="Remove this photo"
+          className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 transition cursor-pointer"
+        >
+          <X size={16} />
+        </button>
+      </div>
+      <p className="mt-2 text-xs text-neutral-700 text-center">
+        {file?.name} — tap the photo area above to choose a different one.
+      </p>
+    </div>
+  );
+}
+
 function OrderHistoryCard({ order }) {
   const status = (order.status || 'pending').toLowerCase();
   const cancelled = status === 'cancelled';
@@ -80,38 +108,38 @@ function OrderHistoryCard({ order }) {
   );
 
   let payLabel = 'Unpaid';
-  let payClass = 'bg-neutral-100 text-neutral-500';
+  let payClass = 'bg-neutral-200 text-neutral-700';
   if (paid) {
     payLabel = 'Payment verified';
-    payClass = 'bg-emerald-50 text-emerald-700';
+    payClass = 'bg-emerald-100 text-emerald-800';
   } else if (settled) {
     payLabel = 'Awaiting verification';
-    payClass = 'bg-amber-50 text-amber-700';
+    payClass = 'bg-amber-100 text-amber-900';
   }
 
   return (
     <div className="bg-white rounded-2xl border border-neutral-200/80 p-5 shadow-xs">
       <div className="flex items-center justify-between mb-1">
-        <span className="font-[Prata] text-sm text-[#1d080f]">
+        <span className="font-[Prata] text-base text-[#1d080f]">
           {order.customer_name || '—'}
         </span>
-        <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-full ${payClass}`}>
+        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${payClass}`}>
           {payLabel}
         </span>
       </div>
-      <p className="text-[11px] text-neutral-400 mb-1" style={{ textAlign: 'left' }}>
+      <p className="text-xs text-neutral-700 mb-1" style={{ textAlign: 'left' }}>
         Order #{orderNo}
         {order.table_number ? ` · Table ${order.table_number}` : ''}
       </p>
-      <div className="text-[11px] text-neutral-400 mb-4 space-y-0.5" style={{ textAlign: 'left' }}>
+      <div className="text-xs text-neutral-700 mb-4 space-y-0.5" style={{ textAlign: 'left' }}>
         <p>Ordered: {formatDateTime(order.created_at)}</p>
         {paid && order.verified_at && (
-          <p className="text-emerald-700">Payment verified: {formatDateTime(order.verified_at)}</p>
+          <p className="text-emerald-800 font-medium">Payment verified: {formatDateTime(order.verified_at)}</p>
         )}
       </div>
 
       {cancelled ? (
-        <div className="bg-red-50 text-red-600 text-xs font-medium rounded-lg px-3 py-2 text-center mb-3">
+        <div className="bg-red-100 text-red-800 text-sm font-medium rounded-lg px-3 py-2 text-center mb-3">
           This order was cancelled.
         </div>
       ) : (
@@ -123,18 +151,18 @@ function OrderHistoryCard({ order }) {
                 {i > 0 && (
                   <span
                     className={`absolute top-2 right-1/2 w-full h-0.5 z-0 transition-colors duration-500 ${
-                      i <= currentStep ? 'bg-[#2e5a2e]' : 'bg-neutral-200'
+                      i <= currentStep ? 'bg-[#2e5a2e]' : 'bg-neutral-300'
                     }`}
                   />
                 )}
                 <span
                   className={`relative z-10 w-4 h-4 rounded-full border-2 transition-colors duration-500 ${
-                    done ? 'bg-[#2e5a2e] border-[#2e5a2e]' : 'bg-white border-neutral-300'
+                    done ? 'bg-[#2e5a2e] border-[#2e5a2e]' : 'bg-white border-neutral-400'
                   }`}
                 />
                 <span
-                  className={`mt-1.5 text-[10px] transition-colors duration-500 ${
-                    done ? 'text-[#2e5a2e] font-semibold' : 'text-neutral-400'
+                  className={`mt-1.5 text-xs transition-colors duration-500 ${
+                    done ? 'text-[#2e5a2e] font-bold' : 'text-neutral-600 font-medium'
                   }`}
                 >
                   {FOOD_STEP_LABELS[step]}
@@ -145,20 +173,20 @@ function OrderHistoryCard({ order }) {
         </div>
       )}
 
-      <div className="border-t border-dashed border-neutral-200 pt-3 space-y-1">
+      <div className="border-t border-dashed border-neutral-300 pt-3 space-y-1">
         {items.map((it, idx) => {
           const isDone = Boolean(it.checked);
           return (
-            <div key={idx} className="flex justify-between items-center text-xs">
+            <div key={idx} className="flex justify-between items-center text-sm">
               <span
                 className={`flex items-center gap-1.5 ${
-                  isDone ? 'line-through text-neutral-400' : 'text-neutral-600'
+                  isDone ? 'line-through text-neutral-500' : 'text-neutral-800'
                 }`}
               >
-                {isDone && <Check size={12} className="text-[#2e5a2e] shrink-0" />}
+                {isDone ? <Check size={13} className="text-[#2e5a2e] shrink-0" /> : null}
                 {(it.item_name || it.name || '').toString()} ×{it.quantity || it.qty}
               </span>
-              <span className={isDone ? 'line-through text-neutral-400' : 'text-neutral-600'}>
+              <span className={isDone ? 'line-through text-neutral-500' : 'text-neutral-800'}>
                 ₱{' '}
                 {(Number(it.price) * Number(it.quantity || it.qty)).toLocaleString('en-US', {
                   minimumFractionDigits: 2,
@@ -167,7 +195,7 @@ function OrderHistoryCard({ order }) {
             </div>
           );
         })}
-        <div className="flex justify-between text-sm font-bold text-[#1d080f] pt-2">
+        <div className="flex justify-between text-base font-bold text-[#1d080f] pt-2">
           <span>Total</span>
           <span>₱ {total.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
         </div>
@@ -186,12 +214,12 @@ function ActiveOrderCard({ order }) {
   return (
     <div className="bg-white rounded-2xl border border-neutral-200/80 p-5 shadow-xs text-left">
       <div className="flex items-center justify-between mb-1">
-        <span className="font-[Prata] text-sm text-[#1d080f]">Order #{orderNo}</span>
-        <span className="text-[10px] font-semibold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700">
+        <span className="font-[Prata] text-base text-[#1d080f]">Order #{orderNo}</span>
+        <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-900">
           {FOOD_STEP_LABELS[status] || 'Received'}
         </span>
       </div>
-      <p className="text-[11px] text-neutral-400 mb-4">
+      <p className="text-xs text-neutral-700 mb-4">
         Ordered: {formatDateTime(order.created_at)}
       </p>
 
@@ -203,18 +231,18 @@ function ActiveOrderCard({ order }) {
               {i > 0 && (
                 <span
                   className={`absolute top-2 right-1/2 w-full h-0.5 z-0 transition-colors duration-500 ${
-                    i <= currentStep ? 'bg-[#2e5a2e]' : 'bg-neutral-200'
+                    i <= currentStep ? 'bg-[#2e5a2e]' : 'bg-neutral-300'
                   }`}
                 />
               )}
               <span
                 className={`relative z-10 w-4 h-4 rounded-full border-2 transition-colors duration-500 ${
-                  done ? 'bg-[#2e5a2e] border-[#2e5a2e]' : 'bg-white border-neutral-300'
+                  done ? 'bg-[#2e5a2e] border-[#2e5a2e]' : 'bg-white border-neutral-400'
                 }`}
               />
               <span
-                className={`mt-1.5 text-[10px] transition-colors duration-500 ${
-                  done ? 'text-[#2e5a2e] font-semibold' : 'text-neutral-400'
+                className={`mt-1.5 text-xs transition-colors duration-500 ${
+                  done ? 'text-[#2e5a2e] font-bold' : 'text-neutral-600 font-medium'
                 }`}
               >
                 {FOOD_STEP_LABELS[step]}
@@ -224,14 +252,14 @@ function ActiveOrderCard({ order }) {
         })}
       </div>
 
-      <div className="border-t border-dashed border-neutral-200 pt-3 space-y-1">
+      <div className="border-t border-dashed border-neutral-300 pt-3 space-y-1">
         {items.map((it, idx) => (
-          <div key={idx} className="flex justify-between items-center text-xs">
-            <span className="flex items-center gap-1.5 text-neutral-600">
-              {it.checked && <Check size={12} className="text-[#2e5a2e] shrink-0" />}
+          <div key={idx} className="flex justify-between items-center text-sm">
+            <span className="flex items-center gap-1.5 text-neutral-800">
+              {it.checked ? <Check size={13} className="text-[#2e5a2e] shrink-0" /> : null}
               {(it.item_name || '').toString()} ×{it.quantity}
             </span>
-            <span className="text-neutral-600">
+            <span className="text-neutral-800">
               ₱ {(Number(it.price) * Number(it.quantity)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
             </span>
           </div>
@@ -263,7 +291,9 @@ function Payment() {
   const [method, setMethod] = useState('');
   const [hasDiscount, setHasDiscount] = useState(false);
   const [discountIdFile, setDiscountIdFile] = useState(null);
+  const [discountIdPreview, setDiscountIdPreview] = useState('');
   const [receiptFile, setReceiptFile] = useState(null);
+  const [receiptPreview, setReceiptPreview] = useState('');
   const [settling, setSettling] = useState(false);
   const [justSettled, setJustSettled] = useState(false);
 
@@ -279,7 +309,7 @@ function Payment() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyOrders, setHistoryOrders] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-    // --- Active orders (still in the kitchen) ---
+  // --- Active orders (still in the kitchen) ---
   const [activeOrders, setActiveOrders] = useState([]);
 
   // Load cart or buy-now item on mount
@@ -315,7 +345,7 @@ function Payment() {
     setScreen('empty');
   }, []);
 
-    // Pull the orders the kitchen is still working on, and keep them live
+  // Pull the orders the kitchen is still working on, and keep them live
   const fetchActiveOrders = useCallback(async () => {
     if (!isAuthenticated) {
       setActiveOrders([]);
@@ -343,6 +373,19 @@ function Payment() {
     return () => clearInterval(interval);
   }, [screen, fetchActiveOrders]);
 
+  // Preview URLs are object URLs, so release them when the photo changes or the page unmounts
+  useEffect(() => {
+    return () => {
+      if (receiptPreview) URL.revokeObjectURL(receiptPreview);
+    };
+  }, [receiptPreview]);
+
+  useEffect(() => {
+    return () => {
+      if (discountIdPreview) URL.revokeObjectURL(discountIdPreview);
+    };
+  }, [discountIdPreview]);
+
   // Lock page scroll while a modal is open
   useEffect(() => {
     if (historyOpen || showCancelConfirm) {
@@ -354,7 +397,7 @@ function Payment() {
 
   // ---------------- Order totals ----------------
   const orderSubtotal = orderItems.reduce((sum, item) => sum + item.price * item.qty, 0);
-  const orderServiceFee = Math.round(orderSubtotal * 0.15 * 100) / 100;
+  const orderServiceFee = Math.round(orderSubtotal * 0.05 * 100) / 100;
   const orderTotal = orderSubtotal + orderServiceFee;
 
   // ---------------- Settle totals ----------------
@@ -362,9 +405,9 @@ function Payment() {
     (o.items || []).map((it) => ({ ...it, orderId: o.id }))
   );
 
-   const settleSubtotal = unpaidOrders.reduce((sum, o) => sum + Number(o.subtotal || 0), 0);
+  const settleSubtotal = unpaidOrders.reduce((sum, o) => sum + Number(o.subtotal || 0), 0);
   const settleDiscountAmount = hasDiscount ? Math.round(settleSubtotal * 0.20) : 0;
-  const settleServiceFee = Math.round((settleSubtotal - settleDiscountAmount) * 0.15 * 100) / 100;
+  const settleServiceFee = Math.round((settleSubtotal - settleDiscountAmount) * 0.05 * 100) / 100;
   const settleFinalTotal = settleSubtotal - settleDiscountAmount + settleServiceFee;
   const isCash = method === 'cash';
   const settleMethodLabel = PAYMENT_METHODS.find((m) => m.id === method)?.label || '';
@@ -500,10 +543,10 @@ function Payment() {
       });
 
       setUnpaidOrders([]);
-      setReceiptFile(null);
+      clearReceipt();
       setMethod('');
       setHasDiscount(false);
-      setDiscountIdFile(null);
+      clearDiscountId();
       setJustSettled(true);
 
       showToast("Payment proof submitted! The cashier will verify it shortly.");
@@ -553,12 +596,30 @@ function Payment() {
 
   const handleReceiptChange = (e) => {
     const file = e.target.files?.[0];
-    if (file) setReceiptFile(file);
+    if (!file) return;
+    if (receiptPreview) URL.revokeObjectURL(receiptPreview);
+    setReceiptFile(file);
+    setReceiptPreview(URL.createObjectURL(file));
+  };
+
+  const clearReceipt = () => {
+    if (receiptPreview) URL.revokeObjectURL(receiptPreview);
+    setReceiptFile(null);
+    setReceiptPreview('');
   };
 
   const handleDiscountIdChange = (e) => {
     const file = e.target.files?.[0];
-    if (file) setDiscountIdFile(file);
+    if (!file) return;
+    if (discountIdPreview) URL.revokeObjectURL(discountIdPreview);
+    setDiscountIdFile(file);
+    setDiscountIdPreview(URL.createObjectURL(file));
+  };
+
+  const clearDiscountId = () => {
+    if (discountIdPreview) URL.revokeObjectURL(discountIdPreview);
+    setDiscountIdFile(null);
+    setDiscountIdPreview('');
   };
 
   const heroTitle = screen === 'settle' ? 'Settle your bill' : 'Finalize your Culinary Selection';
@@ -582,12 +643,12 @@ function Payment() {
 
         {authLoading ? (
           <div className="bg-white rounded-2xl border border-neutral-200/80 p-12 text-center shadow-xs">
-            <p className="text-sm text-neutral-500">Loading...</p>
+            <p className="text-sm text-neutral-700">Loading...</p>
           </div>
         ) : !isAuthenticated ? (
           <div className="bg-white rounded-2xl border border-neutral-200/80 shadow-xs p-12 text-center">
             <p className="font-[Prata] text-lg text-[#1d080f] mb-2">Log in to place an order</p>
-            <p className="text-sm text-neutral-500 font-[Prata] mb-8">
+            <p className="text-sm text-neutral-700 font-[Prata] mb-8">
               You need an account to order from our kitchen and settle your bill.
             </p>
             <div className="flex flex-col sm:flex-row justify-center gap-3">
@@ -614,13 +675,7 @@ function Payment() {
 
           {activeOrders.length > 0 && (
             <div className="grid gap-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-[Prata] text-sm text-[#1d080f]">In the Kitchen</h3>
-                <span className="flex items-center gap-1.5 text-[10px] text-neutral-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  Live
-                </span>
-              </div>
+              <h3 className="font-[Prata] text-base text-[#1d080f]">In the Kitchen</h3>
               {activeOrders.map((o) => (
                 <ActiveOrderCard key={o.id} order={o} />
               ))}
@@ -628,13 +683,13 @@ function Payment() {
           )}
 
           <div className="bg-white rounded-2xl border border-neutral-200/80 p-12 text-center shadow-xs">
-            <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${justOrdered ? 'bg-emerald-50 text-emerald-600' : 'bg-neutral-100 text-neutral-400'}`}>
+            <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${justOrdered ? 'bg-emerald-50 text-emerald-700' : 'bg-neutral-100 text-neutral-600'}`}>
               {justOrdered ? <CheckCircle2 size={28} /> : <ShoppingBag size={28} />}
             </div>
             <h2 className="font-['Prata'],serif text-xl font-bold mb-3">
               {justOrdered ? 'Order Sent to Kitchen!' : 'Your Tray is Empty'}
             </h2>
-            <p className="text-sm text-neutral-500 mx-auto mb-6 text-center">
+            <p className="text-sm text-neutral-700 mx-auto mb-6 text-center leading-relaxed">
               {justOrdered
                 ? 'Your food is being prepared. Enjoy your meal, then call your server to settle the bill and upload your proof of payment here.'
                 : 'There are no items ready to order. Browse the menu, or settle a bill from an earlier order.'}
@@ -668,7 +723,7 @@ function Payment() {
           <div className="grid gap-6">
 
             <div className="bg-white rounded-2xl shadow-sm p-8 border border-neutral-200/80">
-              <h2 className="text-center font-[Prata] text-amber-700 tracking-wide text-sm mb-4">
+              <h2 className="text-center font-[Prata] text-amber-800 tracking-wide text-sm mb-4">
                 ORDERING AS
               </h2>
               <div className="max-w-xs mx-auto">
@@ -678,26 +733,26 @@ function Payment() {
               </div>
             </div>
 
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-800 text-center">
+            <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 text-sm text-amber-900 text-center leading-relaxed">
               Payment comes later — after your meal, call your server to settle the bill, then upload your proof of payment here.
             </div>
 
             <div className="bg-white rounded-2xl border border-neutral-200/80 p-6 shadow-xs font-mono">
               <div className="border-b border-dashed border-neutral-300 pb-3 mb-4 text-base">
-                <div className="flex justify-between items-center font-bold text-neutral-800 font-[Prata]">
+                <div className="flex justify-between items-center font-bold text-neutral-900 font-[Prata]">
                   <span>Eurasia Restaurant</span>
-                  <Receipt size={18} className="text-neutral-400" />
+                  <Receipt size={18} className="text-neutral-600" />
                 </div>
               </div>
 
-              <div className="divide-y divide-neutral-100 max-h-80 overflow-y-auto pr-1">
+              <div className="divide-y divide-neutral-200 max-h-80 overflow-y-auto pr-1">
                 {orderItems.map((item, i) => (
                   <div key={i} className="py-2.5">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-neutral-800">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-neutral-900">
                         {(item.name || '').toString().toUpperCase()} x{item.qty}
                       </span>
-                      <span className="font-semibold text-neutral-800">
+                      <span className="font-semibold text-neutral-900">
                         ₱ {(item.price * item.qty).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                       </span>
                     </div>
@@ -710,7 +765,7 @@ function Payment() {
                             value={item.note || ''}
                             onChange={(e) => updateItemNote(i, e.target.value)}
                             placeholder="e.g. less spicy, no onions"
-                            className="w-full bg-[#faf8f5] border border-neutral-200 rounded-md px-3 py-2 text-xs text-[#1d080f] placeholder:text-neutral-400 focus:outline-none focus:ring-1 focus:ring-[#1d080f]"
+                            className="w-full bg-[#faf8f5] border border-neutral-300 rounded-md px-3 py-2 text-sm text-[#1d080f] placeholder:text-neutral-500 focus:outline-none focus:ring-1 focus:ring-[#1d080f]"
                           />
                           <button
                             type="button"
@@ -718,7 +773,7 @@ function Payment() {
                               updateItemNote(i, '');
                               setOpenNotes((prev) => ({ ...prev, [i]: false }));
                             }}
-                            className="mt-1 text-[11px] text-[#c0392b] hover:opacity-70 transition"
+                            className="mt-1 text-xs text-[#c0392b] font-medium hover:opacity-70 transition"
                           >
                             Remove note
                           </button>
@@ -727,7 +782,7 @@ function Payment() {
                         <button
                           type="button"
                           onClick={() => setOpenNotes((prev) => ({ ...prev, [i]: true }))}
-                          className="text-[11px] text-[#b38548] font-semibold hover:text-[#1d080f] transition"
+                          className="text-xs text-[#8a6228] font-semibold hover:text-[#1d080f] transition"
                         >
                           + Add note
                         </button>
@@ -737,13 +792,13 @@ function Payment() {
                 ))}
               </div>
 
-              <div className="mt-4 pt-4 border-t border-dashed border-neutral-300 space-y-2 text-xs">
-                <div className="flex justify-between text-neutral-600">
+              <div className="mt-4 pt-4 border-t border-dashed border-neutral-300 space-y-2 text-sm">
+                <div className="flex justify-between text-neutral-800">
                   <span>Subtotal</span>
                   <span>₱ {orderSubtotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                 </div>
-                <div className="flex justify-between text-neutral-600">
-                  <span>Service (15%)</span>
+                <div className="flex justify-between text-neutral-800">
+                  <span>Service (5%)</span>
                   <span>₱ {orderServiceFee.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div className="flex justify-between items-baseline text-base font-bold text-[#1d080f] pt-3 border-t border-neutral-800">
@@ -756,7 +811,7 @@ function Payment() {
                 <button
                   type="button"
                   onClick={() => setShowCancelConfirm(true)}
-                  className="flex-1 border border-neutral-300 text-neutral-700 text-sm font-medium py-3 rounded-xl hover:bg-neutral-50 transition cursor-pointer"
+                  className="flex-1 border border-neutral-400 text-neutral-800 text-sm font-medium py-3 rounded-xl hover:bg-neutral-50 transition cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -779,22 +834,22 @@ function Payment() {
 
             <button
               onClick={() => { setScreen('empty'); setJustOrdered(false); }}
-              className="flex items-center gap-1.5 text-sm text-neutral-500 hover:text-[#1d080f] transition cursor-pointer w-fit"
+              className="flex items-center gap-1.5 text-sm text-neutral-700 hover:text-[#1d080f] transition cursor-pointer w-fit"
             >
               <ArrowLeft size={16} /> Back
             </button>
 
             {settleLoading ? (
               <div className="bg-white rounded-2xl border border-neutral-200/80 p-12 text-center shadow-xs">
-                <p className="text-sm text-neutral-500">Loading your bill…</p>
+                <p className="text-sm text-neutral-700">Loading your bill…</p>
               </div>
             ) : justSettled ? (
               <div className="bg-white rounded-2xl border border-neutral-200/80 p-12 text-center shadow-xs">
-                <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <div className="w-16 h-16 bg-emerald-50 text-emerald-700 rounded-full flex items-center justify-center mx-auto mb-4">
                   <CheckCircle2 size={28} />
                 </div>
                 <h2 className="font-['Prata'],serif text-xl font-bold mb-3">Proof Submitted!</h2>
-                <p className="text-sm text-neutral-500 mb-6">
+                <p className="text-sm text-neutral-700 mb-6 leading-relaxed">
                   Thank you for dining with Eurasia San Jose. The cashier will verify your payment shortly — you can track it in History.
                 </p>
                 <button
@@ -806,11 +861,11 @@ function Payment() {
               </div>
             ) : unpaidOrders.length === 0 ? (
               <div className="bg-white rounded-2xl border border-neutral-200/80 p-12 text-center shadow-xs">
-                <div className="w-16 h-16 bg-neutral-100 text-neutral-400 rounded-full flex items-center justify-center mx-auto mb-4">
+                <div className="w-16 h-16 bg-neutral-100 text-neutral-600 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Receipt size={28} />
                 </div>
                 <h2 className="font-['Prata'],serif text-xl font-bold mb-3">No Bill to Settle</h2>
-                <p className="text-sm text-neutral-500 mb-6">
+                <p className="text-sm text-neutral-700 mb-6 leading-relaxed">
                   You have no unpaid orders right now. Place an order first, then come back here after your meal.
                 </p>
                 <button
@@ -822,42 +877,42 @@ function Payment() {
               </div>
             ) : (
               <>
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-800 font-[Prata] text-center">
+                <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 text-sm text-amber-900 font-[Prata] text-center">
                   Found {unpaidOrders.length} unpaid order{unpaidOrders.length !== 1 ? 's' : ''} for {user?.full_name || '—'}. Review the bill below.
                 </div>
 
                 <div className="bg-white rounded-2xl border border-neutral-200/80 p-6 shadow-xs">
-                  <h4 className="text-[16px] font-bold text-[#b38548] uppercase tracking-wider mb-4">
+                  <h4 className="text-[16px] font-bold text-[#8a6228] uppercase tracking-wider mb-4">
                     1. Mode of Payment
                   </h4>
                   <div className="relative">
                     <select
                       value={method}
                       onChange={(e) => setMethod(e.target.value)}
-                      className={`w-full bg-white border border-neutral-200 rounded-xl px-4 py-3.5 text-sm appearance-none focus:outline-none focus:ring-1 focus:ring-[#1d080f] ${method ? 'text-[#1d080f]' : 'text-neutral-400'}`}
+                      className={`w-full bg-white border border-neutral-300 rounded-xl px-4 py-3.5 text-sm appearance-none focus:outline-none focus:ring-1 focus:ring-[#1d080f] ${method ? 'text-[#1d080f]' : 'text-neutral-600'}`}
                     >
-                      <option value="" disabled className="text-neutral-400">Mode of Payment *</option>
+                      <option value="" disabled className="text-neutral-600">Mode of Payment *</option>
                       {PAYMENT_METHODS.map(({ id, label }) => (
                         <option key={id} value={id} className="text-[#1d080f]">{label}</option>
                       ))}
                     </select>
-                    <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-400" />
+                    <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-600" />
                   </div>
                   {!method && (
-                    <p className="text-xs text-red-500 mt-2">Please select how you paid.</p>
+                    <p className="text-sm text-red-700 mt-2 font-medium">Please select how you paid.</p>
                   )}
                 </div>
 
                 <div className="bg-white rounded-2xl border border-neutral-200/80 p-6 shadow-xs">
-                  <h4 className="text-[16px] font-bold text-[#b38548] uppercase tracking-wider mb-4">
+                  <h4 className="text-[16px] font-bold text-[#8a6228] uppercase tracking-wider mb-4">
                     2. Discount (Optional)
                   </h4>
 
                   <label
-                    className={`flex items-center gap-3 p-3.5 rounded-xl border text-xs font-medium transition-all cursor-pointer ${
+                    className={`flex items-center gap-3 p-3.5 rounded-xl border text-sm font-medium transition-all cursor-pointer ${
                       hasDiscount
                         ? 'border-[#1d080f] bg-[#1d080f]/5 text-[#1d080f]'
-                        : 'border-neutral-200 text-neutral-700 hover:bg-neutral-50'
+                        : 'border-neutral-300 text-neutral-800 hover:bg-neutral-50'
                     }`}
                   >
                     <input
@@ -865,7 +920,7 @@ function Payment() {
                       checked={hasDiscount}
                       onChange={(e) => {
                         setHasDiscount(e.target.checked);
-                        setDiscountIdFile(null);
+                        clearDiscountId();
                       }}
                       className="w-4 h-4 shrink-0 accent-[#1d080f] cursor-pointer"
                     />
@@ -875,35 +930,38 @@ function Payment() {
                   </label>
 
                   {hasDiscount && (
-                    <div className="mt-4 p-4 bg-[#faf8f5] rounded-xl border border-dashed border-amber-800/30">
+                    <div className="mt-4 p-4 bg-[#faf8f5] rounded-xl border border-dashed border-amber-800/40">
                       <label className="flex flex-col items-center justify-center gap-2 cursor-pointer text-center">
-                        <UploadCloud size={24} className="text-[#b38548]" />
-                        <div className="text-xs">
+                        <UploadCloud size={24} className="text-[#8a6228]" />
+                        <div className="text-sm">
                           <span className="font-semibold text-[#1d080f]">
                             Upload Picture of Senior Citizen or PWD ID
                           </span>
-                          <p className="text-neutral-500 mt-0.5">Attach ID photo to prove discount eligibility</p>
+                          <p className="text-neutral-700 mt-0.5 text-xs">Attach ID photo to prove discount eligibility</p>
                         </div>
-                        {discountIdFile ? (
-                          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full mt-1">
-                            <CheckCircle2 size={14} /> {discountIdFile.name}
-                          </span>
-                        ) : (
-                          <span className="text-[10px] text-amber-700 font-medium bg-amber-50 px-2.5 py-0.5 rounded">
+                        {!discountIdFile && (
+                          <span className="text-xs text-amber-900 font-semibold bg-amber-100 px-2.5 py-1 rounded">
                             ID Photo Required
                           </span>
                         )}
                         <input type="file" accept="image/*" hidden onChange={handleDiscountIdChange} />
                       </label>
+
+                      <ImagePreview
+                        file={discountIdFile}
+                        previewUrl={discountIdPreview}
+                        onRemove={clearDiscountId}
+                        label="Senior Citizen or PWD ID preview"
+                      />
                     </div>
                   )}
                 </div>
 
                 <div className="bg-white rounded-2xl border border-neutral-200/80 p-6 shadow-xs">
-                  <h4 className="text-[16px] font-bold text-[#b38548] uppercase tracking-wider mb-2">
+                  <h4 className="text-[16px] font-bold text-[#8a6228] uppercase tracking-wider mb-2">
                     3. {isCash ? 'Upload Receipt from Cashier' : 'Upload Proof of Payment'}
                   </h4>
-                  <p className="text-xs text-neutral-500 mb-4">
+                  <p className="text-sm text-neutral-700 mb-4 leading-relaxed">
                     {!method
                       ? 'Select how you paid above, then attach your proof of payment.'
                       : isCash
@@ -911,58 +969,65 @@ function Payment() {
                       : `Attach a screenshot of your successful ${settleMethodLabel} transaction.`}
                   </p>
 
-                  <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-neutral-300 rounded-xl py-6 px-4 text-center cursor-pointer hover:bg-neutral-50 transition">
-                    <UploadCloud size={28} className="text-neutral-400" />
-                    <div className="text-xs font-medium text-neutral-700">
+                  <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-neutral-400 rounded-xl py-6 px-4 text-center cursor-pointer hover:bg-neutral-50 transition">
+                    <UploadCloud size={28} className="text-neutral-600" />
+                    <div className="text-sm font-medium text-neutral-800">
                       {receiptFile ? (
-                        <span className="text-emerald-700 flex items-center gap-1.5">
-                          <CheckCircle2 size={16} /> {receiptFile.name}
+                        <span className="text-emerald-800 flex items-center gap-1.5 font-semibold">
+                          <CheckCircle2 size={16} /> Photo attached — check it below
                         </span>
                       ) : (
                         <span>
                           {isCash ? 'Drop receipt photo here or ' : 'Drop payment screenshot here or '}
-                          <span className="text-[#1d080f] underline">browse</span>
+                          <span className="text-[#1d080f] underline font-semibold">browse</span>
                         </span>
                       )}
                     </div>
                     <input type="file" accept="image/*" hidden onChange={handleReceiptChange} />
                   </label>
+
+                  <ImagePreview
+                    file={receiptFile}
+                    previewUrl={receiptPreview}
+                    onRemove={clearReceipt}
+                    label="Proof of payment preview"
+                  />
                 </div>
 
                 <div className="bg-white rounded-2xl border border-neutral-200/80 p-6 shadow-xs font-mono">
                   <div className="border-b border-dashed border-neutral-300 pb-3 mb-4 text-base">
-                    <div className="flex justify-between items-center font-bold text-neutral-800 font-[Prata]">
+                    <div className="flex justify-between items-center font-bold text-neutral-900 font-[Prata]">
                       <span>Eurasia Restaurant</span>
-                      <Receipt size={18} className="text-neutral-400" />
+                      <Receipt size={18} className="text-neutral-600" />
                     </div>
                   </div>
 
-                  <div className="divide-y divide-neutral-100 max-h-64 overflow-y-auto pr-1">
+                  <div className="divide-y divide-neutral-200 max-h-64 overflow-y-auto pr-1">
                     {settleItems.map((item, i) => (
-                      <div key={i} className="py-2 flex justify-between items-center text-xs">
-                        <span className="text-neutral-800">
+                      <div key={i} className="py-2 flex justify-between items-center text-sm">
+                        <span className="text-neutral-900">
                           {(item.item_name || '').toString().toUpperCase()} x{item.quantity}
                         </span>
-                        <span className="font-semibold text-neutral-800">
+                        <span className="font-semibold text-neutral-900">
                           ₱ {(Number(item.price) * Number(item.quantity)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                         </span>
                       </div>
                     ))}
                   </div>
 
-                  <div className="mt-4 pt-4 border-t border-dashed border-neutral-300 space-y-2 text-xs">
-                    <div className="flex justify-between text-neutral-600">
+                  <div className="mt-4 pt-4 border-t border-dashed border-neutral-300 space-y-2 text-sm">
+                    <div className="flex justify-between text-neutral-800">
                       <span>Subtotal</span>
                       <span>₱ {settleSubtotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                     </div>
                     {hasDiscount && (
-                      <div className="flex justify-between text-red-600 font-semibold">
+                      <div className="flex justify-between text-red-700 font-semibold">
                         <span>DISCOUNT (SENIOR/PWD)</span>
                         <span>- ₱ {settleDiscountAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                       </div>
                     )}
-                    <div className="flex justify-between text-neutral-600">
-                      <span>Service (15%)</span>
+                    <div className="flex justify-between text-neutral-800">
+                      <span>Service (5%)</span>
                       <span>₱ {settleServiceFee.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                     </div>
                     <div className="flex justify-between items-baseline text-base font-bold text-[#1d080f] pt-3 border-t border-neutral-800">
@@ -975,7 +1040,7 @@ function Payment() {
                     <button
                       type="button"
                       onClick={() => setScreen('empty')}
-                      className="flex-1 border border-neutral-300 text-neutral-700 text-sm font-medium py-3 rounded-xl hover:bg-neutral-50 transition cursor-pointer"
+                      className="flex-1 border border-neutral-400 text-neutral-800 text-sm font-medium py-3 rounded-xl hover:bg-neutral-50 transition cursor-pointer"
                     >
                       Pay Later
                     </button>
@@ -1008,17 +1073,17 @@ function Payment() {
             className="bg-white rounded-2xl p-8 max-w-sm w-full text-center shadow-2xl"
           >
             <div className="mx-auto mb-4 w-14 h-14 rounded-full bg-red-50 flex items-center justify-center">
-              <X size={26} className="text-red-500" />
+              <X size={26} className="text-red-600" />
             </div>
             <h3 className="font-[Prata] text-lg text-[#1d080f] mb-2">Cancel this order?</h3>
-            <p className="text-sm text-neutral-500 mb-6 leading-relaxed">
+            <p className="text-sm text-neutral-700 mb-6 leading-relaxed">
               Your items will be removed from the tray. You can always browse the menu again.
             </p>
             <div className="flex gap-3">
               <button
                 type="button"
                 onClick={() => setShowCancelConfirm(false)}
-                className="flex-1 border border-neutral-300 text-neutral-700 text-sm font-medium py-3 rounded-xl hover:bg-neutral-50 transition cursor-pointer"
+                className="flex-1 border border-neutral-400 text-neutral-800 text-sm font-medium py-3 rounded-xl hover:bg-neutral-50 transition cursor-pointer"
               >
                 Keep Order
               </button>
@@ -1049,31 +1114,25 @@ function Payment() {
           >
             <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-200">
               <h3 className="font-[Prata] text-lg text-[#1d080f] flex items-center gap-2">
-                <History size={18} className="text-[#b38548]" /> Order History
+                <History size={18} className="text-[#8a6228]" /> Order History
               </h3>
-              <div className="flex items-center gap-3">
-                <span className="flex items-center gap-1.5 text-[10px] text-neutral-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  Live
-                </span>
-                <button
-                  onClick={() => setHistoryOpen(false)}
-                  className="text-neutral-500 hover:text-[#1d080f] cursor-pointer"
-                >
-                  <X size={20} />
-                </button>
-              </div>
+              <button
+                onClick={() => setHistoryOpen(false)}
+                className="text-neutral-700 hover:text-[#1d080f] cursor-pointer"
+              >
+                <X size={20} />
+              </button>
             </div>
 
             <div className="overflow-y-auto px-6 py-5 space-y-4">
               {historyLoading ? (
-                <p className="text-center text-sm text-neutral-500 py-8">Loading your orders…</p>
+                <p className="text-center text-sm text-neutral-700 py-8">Loading your orders…</p>
               ) : historyOrders.length === 0 ? (
                 <div className="text-center py-10">
-                  <div className="w-14 h-14 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-3 text-neutral-400">
+                  <div className="w-14 h-14 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-3 text-neutral-600">
                     <History size={24} />
                   </div>
-                  <p className="text-sm text-neutral-500">
+                  <p className="text-sm text-neutral-700 leading-relaxed">
                     No orders yet. Once you place an order, you can track its status here.
                   </p>
                 </div>
@@ -1122,7 +1181,7 @@ function Payment() {
             <div className="text-sm font-bold leading-tight">
               {toast.tone === 'error' ? 'Please check' : 'Success'}
             </div>
-            <div className="text-xs text-white/85 leading-snug mt-0.5">{toast.message}</div>
+            <div className="text-xs text-white/95 leading-snug mt-0.5">{toast.message}</div>
           </div>
         </div>
       )}

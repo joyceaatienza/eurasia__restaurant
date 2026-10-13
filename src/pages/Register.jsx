@@ -13,6 +13,14 @@ const PASSWORD_RULES = [
   { key: 'nospace', label: 'No spaces', test: (p) => p.length > 0 && !/\s/.test(p) },
 ];
 
+// Philippine mobile numbers are 11 digits — grouped 0917 123 4567 so they're
+// easy to read back and check against a phone screen
+function formatContactNumber(value) {
+  const digits = value.replace(/\D/g, '').slice(0, 11);
+  const parts = [digits.slice(0, 4), digits.slice(4, 7), digits.slice(7, 11)];
+  return parts.filter(Boolean).join(' ');
+}
+
 function PasswordChecklist({ password }) {
   return (
     <div className="bg-[#f7f5f0] rounded-lg px-4 py-3 mt-1">
@@ -74,6 +82,12 @@ function Register() {
       return;
     }
 
+    const digits = contactNumber.replace(/\D/g, '');
+    if (digits.length !== 11 || !digits.startsWith('09')) {
+      setError('Please enter a valid 11-digit mobile number starting with 09.');
+      return;
+    }
+
     const failedRule = PASSWORD_RULES.find((rule) => !rule.test(password));
     if (failedRule) {
       setError('Please meet all the password requirements.');
@@ -94,7 +108,8 @@ function Register() {
       setSubmitting(true);
       await register({
         full_name: fullName.trim(),
-        contact_number: contactNumber.trim(),
+        // Spaces are only for reading — the database keeps the plain digits
+        contact_number: contactNumber.replace(/\D/g, ''),
         email: email.trim(),
         password,
       });
@@ -147,9 +162,10 @@ function Register() {
               className={inputClass}
             />
             <input
-              type="text"
+              type="tel"
+              inputMode="numeric"
               value={contactNumber}
-              onChange={(e) => setContactNumber(e.target.value)}
+              onChange={(e) => setContactNumber(formatContactNumber(e.target.value))}
               placeholder="Contact Number"
               className={inputClass}
             />

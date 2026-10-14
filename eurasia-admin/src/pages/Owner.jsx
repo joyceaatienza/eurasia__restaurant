@@ -1090,7 +1090,9 @@ function PeriodDropdown({ value, onChange }) {
           style={{
             position: "absolute",
             top: "110%",
-            right: 0,
+            // Anchored left so a button near the right edge doesn't push
+            // the menu off the screen on a phone
+            left: 0,
             background: "#fff",
             borderRadius: 10,
             boxShadow: "0 4px 16px rgba(0,0,0,0.12)",

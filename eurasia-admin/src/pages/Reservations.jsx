@@ -33,11 +33,30 @@ const FONT = "'Prata', serif";
 
 const HIGHLIGHT_MS = 3000;
 const POLL_MS = 8000;
+const MOBILE_QUERY = "(max-width: 767px)";
 
 const DAY_LABELS = ["SUN", "MON", "TUES", "WED", "THU", "FRI", "SAT"];
+const DAY_LABELS_SHORT = ["S", "M", "T", "W", "T", "F", "S"];
 const HOURS = [11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]; // 11am–10pm
 
 const STATUS_OPTIONS = ["Pending", "Confirmed", "Arrived", "Completed", "Cancelled"];
+
+// Lets the standalone page size itself; inside the Owner shell the prop wins
+function useMediaQuery(query) {
+  const [matches, setMatches] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia(query).matches : false
+  );
+
+  useEffect(() => {
+    const mql = window.matchMedia(query);
+    const handler = (e) => setMatches(e.matches);
+    setMatches(mql.matches);
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, [query]);
+
+  return matches;
+}
 
 /* ---------------------------------------------------------------- */
 /* Date helpers                                                      */
@@ -71,6 +90,9 @@ function displayDateFromISO(iso) {
 }
 function formatDisplayDate(date) {
   return date.toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" });
+}
+function formatDisplayDateShort(date) {
+  return date.toLocaleDateString("en-US", { day: "numeric", month: "short" });
 }
 function formatMonthLabel(date) {
   return date.toLocaleDateString("en-US", { month: "long", year: "numeric" }).toUpperCase();
@@ -156,7 +178,7 @@ function statusColors(status) {
 
 function Card({ children, style }) {
   return (
-    <div style={{ background: C.card, borderRadius: 16, padding: 22, boxShadow: "0 1px 3px rgba(23,3,16,0.06)", ...style }}>
+    <div style={{ background: C.card, borderRadius: 16, padding: 22, boxShadow: "0 1px 3px rgba(23,3,16,0.06)", minWidth: 0, ...style }}>
       {children}
     </div>
   );
@@ -173,32 +195,34 @@ function SectionTitle({ children }) {
 /* ---------------------------------------------------------------- */
 /* Status dropdown — locked until the cashier verifies the downpayment */
 /* ---------------------------------------------------------------- */
-function StatusSelect({ status, onChange, locked }) {
+function StatusSelect({ status, onChange, locked, fullWidth }) {
   const c = statusColors(status);
 
   if (locked) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4, width: fullWidth ? "100%" : "auto" }}>
         <div
           style={{
             display: "inline-flex",
             alignItems: "center",
+            justifyContent: fullWidth ? "center" : "flex-start",
             gap: 6,
             background: "#f4f2f3",
             color: C.inkSoft,
             border: `1px solid ${C.hair}`,
             borderRadius: 8,
-            padding: "7px 14px",
+            padding: "9px 14px",
             fontSize: 12.5,
             fontWeight: 700,
             fontFamily: FONT,
-            minWidth: 130,
+            minWidth: fullWidth ? 0 : 130,
+            width: fullWidth ? "100%" : "auto",
             cursor: "not-allowed",
           }}
         >
           <Lock size={12} /> {status}
         </div>
-        <span style={{ fontSize: 10.5, color: C.inkSoft, fontFamily: FONT, maxWidth: 150, lineHeight: 1.4 }}>
+        <span style={{ fontSize: 10.5, color: C.inkSoft, fontFamily: FONT, maxWidth: fullWidth ? "none" : 150, lineHeight: 1.4 }}>
           Waiting for the cashier to verify the downpayment
         </span>
       </div>
@@ -206,7 +230,7 @@ function StatusSelect({ status, onChange, locked }) {
   }
 
   return (
-    <div style={{ position: "relative", display: "inline-block" }}>
+    <div style={{ position: "relative", display: fullWidth ? "block" : "inline-block", width: fullWidth ? "100%" : "auto" }}>
       <select
         value={status}
         onChange={(e) => onChange(e.target.value)}
@@ -217,13 +241,14 @@ function StatusSelect({ status, onChange, locked }) {
           color: c.fg,
           border: `1px solid ${c.border}`,
           borderRadius: 8,
-          padding: "7px 32px 7px 14px",
+          padding: "9px 32px 9px 14px",
           fontSize: 12.5,
           fontWeight: 700,
           fontFamily: FONT,
           cursor: "pointer",
           outline: "none",
-          minWidth: 130,
+          minWidth: fullWidth ? 0 : 130,
+          width: fullWidth ? "100%" : "auto",
         }}
       >
         {STATUS_OPTIONS.map((s) => (
@@ -346,21 +371,21 @@ function ProofModal({ reservation, onClose }) {
           borderRadius: 16,
           maxWidth: 480,
           width: "100%",
-          maxHeight: "85vh",
+          maxHeight: "88vh",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
           fontFamily: FONT,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 22px", borderBottom: `1px solid ${C.hair}` }}>
-          <div>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, padding: "18px 22px", borderBottom: `1px solid ${C.hair}` }}>
+          <div style={{ minWidth: 0 }}>
             <div style={{ fontWeight: 700, fontSize: 15, color: C.ink }}>Proof of Payment</div>
             <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 2 }}>
               {reservation.name} · {peso(reservation.downpayment)} · {reservation.paymentMethod || "—"}
             </div>
           </div>
-          <button onClick={onClose} style={{ border: "none", background: "transparent", cursor: "pointer", color: C.inkSoft }}>
+          <button onClick={onClose} style={{ border: "none", background: "transparent", cursor: "pointer", color: C.inkSoft, flexShrink: 0, display: "flex" }}>
             <X size={20} />
           </button>
         </div>
@@ -393,6 +418,7 @@ function ProofModal({ reservation, onClose }) {
               fontWeight: 700,
               padding: "5px 12px",
               borderRadius: 8,
+              whiteSpace: "nowrap",
             }}
           >
             {tone.label}
@@ -406,7 +432,7 @@ function ProofModal({ reservation, onClose }) {
 /* ---------------------------------------------------------------- */
 /* Toast — replaces alert                                            */
 /* ---------------------------------------------------------------- */
-function Toast({ message, tone = "error", onClose }) {
+function Toast({ message, tone = "error", onClose, isMobile }) {
   useEffect(() => {
     if (!message) return;
     const timer = setTimeout(onClose, 4000);
@@ -419,8 +445,9 @@ function Toast({ message, tone = "error", onClose }) {
     <div
       style={{
         position: "fixed",
-        bottom: 28,
-        right: 28,
+        bottom: 20,
+        right: 20,
+        left: isMobile ? 20 : "auto",
         background: tone === "error" ? "#c0392b" : C.green,
         color: "#fff",
         padding: "14px 20px",
@@ -432,7 +459,7 @@ function Toast({ message, tone = "error", onClose }) {
         alignItems: "center",
         gap: 10,
         zIndex: 300,
-        maxWidth: 340,
+        maxWidth: isMobile ? "none" : 340,
       }}
     >
       <span
@@ -544,7 +571,7 @@ function ConfirmModal({ open, title, message, confirmLabel, onConfirm, onCancel 
 /* ---------------------------------------------------------------- */
 function Legend() {
   return (
-    <div style={{ display: "flex", gap: 20, marginBottom: 16, fontSize: 12.5, color: C.ink, fontFamily: FONT }}>
+    <div style={{ display: "flex", gap: 20, marginBottom: 16, fontSize: 12.5, color: C.ink, fontFamily: FONT, flexWrap: "wrap" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
         <span style={{ width: 12, height: 12, borderRadius: 3, background: C.eventYellow, display: "inline-block" }} />
         Table Reservation
@@ -560,7 +587,7 @@ function Legend() {
 /* ---------------------------------------------------------------- */
 /* Week view                                                          */
 /* ---------------------------------------------------------------- */
-function WeekView({ selectedDate, reservations, onOpenDay }) {
+function WeekView({ selectedDate, reservations, onOpenDay, isMobile }) {
   const weekStart = startOfWeek(selectedDate);
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(weekStart);
@@ -573,21 +600,26 @@ function WeekView({ selectedDate, reservations, onOpenDay }) {
 
   return (
     <Card style={{ padding: 0, overflow: "hidden" }}>
-      <div style={{ padding: "20px 20px 0" }}>
+      <div style={{ padding: isMobile ? "16px 16px 0" : "20px 20px 0" }}>
         <Legend />
       </div>
-      <div style={{ overflowX: "auto" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "90px repeat(7, 1fr)", minWidth: 900 }}>
+      {isMobile && (
+        <div style={{ padding: "0 16px 10px", fontSize: 11, color: C.inkSoft, fontFamily: FONT, fontStyle: "italic" }}>
+          Swipe sideways to see the whole week
+        </div>
+      )}
+      <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "72px repeat(7, minmax(110px, 1fr))", minWidth: 840 }}>
           <div style={{ borderBottom: `1px solid ${C.hair}` }} />
           {days.map((d, i) => (
-            <div key={i} style={{ textAlign: "center", padding: "10px 6px", fontFamily: FONT, fontWeight: 700, fontSize: 13, color: C.ink, borderBottom: `1px solid ${C.hair}`, borderLeft: `1px solid ${C.hair}` }}>
+            <div key={i} style={{ textAlign: "center", padding: "10px 6px", fontFamily: FONT, fontWeight: 700, fontSize: 12.5, color: C.ink, borderBottom: `1px solid ${C.hair}`, borderLeft: `1px solid ${C.hair}` }}>
               {DAY_LABELS[i]} | {d.getDate()}
             </div>
           ))}
 
           {HOURS.map((hour) => (
             <React.Fragment key={hour}>
-              <div style={{ padding: "14px 10px", fontSize: 12, color: C.inkSoft, borderBottom: `1px solid ${C.hair}`, fontFamily: FONT }}>
+              <div style={{ padding: "14px 8px", fontSize: 11.5, color: C.inkSoft, borderBottom: `1px solid ${C.hair}`, fontFamily: FONT, whiteSpace: "nowrap" }}>
                 {hourLabel(hour)}
               </div>
               {days.map((d, i) => {
@@ -634,7 +666,7 @@ function WeekView({ selectedDate, reservations, onOpenDay }) {
 /* ---------------------------------------------------------------- */
 /* Month view                                                         */
 /* ---------------------------------------------------------------- */
-function MonthView({ selectedDate, reservations }) {
+function MonthView({ selectedDate, reservations, onOpenDay, isMobile }) {
   const weeks = buildMonthMatrix(selectedDate);
 
   const countsFor = (dayISO) => {
@@ -645,14 +677,16 @@ function MonthView({ selectedDate, reservations }) {
     };
   };
 
+  const labels = isMobile ? DAY_LABELS_SHORT : DAY_LABELS;
+
   return (
     <Card style={{ padding: 0, overflow: "hidden" }}>
-      <div style={{ padding: "20px 20px 0" }}>
+      <div style={{ padding: isMobile ? "16px 16px 0" : "20px 20px 0" }}>
         <Legend />
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)" }}>
-        {DAY_LABELS.map((d) => (
-          <div key={d} style={{ textAlign: "center", padding: "10px 6px", fontFamily: FONT, fontWeight: 700, fontSize: 13, color: C.ink, borderBottom: `1px solid ${C.hair}` }}>
+        {labels.map((d, i) => (
+          <div key={i} style={{ textAlign: "center", padding: isMobile ? "8px 2px" : "10px 6px", fontFamily: FONT, fontWeight: 700, fontSize: isMobile ? 11 : 13, color: C.ink, borderBottom: `1px solid ${C.hair}` }}>
             {d}
           </div>
         ))}
@@ -662,25 +696,27 @@ function MonthView({ selectedDate, reservations }) {
           return (
             <div
               key={i}
+              onClick={() => onOpenDay(cell.date)}
               style={{
-                minHeight: 90,
-                padding: "8px 10px",
+                minHeight: isMobile ? 58 : 90,
+                padding: isMobile ? "5px 4px" : "8px 10px",
                 borderBottom: `1px solid ${C.hair}`,
                 borderLeft: i % 7 !== 0 ? `1px solid ${C.hair}` : "none",
                 background: cell.inMonth ? "#fff" : "#f7f6f8",
                 opacity: cell.inMonth ? 1 : 0.5,
+                cursor: "pointer",
               }}
             >
-              <div style={{ fontSize: 13, fontWeight: 600, color: C.ink, marginBottom: 6, fontFamily: FONT }}>{cell.date.getDate()}</div>
+              <div style={{ fontSize: isMobile ? 11.5 : 13, fontWeight: 600, color: C.ink, marginBottom: isMobile ? 3 : 6, fontFamily: FONT }}>{cell.date.getDate()}</div>
               {counts.table > 0 && (
-                <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11.5, color: C.ink, marginBottom: 3, fontFamily: FONT }}>
-                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.eventYellow, display: "inline-block" }} />
+                <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: isMobile ? 10.5 : 11.5, color: C.ink, marginBottom: 3, fontFamily: FONT }}>
+                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.eventYellow, display: "inline-block", flexShrink: 0 }} />
                   {counts.table}
                 </div>
               )}
               {counts.event > 0 && (
-                <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11.5, color: C.ink, fontFamily: FONT }}>
-                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.eventBlue, display: "inline-block" }} />
+                <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: isMobile ? 10.5 : 11.5, color: C.ink, fontFamily: FONT }}>
+                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.eventBlue, display: "inline-block", flexShrink: 0 }} />
                   {counts.event}
                 </div>
               )}
@@ -693,16 +729,65 @@ function MonthView({ selectedDate, reservations }) {
 }
 
 /* ---------------------------------------------------------------- */
+/* Phone card — a six-column table is unreadable at 375px            */
+/* ---------------------------------------------------------------- */
+function ReservationCard({ r, highlighted, cardRef, markStatus, onViewProof, showStatus = true }) {
+  const locked = r.paymentStatus !== "verified" && r.status !== "Cancelled";
+
+  return (
+    <div
+      ref={cardRef}
+      style={{
+        background: highlighted ? C.highlight : "#fff",
+        border: highlighted ? `2px solid ${C.eventYellow}` : `1px solid ${C.hair}`,
+        borderRadius: 14,
+        padding: 16,
+        fontFamily: FONT,
+        opacity: r.status === "Cancelled" ? 0.6 : 1,
+        transition: "background 0.4s ease",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 700, fontSize: 15, color: C.ink }}>
+            {r.type === "event" ? r.eventTitle : r.name}
+          </div>
+          <div style={{ fontSize: 12.5, color: C.inkSoft, marginTop: 2 }}>
+            {to12h(r.time)} · {r.pax} pax
+          </div>
+        </div>
+        <Badge tone={r.type === "event" ? "amber" : "green"}>
+          {r.type === "event" ? "Event" : "Table"}
+        </Badge>
+      </div>
+
+      <div style={{ paddingTop: 10, borderTop: `1px dashed ${C.hair}`, marginBottom: showStatus ? 12 : 0 }}>
+        <DownpaymentCell reservation={r} onViewProof={onViewProof} />
+      </div>
+
+      {showStatus && (
+        <StatusSelect
+          status={r.status}
+          locked={locked}
+          fullWidth
+          onChange={(status) => markStatus(r.id, status)}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- */
 /* History view — completed reservations                              */
 /* ---------------------------------------------------------------- */
-function HistoryView({ reservations, onViewProof }) {
+function HistoryView({ reservations, onViewProof, isMobile }) {
   const completed = [...reservations]
     .filter((r) => r.status === "Completed")
     .sort((a, b) => (a.date + a.time < b.date + b.time ? 1 : -1));
 
   return (
     <Card style={{ padding: 0, overflow: "hidden" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "20px 22px 0" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: isMobile ? "16px 16px 0" : "20px 22px 0" }}>
         <SectionTitle>Completed Reservations</SectionTitle>
         <span style={{ background: C.void, color: "#f5e9d8", fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, marginTop: -14, fontFamily: FONT }}>
           {completed.length}
@@ -710,24 +795,38 @@ function HistoryView({ reservations, onViewProof }) {
       </div>
 
       {completed.length === 0 ? (
-        <div style={{ color: C.inkSoft, fontSize: 13.5, textAlign: "center", padding: "30px 0", fontFamily: FONT }}>
+        <div style={{ color: C.inkSoft, fontSize: 13.5, textAlign: "center", padding: "30px 16px", fontFamily: FONT }}>
           No completed reservations yet.
         </div>
+      ) : isMobile ? (
+        <div style={{ display: "grid", gap: 12, padding: "0 16px 16px" }}>
+          {completed.map((r) => (
+            <ReservationCard
+              key={r.id}
+              r={r}
+              highlighted={false}
+              cardRef={null}
+              markStatus={() => {}}
+              onViewProof={onViewProof}
+              showStatus={false}
+            />
+          ))}
+        </div>
       ) : (
-        <div style={{ overflowX: "auto" }}>
+        <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: FONT, minWidth: 800 }}>
             <thead>
               <tr style={{ textAlign: "left", fontSize: 12, color: C.inkSoft }}>
                 {["Date", "Time", "Name", "Pax", "Downpayment", "Type"].map((h) => (
-                  <th key={h} style={{ padding: "10px 22px", borderBottom: `1px solid ${C.hair}`, fontWeight: 700, textAlign: "left" }}>{h}</th>
+                  <th key={h} style={{ padding: "10px 22px", borderBottom: `1px solid ${C.hair}`, fontWeight: 700, textAlign: "left", whiteSpace: "nowrap" }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {completed.map((r) => (
                 <tr key={r.id} style={{ fontSize: 13.5 }}>
-                  <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, textAlign: "left" }}>{displayDateFromISO(r.date)}</td>
-                  <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, fontWeight: 700, textAlign: "left" }}>{to12h(r.time)}</td>
+                  <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, textAlign: "left", whiteSpace: "nowrap" }}>{displayDateFromISO(r.date)}</td>
+                  <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, fontWeight: 700, textAlign: "left", whiteSpace: "nowrap" }}>{to12h(r.time)}</td>
                   <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, textAlign: "left" }}>
                     {r.type === "event" ? r.eventTitle : r.name}
                   </td>
@@ -753,7 +852,7 @@ function HistoryView({ reservations, onViewProof }) {
 /* ---------------------------------------------------------------- */
 /* Guests — reserved arrivals plus walk-ins                          */
 /* ---------------------------------------------------------------- */
-function GuestCard({ counts, onAddWalkIn, busy, isToday }) {
+function GuestCard({ counts, onAddWalkIn, busy, isToday, isMobile }) {
   const [input, setInput] = useState("");
 
   const handleAdd = async () => {
@@ -764,13 +863,23 @@ function GuestCard({ counts, onAddWalkIn, busy, isToday }) {
   };
 
   return (
-    <Card style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
+    <Card
+      style={{
+        display: "flex",
+        alignItems: isMobile ? "stretch" : "center",
+        justifyContent: "space-between",
+        gap: isMobile ? 14 : 20,
+        flexDirection: isMobile ? "column" : "row",
+        flexWrap: "wrap",
+        padding: isMobile ? 16 : 22,
+      }}
+    >
       <div style={{ textAlign: "left" }}>
         <div style={{ fontSize: 12, color: C.inkSoft, fontFamily: FONT, marginBottom: 4 }}>
           {isToday ? "Guests Today" : "Guests"}
         </div>
         <div
-          style={{ fontSize: 34, fontFamily: FONT, color: C.ink, lineHeight: 1.1, WebkitTextStroke: "0.5px " + C.ink }}
+          style={{ fontSize: isMobile ? 28 : 34, fontFamily: FONT, color: C.ink, lineHeight: 1.1, WebkitTextStroke: "0.5px " + C.ink }}
         >
           {counts.total}
         </div>
@@ -784,7 +893,7 @@ function GuestCard({ counts, onAddWalkIn, busy, isToday }) {
           Walk-ins can only be logged for today
         </span>
       ) : (
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <span style={{ fontSize: 12, color: C.inkSoft, fontFamily: FONT }}>Walk-in guests</span>
           <input
             type="number"
@@ -819,6 +928,7 @@ function GuestCard({ counts, onAddWalkIn, busy, isToday }) {
               color: "#f5e9d8",
               cursor: busy || !input ? "not-allowed" : "pointer",
               opacity: busy || !input ? 0.5 : 1,
+              flex: isMobile ? 1 : "none",
             }}
           >
             {busy ? "Adding..." : "Add"}
@@ -832,27 +942,41 @@ function GuestCard({ counts, onAddWalkIn, busy, isToday }) {
 /* ---------------------------------------------------------------- */
 /* Day view                                                           */
 /* ---------------------------------------------------------------- */
-function DayView({ selectedISO, reservations, markStatus, highlightId, highlightRef, onViewProof }) {
+function DayView({ selectedISO, reservations, markStatus, highlightId, highlightRef, onViewProof, isMobile }) {
   const dayReservations = reservations.filter((r) => r.date === selectedISO && r.status !== "Completed");
   const sortedAll = [...dayReservations].sort((a, b) => (a.time > b.time ? 1 : -1));
 
   return (
     <Card style={{ padding: 0, overflow: "hidden" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "20px 22px 0" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: isMobile ? "16px 16px 0" : "20px 22px 0" }}>
         <SectionTitle>Today's Reservations</SectionTitle>
         <span style={{ background: C.void, color: "#f5e9d8", fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, marginTop: -14, fontFamily: FONT }}>
           {sortedAll.length}
         </span>
       </div>
+
       {sortedAll.length === 0 ? (
-        <div style={{ color: C.inkSoft, fontSize: 13.5, textAlign: "center", padding: "30px 0", fontFamily: FONT }}>No reservations today.</div>
+        <div style={{ color: C.inkSoft, fontSize: 13.5, textAlign: "center", padding: "30px 16px", fontFamily: FONT }}>No reservations today.</div>
+      ) : isMobile ? (
+        <div style={{ display: "grid", gap: 12, padding: "0 16px 16px" }}>
+          {sortedAll.map((r) => (
+            <ReservationCard
+              key={r.id}
+              r={r}
+              highlighted={r.id === highlightId}
+              cardRef={r.id === highlightId ? highlightRef : null}
+              markStatus={markStatus}
+              onViewProof={onViewProof}
+            />
+          ))}
+        </div>
       ) : (
-        <div style={{ overflowX: "auto" }}>
+        <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: FONT, minWidth: 800, textAlign: "left" }}>
             <thead>
               <tr style={{ textAlign: "left", fontSize: 12, color: C.inkSoft }}>
                 {["Time", "Name", "Type", "Pax", "Downpayment", "Status"].map((h) => (
-                  <th key={h} style={{ padding: "10px 22px", borderBottom: `1px solid ${C.hair}`, fontWeight: 700 }}>{h}</th>
+                  <th key={h} style={{ padding: "10px 22px", borderBottom: `1px solid ${C.hair}`, fontWeight: 700, whiteSpace: "nowrap" }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -872,7 +996,7 @@ function DayView({ selectedISO, reservations, markStatus, highlightId, highlight
                       opacity: r.status === "Cancelled" ? 0.55 : 1,
                     }}
                   >
-                    <td style={{ padding: "16px 22px", borderBottom: `1px solid ${C.hair}`, fontWeight: 700, verticalAlign: "top" }}>
+                    <td style={{ padding: "16px 22px", borderBottom: `1px solid ${C.hair}`, fontWeight: 700, verticalAlign: "top", whiteSpace: "nowrap" }}>
                       {to12h(r.time)}
                     </td>
                     <td style={{ padding: "16px 22px", borderBottom: `1px solid ${C.hair}`, verticalAlign: "top" }}>
@@ -951,8 +1075,11 @@ function normalizeReservation(r) {
   };
 }
 
-export default function Reservations({ embedded = false, highlightTarget = null }) {
+export default function Reservations({ embedded = false, highlightTarget = null, isMobile: isMobileProp }) {
   const location = useLocation();
+  const detectedMobile = useMediaQuery(MOBILE_QUERY);
+  const isMobile = isMobileProp ?? detectedMobile;
+
   const [range, setRange] = useState("Day");
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [reservations, setReservations] = useState([]);
@@ -1077,6 +1204,29 @@ export default function Reservations({ embedded = false, highlightTarget = null 
 
   const isHistory = range === "History";
 
+  const rangeLabel = (() => {
+    if (range === "Week") {
+      return isMobile
+        ? `${formatDisplayDateShort(weekStart)} - ${formatDisplayDateShort(weekEnd)}`
+        : `${formatDisplayDate(weekStart)} - ${formatDisplayDate(weekEnd)}`;
+    }
+    return isMobile ? formatDisplayDateShort(selectedDate) : formatDisplayDate(selectedDate);
+  })();
+
+  const arrowButton = {
+    border: "none",
+    background: "#fff",
+    borderRadius: 8,
+    width: 34,
+    height: 34,
+    boxShadow: "0 1px 2px rgba(0,0,0,0.08)",
+    cursor: "pointer",
+    flexShrink: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  };
+
   return (
     <div style={{ fontFamily: FONT, minHeight: "100vh", background: C.canvas }}>
       <style>{`${FONT_IMPORT}
@@ -1084,48 +1234,67 @@ export default function Reservations({ embedded = false, highlightTarget = null 
       `}</style>
 
       {!embedded && <StaffHeader />}
-      <div style={{ padding: 28, display: "flex", flexDirection: "column", gap: 14, width: "100%" }}>
-        <div style={{ fontFamily: FONT, fontSize: 39, fontWeight: 700, color: C.ink, WebkitTextStroke: "0.5px " + C.ink, textAlign: "left", width: "100%" }}>
+      <div style={{ padding: isMobile ? 16 : 28, display: "flex", flexDirection: "column", gap: 14, width: "100%" }}>
+        <div
+          style={{
+            fontFamily: FONT,
+            fontSize: "clamp(26px, 6vw, 39px)",
+            fontWeight: 700,
+            color: C.ink,
+            WebkitTextStroke: "0.5px " + C.ink,
+            textAlign: "left",
+            width: "100%",
+          }}
+        >
           Reservations
         </div>
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
           {!isHistory ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <span style={{ letterSpacing: 1, color: "#1d080f", fontSize: 13, fontFamily: FONT, WebkitTextStroke: "0.5px #1d080f" }}>{formatMonthLabel(selectedDate)}</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff", padding: "8px 14px", borderRadius: 10, fontSize: 13, fontWeight: 600, boxShadow: "0 1px 2px rgba(0,0,0,0.06)", fontFamily: FONT }}>
-                {range === "Week" ? `${formatDisplayDate(weekStart)} - ${formatDisplayDate(weekEnd)}` : formatDisplayDate(selectedDate)}
+            <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 12, flexWrap: "wrap" }}>
+              {!isMobile && (
+                <span style={{ letterSpacing: 1, color: "#1d080f", fontSize: 13, fontFamily: FONT, WebkitTextStroke: "0.5px #1d080f" }}>
+                  {formatMonthLabel(selectedDate)}
+                </span>
+              )}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff", padding: "8px 14px", borderRadius: 10, fontSize: isMobile ? 12.5 : 13, fontWeight: 600, boxShadow: "0 1px 2px rgba(0,0,0,0.06)", fontFamily: FONT, whiteSpace: "nowrap" }}>
+                {rangeLabel}
               </div>
-              <button onClick={() => setSelectedDate(shiftDate(selectedDate, range, "prev"))} style={{ border: "none", background: "#fff", borderRadius: 8, width: 32, height: 32, boxShadow: "0 1px 2px rgba(0,0,0,0.08)", cursor: "pointer" }}>
-                <ChevronLeft size={15} style={{ margin: "auto" }} />
+              <button onClick={() => setSelectedDate(shiftDate(selectedDate, range, "prev"))} style={arrowButton}>
+                <ChevronLeft size={15} />
               </button>
-              <button onClick={() => setSelectedDate(shiftDate(selectedDate, range, "next"))} style={{ border: "none", background: "#fff", borderRadius: 8, width: 32, height: 32, boxShadow: "0 1px 2px rgba(0,0,0,0.08)", cursor: "pointer" }}>
-                <ChevronRight size={15} style={{ margin: "auto" }} />
+              <button onClick={() => setSelectedDate(shiftDate(selectedDate, range, "next"))} style={arrowButton}>
+                <ChevronRight size={15} />
               </button>
             </div>
           ) : (
             <div />
           )}
-          <div style={{ display: "flex", gap: 6, background: "#fff", padding: 4, borderRadius: 10, boxShadow: "0 1px 2px rgba(0,0,0,0.06)" }}>
-            {(embedded ? ["Day", "Week", "Month"] : ["Day", "Week", "Month", "History"]).map((r) => (
-              <button
-                key={r}
-                onClick={() => setRange(r)}
-                style={{
-                  border: "none",
-                  borderRadius: 8,
-                  padding: "8px 16px",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  fontFamily: FONT,
-                  background: range === r ? C.void : "transparent",
-                  color: range === r ? "#f5e9d8" : C.ink,
-                }}
-              >
-                {r}
-              </button>
-            ))}
+
+          {/* The range switcher scrolls sideways rather than wrapping */}
+          <div style={{ overflowX: "auto", maxWidth: "100%" }}>
+            <div style={{ display: "flex", gap: 6, background: "#fff", padding: 4, borderRadius: 10, boxShadow: "0 1px 2px rgba(0,0,0,0.06)", width: "fit-content" }}>
+              {(embedded ? ["Day", "Week", "Month"] : ["Day", "Week", "Month", "History"]).map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setRange(r)}
+                  style={{
+                    border: "none",
+                    borderRadius: 8,
+                    padding: isMobile ? "8px 13px" : "8px 16px",
+                    fontSize: isMobile ? 12.5 : 13,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    fontFamily: FONT,
+                    background: range === r ? C.void : "transparent",
+                    color: range === r ? "#f5e9d8" : C.ink,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -1135,6 +1304,7 @@ export default function Reservations({ embedded = false, highlightTarget = null 
             onAddWalkIn={handleAddWalkIn}
             busy={addingWalkIn}
             isToday={toISO(selectedDate) === toISO(new Date())}
+            isMobile={isMobile}
           />
         )}
 
@@ -1150,11 +1320,28 @@ export default function Reservations({ embedded = false, highlightTarget = null 
                 highlightId={highlightId}
                 highlightRef={highlightRef}
                 onViewProof={setProofTarget}
+                isMobile={isMobile}
               />
             )}
-            {range === "Week" && <WeekView selectedDate={selectedDate} reservations={reservations} onOpenDay={openDay} />}
-            {range === "Month" && <MonthView selectedDate={selectedDate} reservations={reservations} />}
-            {range === "History" && <HistoryView reservations={reservations} onViewProof={setProofTarget} />}
+            {range === "Week" && (
+              <WeekView
+                selectedDate={selectedDate}
+                reservations={reservations}
+                onOpenDay={openDay}
+                isMobile={isMobile}
+              />
+            )}
+            {range === "Month" && (
+              <MonthView
+                selectedDate={selectedDate}
+                reservations={reservations}
+                onOpenDay={openDay}
+                isMobile={isMobile}
+              />
+            )}
+            {range === "History" && (
+              <HistoryView reservations={reservations} onViewProof={setProofTarget} isMobile={isMobile} />
+            )}
           </>
         )}
       </div>
@@ -1174,7 +1361,7 @@ export default function Reservations({ embedded = false, highlightTarget = null 
         onCancel={() => setPendingCancel(null)}
       />
 
-      <Toast message={toast.message} tone={toast.tone} onClose={closeToast} />
+      <Toast message={toast.message} tone={toast.tone} onClose={closeToast} isMobile={isMobile} />
     </div>
   );
 }

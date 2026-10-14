@@ -9,12 +9,31 @@ const POLL_MS = 8000;
 const HIGHLIGHT_MS = 4000;
 const STATUS_LABEL = { pending: "Pending", verified: "Completed", failed: "Failed" };
 
+const MOBILE_QUERY = "(max-width: 767px)";
+
+// Lets the standalone page size itself; inside the Owner shell the prop wins
+function useMediaQuery(query) {
+  const [matches, setMatches] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia(query).matches : false
+  );
+
+  useEffect(() => {
+    const mql = window.matchMedia(query);
+    const handler = (e) => setMatches(e.matches);
+    setMatches(mql.matches);
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, [query]);
+
+  return matches;
+}
+
 function StatCard({ label, value }) {
   return (
-    <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+    <div className="bg-white rounded-xl p-4 sm:p-5 shadow-sm border border-gray-100">
       <div className="text-xs text-gray-600 font-[Prata] mb-2">{label}</div>
       <div
-        className="text-2xl font-[Prata] text-[#1d080f]"
+        className="text-xl sm:text-2xl font-[Prata] text-[#1d080f]"
         style={{ WebkitTextStroke: "0.6px #1d080f" }}
       >
         {value}
@@ -30,7 +49,7 @@ function StatusBadge({ status }) {
     Failed: "bg-[#f8d7da] text-[#842029]",
   };
   return (
-    <span className={`text-xs font-[Prata] px-3 py-1 rounded-lg ${styles[status] || styles.Pending}`}>
+    <span className={`text-xs font-[Prata] px-3 py-1 rounded-lg whitespace-nowrap ${styles[status] || styles.Pending}`}>
       {status}
     </span>
   );
@@ -42,11 +61,11 @@ function ImageViewer({ src, onClose }) {
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-6"
+      className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4 sm:p-6"
     >
       <button
         onClick={onClose}
-        className="absolute top-6 right-6 text-white/80 hover:text-white transition"
+        className="absolute top-4 right-4 sm:top-6 sm:right-6 text-white/80 hover:text-white transition"
       >
         <X size={26} />
       </button>
@@ -69,21 +88,21 @@ function ValidateModal({ transaction, busy, onClose, onConfirm, onFail }) {
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 px-4"
+      className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 px-4 py-6"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative bg-white rounded-xl p-7 max-w-sm w-full font-[Prata] max-h-[85vh] overflow-y-auto"
+        className="relative bg-white rounded-xl p-5 sm:p-7 max-w-sm w-full font-[Prata] max-h-[88vh] overflow-y-auto"
       >
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 text-gray-500 hover:text-gray-700"
+          className="absolute top-4 right-4 sm:top-5 sm:right-5 text-gray-500 hover:text-gray-700"
         >
           <X size={18} />
         </button>
 
         <h3
-          className="text-xl text-[#1d080f] mb-1"
+          className="text-lg sm:text-xl text-[#1d080f] mb-1 pr-8"
           style={{ WebkitTextStroke: "0.5px #1d080f" }}
         >
           Validate Payment
@@ -91,22 +110,22 @@ function ValidateModal({ transaction, busy, onClose, onConfirm, onFail }) {
         <p className="text-xs text-gray-600 mb-5">Verify and confirm the payment.</p>
 
         <div className="space-y-3 text-sm mb-5">
-          <div className="flex justify-between">
-            <span className="text-gray-600">Customer</span>
-            <span className="text-[#1d080f]">{transaction.customer}</span>
+          <div className="flex justify-between gap-3">
+            <span className="text-gray-600 shrink-0">Customer</span>
+            <span className="text-[#1d080f] text-right">{transaction.customer}</span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-gray-600">Order #</span>
-            <span className="text-[#1d080f]">{transaction.displayNo}</span>
+          <div className="flex justify-between gap-3">
+            <span className="text-gray-600 shrink-0">Order #</span>
+            <span className="text-[#1d080f] text-right">{transaction.displayNo}</span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-gray-600">Payment Method</span>
-            <span className="text-[#1d080f] capitalize">{transaction.method || "—"}</span>
+          <div className="flex justify-between gap-3">
+            <span className="text-gray-600 shrink-0">Payment Method</span>
+            <span className="text-[#1d080f] capitalize text-right">{transaction.method || "—"}</span>
           </div>
           {transaction.discount && (
-            <div className="flex justify-between">
-              <span className="text-gray-600">Discount</span>
-              <span className="text-[#1d080f] capitalize">
+            <div className="flex justify-between gap-3">
+              <span className="text-gray-600 shrink-0">Discount</span>
+              <span className="text-[#1d080f] capitalize text-right">
                 {transaction.discount}
                 {transaction.discountAmount
                   ? ` (- Php. ${Number(transaction.discountAmount).toLocaleString()})`
@@ -114,9 +133,9 @@ function ValidateModal({ transaction, busy, onClose, onConfirm, onFail }) {
               </span>
             </div>
           )}
-          <div className="flex justify-between">
-            <span className="text-gray-600">Amount</span>
-            <span className="text-[#1d080f]">Php. {transaction.amount.toLocaleString()}</span>
+          <div className="flex justify-between gap-3">
+            <span className="text-gray-600 shrink-0">Amount</span>
+            <span className="text-[#1d080f] text-right">Php. {transaction.amount.toLocaleString()}</span>
           </div>
         </div>
 
@@ -203,21 +222,21 @@ function DownpaymentModal({ reservation, busy, onClose, onConfirm, onFail }) {
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 px-4"
+      className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 px-4 py-6"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative bg-white rounded-xl p-7 max-w-sm w-full font-[Prata] max-h-[85vh] overflow-y-auto"
+        className="relative bg-white rounded-xl p-5 sm:p-7 max-w-sm w-full font-[Prata] max-h-[88vh] overflow-y-auto"
       >
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 text-gray-500 hover:text-gray-700"
+          className="absolute top-4 right-4 sm:top-5 sm:right-5 text-gray-500 hover:text-gray-700"
         >
           <X size={18} />
         </button>
 
         <h3
-          className="text-xl text-[#1d080f] mb-1"
+          className="text-lg sm:text-xl text-[#1d080f] mb-1 pr-8"
           style={{ WebkitTextStroke: "0.5px #1d080f" }}
         >
           {reservation.isCash ? "Cash Downpayment" : "Verify Downpayment"}
@@ -227,27 +246,27 @@ function DownpaymentModal({ reservation, busy, onClose, onConfirm, onFail }) {
         </p>
 
         <div className="space-y-3 text-sm mb-5">
-          <div className="flex justify-between">
-            <span className="text-gray-600">Guest</span>
-            <span className="text-[#1d080f]">{reservation.guestName}</span>
+          <div className="flex justify-between gap-3">
+            <span className="text-gray-600 shrink-0">Guest</span>
+            <span className="text-[#1d080f] text-right">{reservation.guestName}</span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-gray-600">Reservation</span>
-            <span className="text-[#1d080f] capitalize">
+          <div className="flex justify-between gap-3">
+            <span className="text-gray-600 shrink-0">Reservation</span>
+            <span className="text-[#1d080f] capitalize text-right">
               {reservation.type === "event" ? "Event" : "Table"} · {reservation.pax} pax
             </span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-gray-600">Date &amp; Time</span>
-            <span className="text-[#1d080f]">{reservation.date} · {reservation.time}</span>
+          <div className="flex justify-between gap-3">
+            <span className="text-gray-600 shrink-0">Date &amp; Time</span>
+            <span className="text-[#1d080f] text-right">{reservation.date} · {reservation.time}</span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-gray-600">Payment Method</span>
-            <span className="text-[#1d080f] capitalize">{reservation.method || "—"}</span>
+          <div className="flex justify-between gap-3">
+            <span className="text-gray-600 shrink-0">Payment Method</span>
+            <span className="text-[#1d080f] capitalize text-right">{reservation.method || "—"}</span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-gray-600">Amount</span>
-            <span className="text-[#1d080f]">Php. {reservation.amount.toLocaleString()}</span>
+          <div className="flex justify-between gap-3">
+            <span className="text-gray-600 shrink-0">Amount</span>
+            <span className="text-[#1d080f] text-right">Php. {reservation.amount.toLocaleString()}</span>
           </div>
         </div>
 
@@ -376,8 +395,129 @@ function assignDailyNumbers(list) {
   }));
 }
 
-export default function PaymentTransactions({ embedded = false, highlightTarget = null }) {
+/* ---------------------------------------------------------------- */
+/* Phone cards — a seven-column table is unusable at 375px, so each  */
+/* row becomes a card with its action as a full-width button         */
+/* ---------------------------------------------------------------- */
+function PaymentCard({ t, highlighted, cardRef, loadingId, onView, onVerify, showStatusOnly }) {
+  return (
+    <div
+      ref={cardRef}
+      className={`bg-white rounded-xl p-4 shadow-sm transition-colors duration-500 ${
+        highlighted ? "border-2 border-[#f2c14e] bg-[#fff8e1]" : "border border-gray-100"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <span
+          className="font-[Prata] text-base text-[#1d080f]"
+          style={{ WebkitTextStroke: "0.3px #1d080f" }}
+        >
+          Order #{t.displayNo}
+        </span>
+        <span className="font-[Prata] text-base text-[#1d080f] whitespace-nowrap">
+          Php. {t.amount.toLocaleString()}
+        </span>
+      </div>
+
+      <div className="text-sm text-[#1d080f] mb-1">{t.customer}</div>
+      <div className="text-xs text-gray-600 mb-3">
+        <span className="capitalize">{t.method || "—"}</span> · {t.date} · {t.time}
+      </div>
+
+      <div className="flex gap-2">
+        {t.hasReceipt && (
+          <button
+            onClick={() => onView(t)}
+            disabled={loadingId === t.id}
+            className="flex-1 inline-flex items-center justify-center gap-1.5 text-xs font-[Prata] py-2.5 rounded-lg border border-gray-300 text-[#1d080f] hover:bg-gray-50 transition disabled:opacity-50"
+          >
+            <Eye size={14} />
+            {loadingId === t.id ? "Loading..." : "View"}
+          </button>
+        )}
+
+        {showStatusOnly ? (
+          <div className="flex-1 flex items-center justify-center">
+            <StatusBadge status={t.status} />
+          </div>
+        ) : t.hasReceipt ? (
+          <button
+            onClick={() => onVerify(t)}
+            disabled={loadingId === t.id}
+            className="flex-[2] text-xs font-[Prata] py-2.5 rounded-lg bg-[#f5e79e] text-[#5e5113] hover:opacity-80 transition disabled:opacity-50"
+          >
+            {loadingId === t.id ? "Loading..." : "Verify Payment"}
+          </button>
+        ) : (
+          <div className="flex-1 flex items-center justify-center text-xs text-gray-500 italic">
+            Awaiting payment
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DownpaymentCard({ d, highlighted, cardRef, onOpen }) {
+  return (
+    <div
+      ref={cardRef}
+      className={`bg-white rounded-xl p-4 shadow-sm transition-colors duration-500 ${
+        highlighted ? "border-2 border-[#f2c14e] bg-[#fff8e1]" : "border border-gray-100"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <span
+          className="font-[Prata] text-base text-[#1d080f]"
+          style={{ WebkitTextStroke: "0.3px #1d080f" }}
+        >
+          {d.guestName}
+        </span>
+        <span className="font-[Prata] text-base text-[#1d080f] whitespace-nowrap">
+          Php. {d.amount.toLocaleString()}
+        </span>
+      </div>
+
+      <div className="flex items-center gap-2 mb-2">
+        <span
+          className={`text-xs font-[Prata] px-2.5 py-1 rounded-lg ${
+            d.type === "event"
+              ? "bg-[#fdf3df] text-[#9c7a1f]"
+              : "bg-[#e5f0e6] text-[#296c39]"
+          }`}
+        >
+          {d.type === "event" ? "Event" : "Table"}
+        </span>
+        <span className="text-xs text-gray-700">{d.pax} pax</span>
+      </div>
+
+      <div className="text-xs text-gray-600 mb-3">
+        <span className="capitalize">{d.method || "—"}</span> · {d.date} · {d.time}
+      </div>
+
+      {d.isCash || d.hasProof ? (
+        <button
+          onClick={() => onOpen(d)}
+          className="w-full text-xs font-[Prata] py-2.5 rounded-lg bg-[#f5e79e] text-[#5e5113] hover:opacity-80 transition"
+        >
+          {d.isCash ? "Mark as Received" : "Verify Downpayment"}
+        </button>
+      ) : (
+        <div className="text-center text-xs text-gray-500 italic py-2">No proof uploaded</div>
+      )}
+    </div>
+  );
+}
+
+export default function PaymentTransactions({
+  embedded = false,
+  highlightTarget = null,
+  isMobile: isMobileProp,
+}) {
   const location = useLocation();
+  const detectedMobile = useMediaQuery(MOBILE_QUERY);
+  const isMobile = isMobileProp ?? detectedMobile;
+
   const [transactions, setTransactions] = useState([]);
   const [downpayments, setDownpayments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -568,8 +708,13 @@ export default function PaymentTransactions({ embedded = false, highlightTarget 
       ? "border-b border-gray-100 last:border-0 text-sm bg-[#fff8e1] transition-colors duration-500"
       : "border-b border-gray-100 last:border-0 text-sm transition-colors duration-500";
 
-  const rowRef = (kind, id) =>
-    highlight && highlight.kind === kind && highlight.id === id ? highlightRef : null;
+  const isHighlighted = (kind, id) =>
+    Boolean(highlight && highlight.kind === kind && highlight.id === id);
+
+  const rowRef = (kind, id) => (isHighlighted(kind, id) ? highlightRef : null);
+
+  const emptyClass =
+    "bg-white rounded-xl p-8 sm:p-12 text-center text-gray-500 font-[Prata] text-sm shadow-sm border border-gray-100";
 
   const tabs = embedded
     ? [
@@ -586,49 +731,68 @@ export default function PaymentTransactions({ embedded = false, highlightTarget 
     <div className="min-h-screen bg-[#f0eff3] font-[Prata] text-[#1d080f] text-left">
       {!embedded && <StaffHeader role="Cashier" />}
 
-      <main className="max-w-[1400px] mx-auto" style={{ padding: 28 }}>
+      <main className="max-w-[1400px] mx-auto" style={{ padding: isMobile ? 16 : 28 }}>
         <h1
           className="text-[#1d080f] text-left"
-          style={{ marginTop: 0, marginBottom: "20px", fontSize: 39, WebkitTextStroke: "0.4px #1d080f" }}
+          style={{
+            marginTop: 0,
+            marginBottom: "20px",
+            fontSize: "clamp(24px, 6vw, 39px)",
+            lineHeight: 1.15,
+            WebkitTextStroke: "0.4px #1d080f",
+          }}
         >
           Payment Transactions
         </h1>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-5 mb-5 sm:mb-6">
           <StatCard label="Pending Payments" value={pendingCount} />
           <StatCard label="Today's Orders" value={transactions.length} />
           <StatCard label="Completed Payments" value={completedCount} />
         </div>
 
-        <div className="flex gap-1.5 bg-white p-1 rounded-lg w-fit mb-6 shadow-sm border border-gray-100">
-          {tabs.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setView(t.key)}
-              className={`px-4 py-2 rounded-md text-sm font-[Prata] transition flex items-center gap-2 ${
-                view === t.key ? "bg-[#1d080f] text-white" : "text-[#1d080f] hover:bg-gray-50"
-              }`}
-            >
-              {t.label}
-              {t.key === "downpayments" && pendingDownpayments.length > 0 && (
-                <span className="bg-[#f5e79e] text-[#5e5113] text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                  {pendingDownpayments.length}
-                </span>
-              )}
-            </button>
-          ))}
+        {/* The tab strip scrolls sideways rather than wrapping on a phone */}
+        <div className="overflow-x-auto mb-5 sm:mb-6 -mx-4 px-4 sm:mx-0 sm:px-0">
+          <div className="flex gap-1.5 bg-white p-1 rounded-lg w-fit shadow-sm border border-gray-100">
+            {tabs.map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setView(t.key)}
+                className={`px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-[Prata] transition flex items-center gap-2 whitespace-nowrap ${
+                  view === t.key ? "bg-[#1d080f] text-white" : "text-[#1d080f] hover:bg-gray-50"
+                }`}
+              >
+                {t.label}
+                {t.key === "downpayments" && pendingDownpayments.length > 0 && (
+                  <span className="bg-[#f5e79e] text-[#5e5113] text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                    {pendingDownpayments.length}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
         </div>
 
         {loading ? (
-          <div className="bg-white rounded-xl p-12 text-center text-gray-500 font-[Prata] text-sm shadow-sm border border-gray-100">
-            Loading transactions...
-          </div>
+          <div className={emptyClass}>Loading transactions...</div>
         ) : (
           <>
             {view === "pending" && (
               pendingTransactions.length === 0 ? (
-                <div className="bg-white rounded-xl p-12 text-center text-gray-500 font-[Prata] text-sm shadow-sm border border-gray-100">
-                  No pending order payments.
+                <div className={emptyClass}>No pending order payments.</div>
+              ) : isMobile ? (
+                <div className="grid gap-3">
+                  {pendingTransactions.map((t) => (
+                    <PaymentCard
+                      key={t.id}
+                      t={t}
+                      highlighted={isHighlighted("payment", t.id)}
+                      cardRef={rowRef("payment", t.id)}
+                      loadingId={loadingId}
+                      onView={viewReceipt}
+                      onVerify={openVerify}
+                    />
+                  ))}
                 </div>
               ) : (
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
@@ -636,7 +800,7 @@ export default function PaymentTransactions({ embedded = false, highlightTarget 
                     <thead>
                       <tr className="text-xs text-gray-600 border-b border-gray-100">
                         {["Order #", "Customer", "Method", "Amount", "Receipt", "Status", "Date & Time"].map((h) => (
-                          <th key={h} className="px-6 py-4 font-[Prata] font-normal text-left">{h}</th>
+                          <th key={h} className="px-6 py-4 font-[Prata] font-normal text-left whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -648,7 +812,7 @@ export default function PaymentTransactions({ embedded = false, highlightTarget 
                           <td className={`${cellClass} capitalize`}>
                             {t.method || <span className="text-gray-500">—</span>}
                           </td>
-                          <td className={cellClass}>Php. {t.amount.toLocaleString()}</td>
+                          <td className={`${cellClass} whitespace-nowrap`}>Php. {t.amount.toLocaleString()}</td>
                           <td className={cellClass}>
                             {t.hasReceipt ? (
                               <button
@@ -668,7 +832,7 @@ export default function PaymentTransactions({ embedded = false, highlightTarget 
                               <button
                                 onClick={() => openVerify(t)}
                                 disabled={loadingId === t.id}
-                                className="text-xs font-[Prata] px-3 py-1.5 rounded-lg bg-[#f5e79e] text-[#5e5113] hover:opacity-80 transition disabled:opacity-50 disabled:cursor-wait"
+                                className="text-xs font-[Prata] px-3 py-1.5 rounded-lg bg-[#f5e79e] text-[#5e5113] hover:opacity-80 transition disabled:opacity-50 disabled:cursor-wait whitespace-nowrap"
                               >
                                 {loadingId === t.id ? "Loading..." : "Verify Payment"}
                               </button>
@@ -676,7 +840,7 @@ export default function PaymentTransactions({ embedded = false, highlightTarget 
                               <span className="text-xs text-gray-500 italic">Awaiting payment</span>
                             )}
                           </td>
-                          <td className={`${cellClass} text-gray-600`}>
+                          <td className={`${cellClass} text-gray-600 whitespace-nowrap`}>
                             {t.date}<br />{t.time}
                           </td>
                         </tr>
@@ -689,8 +853,18 @@ export default function PaymentTransactions({ embedded = false, highlightTarget 
 
             {view === "downpayments" && (
               pendingDownpayments.length === 0 ? (
-                <div className="bg-white rounded-xl p-12 text-center text-gray-500 font-[Prata] text-sm shadow-sm border border-gray-100">
-                  No downpayments waiting for verification.
+                <div className={emptyClass}>No downpayments waiting for verification.</div>
+              ) : isMobile ? (
+                <div className="grid gap-3">
+                  {pendingDownpayments.map((d) => (
+                    <DownpaymentCard
+                      key={d.id}
+                      d={d}
+                      highlighted={isHighlighted("downpayment", d.id)}
+                      cardRef={rowRef("downpayment", d.id)}
+                      onOpen={setModalDp}
+                    />
+                  ))}
                 </div>
               ) : (
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
@@ -698,7 +872,7 @@ export default function PaymentTransactions({ embedded = false, highlightTarget 
                     <thead>
                       <tr className="text-xs text-gray-600 border-b border-gray-100">
                         {["Guest", "Reservation", "Pax", "Method", "Amount", "Status", "Date & Time"].map((h) => (
-                          <th key={h} className="px-6 py-4 font-[Prata] font-normal text-left">{h}</th>
+                          <th key={h} className="px-6 py-4 font-[Prata] font-normal text-left whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -707,7 +881,7 @@ export default function PaymentTransactions({ embedded = false, highlightTarget 
                         <tr key={d.id} ref={rowRef("downpayment", d.id)} className={rowClass("downpayment", d.id)}>
                           <td className={cellClass} style={{ WebkitTextStroke: "0.3px #1d080f" }}>{d.guestName}</td>
                           <td className={cellClass}>
-                            <span className={`text-xs font-[Prata] px-3 py-1 rounded-lg ${
+                            <span className={`text-xs font-[Prata] px-3 py-1 rounded-lg whitespace-nowrap ${
                               d.type === "event"
                                 ? "bg-[#fdf3df] text-[#9c7a1f]"
                                 : "bg-[#e5f0e6] text-[#296c39]"
@@ -719,12 +893,12 @@ export default function PaymentTransactions({ embedded = false, highlightTarget 
                           <td className={`${cellClass} capitalize`}>
                             {d.method || <span className="text-gray-500">—</span>}
                           </td>
-                          <td className={cellClass}>Php. {d.amount.toLocaleString()}</td>
+                          <td className={`${cellClass} whitespace-nowrap`}>Php. {d.amount.toLocaleString()}</td>
                           <td className={cellClass}>
                             {d.isCash || d.hasProof ? (
                               <button
                                 onClick={() => setModalDp(d)}
-                                className="text-xs font-[Prata] px-3 py-1.5 rounded-lg bg-[#f5e79e] text-[#5e5113] hover:opacity-80 transition"
+                                className="text-xs font-[Prata] px-3 py-1.5 rounded-lg bg-[#f5e79e] text-[#5e5113] hover:opacity-80 transition whitespace-nowrap"
                               >
                                 {d.isCash ? "Mark as Received" : "Verify Downpayment"}
                               </button>
@@ -732,7 +906,7 @@ export default function PaymentTransactions({ embedded = false, highlightTarget 
                               <span className="text-xs text-gray-500 italic">No proof uploaded</span>
                             )}
                           </td>
-                          <td className={`${cellClass} text-gray-600`}>
+                          <td className={`${cellClass} text-gray-600 whitespace-nowrap`}>
                             {d.date}<br />{d.time}
                           </td>
                         </tr>
@@ -744,17 +918,30 @@ export default function PaymentTransactions({ embedded = false, highlightTarget 
             )}
 
             {view === "history" && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
-                {historyTransactions.length === 0 ? (
-                  <div className="p-12 text-center text-gray-500 font-[Prata] text-sm">
-                    No payment history yet.
-                  </div>
-                ) : (
+              historyTransactions.length === 0 ? (
+                <div className={emptyClass}>No payment history yet.</div>
+              ) : isMobile ? (
+                <div className="grid gap-3">
+                  {historyTransactions.map((t) => (
+                    <PaymentCard
+                      key={t.id}
+                      t={t}
+                      highlighted={false}
+                      cardRef={null}
+                      loadingId={loadingId}
+                      onView={viewReceipt}
+                      onVerify={openVerify}
+                      showStatusOnly
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
                   <table className="w-full text-left" style={{ minWidth: 800 }}>
                     <thead>
                       <tr className="text-xs text-gray-600 border-b border-gray-100">
                         {["Order #", "Customer", "Method", "Amount", "Receipt", "Status", "Date & Time"].map((h) => (
-                          <th key={h} className="px-6 py-4 font-[Prata] font-normal text-left">{h}</th>
+                          <th key={h} className="px-6 py-4 font-[Prata] font-normal text-left whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -766,7 +953,7 @@ export default function PaymentTransactions({ embedded = false, highlightTarget 
                           <td className={`${cellClass} capitalize`}>
                             {t.method || <span className="text-gray-500">—</span>}
                           </td>
-                          <td className={cellClass}>Php. {t.amount.toLocaleString()}</td>
+                          <td className={`${cellClass} whitespace-nowrap`}>Php. {t.amount.toLocaleString()}</td>
                           <td className={cellClass}>
                             {t.hasReceipt ? (
                               <button
@@ -790,15 +977,15 @@ export default function PaymentTransactions({ embedded = false, highlightTarget 
                               <StatusBadge status={t.status} />
                             )}
                           </td>
-                          <td className={`${cellClass} text-gray-600`}>
+                          <td className={`${cellClass} text-gray-600 whitespace-nowrap`}>
                             {t.date}<br />{t.time}
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                )}
-              </div>
+                </div>
+              )
             )}
           </>
         )}
@@ -827,8 +1014,9 @@ export default function PaymentTransactions({ embedded = false, highlightTarget 
           className="font-[Prata]"
           style={{
             position: "fixed",
-            bottom: 28,
-            right: 28,
+            bottom: 20,
+            right: 20,
+            left: isMobile ? 20 : "auto",
             background: toast.tone === "error" ? "#c0392b" : "#1d080f",
             color: "#fff",
             padding: "14px 20px",
@@ -839,7 +1027,7 @@ export default function PaymentTransactions({ embedded = false, highlightTarget 
             alignItems: "center",
             gap: 10,
             zIndex: 300,
-            maxWidth: 340,
+            maxWidth: isMobile ? "none" : 340,
           }}
         >
           <span

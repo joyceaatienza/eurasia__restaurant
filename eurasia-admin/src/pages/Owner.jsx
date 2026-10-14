@@ -16,6 +16,7 @@ import {
   ArrowUpDown,
   Bell,
   X,
+  Menu as MenuIcon,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -60,6 +61,28 @@ const FONT_IMPORT =
 
 const POLL_MS = 8000;
 const READ_KEY = "eurasia_read_notifications";
+
+/* Phones get the drawer sidebar; tablets keep it collapsed to icons */
+const MOBILE_QUERY = "(max-width: 767px)";
+const TABLET_QUERY = "(min-width: 768px) and (max-width: 1100px)";
+
+// Tracks a CSS media query so layout decisions can live in JS alongside the
+// inline styles this admin is built with
+function useMediaQuery(query) {
+  const [matches, setMatches] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia(query).matches : false
+  );
+
+  useEffect(() => {
+    const mql = window.matchMedia(query);
+    const handler = (e) => setMatches(e.matches);
+    setMatches(mql.matches);
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, [query]);
+
+  return matches;
+}
 
 const categoryBreakdown = [
   { name: "Appetizers", value: 2400 },
@@ -184,6 +207,7 @@ function Btn({ children, variant = "primary", onClick, small }) {
     alignItems: "center",
     gap: 6,
     transition: "opacity .15s ease",
+    whiteSpace: "nowrap",
   };
   const variants = {
     primary: { background: C.flame, color: "#fff" },
@@ -206,6 +230,7 @@ function Card({ children, style }) {
         borderRadius: 22,
         padding: 22,
         boxShadow: "0 2px 8px rgba(23,3,16,0.05)",
+        minWidth: 0,
         ...style,
       }}
     >
@@ -245,6 +270,7 @@ function Badge({ tone = "green", children }) {
         borderRadius: 999,
         fontSize: 11.5,
         fontWeight: 700,
+        whiteSpace: "nowrap",
         ...tones[tone],
       }}
     >
@@ -435,6 +461,7 @@ function NotificationBell({ notifications, readIds, onOpenItem, onMarkAllRead })
           cursor: "pointer",
           color: C.ink,
           boxShadow: "0 1px 3px rgba(23,3,16,0.06)",
+          flexShrink: 0,
         }}
       >
         <Bell size={19} />
@@ -470,8 +497,9 @@ function NotificationBell({ notifications, readIds, onOpenItem, onMarkAllRead })
             position: "absolute",
             top: "calc(100% + 10px)",
             right: 0,
-            width: 360,
-            maxHeight: 440,
+            // Never wider than the screen on a phone
+            width: "min(360px, calc(100vw - 32px))",
+            maxHeight: "min(440px, 70vh)",
             background: "#fff",
             borderRadius: 16,
             boxShadow: "0 12px 40px rgba(23,3,16,0.18)",
@@ -505,6 +533,7 @@ function NotificationBell({ notifications, readIds, onOpenItem, onMarkAllRead })
                     fontWeight: 700,
                     fontFamily: "'Prata', serif",
                     cursor: "pointer",
+                    whiteSpace: "nowrap",
                   }}
                 >
                   Mark all read
@@ -636,7 +665,7 @@ const NAV = [
   { key: "history", label: "History", icon: HistoryIcon },
 ];
 
-function TopHeader({ onLogoClick, children }) {
+function TopHeader({ onToggleSidebar, isMobile, children }) {
   return (
     <div
       style={{
@@ -644,31 +673,62 @@ function TopHeader({ onLogoClick, children }) {
         alignItems: "center",
         justifyContent: "space-between",
         gap: 12,
-        padding: "14px 32px",
+        padding: isMobile ? "12px 16px" : "14px 32px",
       }}
     >
-      <button
-        onClick={onLogoClick}
-        style={{
-          border: "none",
-          background: "transparent",
-          cursor: "pointer",
-          padding: 0,
-          display: "flex",
-        }}
-      >
-        <img
-          src={logoWord}
-          alt="Eurasia Restaurant Logo"
-          style={{ height: 45, width: "auto", objectFit: "contain" }}
-        />
-      </button>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+        {/* On a phone the drawer needs an obvious handle of its own */}
+        {isMobile && (
+          <button
+            onClick={onToggleSidebar}
+            aria-label="Open menu"
+            style={{
+              border: `1px solid ${C.hair}`,
+              background: "#fff",
+              borderRadius: 10,
+              width: 32,
+              height: 32,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              color: C.ink,
+              flexShrink: 0,
+            }}
+          >
+            <MenuIcon size={15} />
+          </button>
+        )}
+
+        <button
+          onClick={isMobile ? undefined : onToggleSidebar}
+          style={{
+            border: "none",
+            background: "transparent",
+            cursor: isMobile ? "default" : "pointer",
+            padding: 0,
+            display: "flex",
+            minWidth: 0,
+          }}
+        >
+          <img
+            src={logoWord}
+            alt="Eurasia Restaurant Logo"
+            style={{
+              height: isMobile ? 34 : 45,
+              width: "auto",
+              objectFit: "contain",
+            }}
+          />
+        </button>
+      </div>
+
       {children}
     </div>
   );
 }
 
-function Sidebar({ active, setActive, collapsed, onLogout }) {
+function Sidebar({ active, setActive, collapsed, onLogout, isMobile, drawerOpen, onCloseDrawer }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -687,200 +747,259 @@ function Sidebar({ active, setActive, collapsed, onLogout }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  return (
-    <aside
-      style={{
-        width: collapsed ? 64 : 240,
-        minWidth: collapsed ? 64 : 240,
+  // On a phone the sidebar slides over the page instead of taking a column
+  const isCollapsed = isMobile ? false : collapsed;
+  const width = isCollapsed ? 64 : 240;
+
+  const asideStyle = isMobile
+    ? {
+        position: "fixed",
+        top: 0,
+        left: 0,
+        bottom: 0,
+        width: 230,
+        maxWidth: "78%",
+        zIndex: 1000,
+        transform: drawerOpen ? "translateX(0)" : "translateX(-100%)",
+        transition: "transform 0.25s ease",
+        boxShadow: drawerOpen ? "4px 0 24px rgba(0,0,0,0.3)" : "none",
+      }
+    : {
+        width,
+        minWidth: width,
         height: "100vh",
         position: "sticky",
         top: 0,
         alignSelf: "flex-start",
-        background: C.void,
-        display: "flex",
-        flexDirection: "column",
-        padding: collapsed ? "24px 12px" : "22px 16px",
-        borderTopRightRadius: 24,
         transition: "width 0.25s ease, min-width 0.25s ease, padding 0.25s ease",
-      }}
-    >
-      <nav style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {NAV.map((item) => {
-          const Icon = item.icon;
-          const isActive = active === item.key;
-          return (
-            <div key={item.key} style={{ position: "relative" }} className="sidebar-nav-item">
-              <button
-                onClick={() => setActive(item.key)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  padding: collapsed ? "12px 0" : "11px 14px",
-                  justifyContent: collapsed ? "center" : "flex-start",
-                  borderRadius: 10,
-                  border: "none",
-                  cursor: "pointer",
-                  background: isActive ? C.flame : "transparent",
-                  color: isActive ? "#ffffff" : "rgba(245,233,216,0.75)",
-                  fontFamily: "'Prata', serif",
-                  fontSize: 14,
-                  fontWeight: 600,
-                  textAlign: "left",
-                  transition: "all 0.15s ease",
-                  whiteSpace: "nowrap",
-                  width: "100%",
-                }}
-              >
-                <Icon size={17} style={{ flexShrink: 0 }} />
-                <span
-                  style={{
-                    opacity: collapsed ? 0 : 1,
-                    width: collapsed ? 0 : "auto",
-                    overflow: "hidden",
-                    transition: "opacity 0.2s ease",
-                  }}
-                >
-                  {item.label}
-                </span>
-              </button>
+      };
 
-              {collapsed && (
-                <span
-                  className="sidebar-tooltip"
-                  style={{
-                    position: "absolute",
-                    left: "calc(100% + 10px)",
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    background: C.void,
-                    color: "#f5e9d8",
-                    fontFamily: "'Prata', serif",
-                    fontSize: 12.5,
-                    fontWeight: 600,
-                    padding: "6px 12px",
-                    borderRadius: 6,
-                    whiteSpace: "nowrap",
-                    boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
-                    opacity: 0,
-                    pointerEvents: "none",
-                    transition: "opacity 0.15s ease",
-                    zIndex: 50,
-                  }}
-                >
-                  {item.label}
-                </span>
-              )}
-            </div>
-          );
-        })}
-      </nav>
-
-      <div
-        style={{
-          marginTop: "auto",
-          paddingTop: 20,
-          borderTop: `1px solid rgba(245,233,216,0.15)`,
-          position: "relative",
-        }}
-        ref={menuRef}
-      >
-        <button
-          onClick={() => setMenuOpen((prev) => !prev)}
+  return (
+    <>
+      {/* Tapping the dimmed page closes the drawer */}
+      {isMobile && drawerOpen && (
+        <div
+          onClick={onCloseDrawer}
           style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            padding: "8px",
-            border: "none",
-            background: "transparent",
-            cursor: "pointer",
-            width: "100%",
-            justifyContent: collapsed ? "center" : "flex-start",
-            textAlign: "left",
-            borderRadius: 10,
+            position: "fixed",
+            inset: 0,
+            background: "rgba(23,3,16,0.45)",
+            zIndex: 999,
           }}
-        >
-          <div
+        />
+      )}
+
+      <aside
+        style={{
+          background: C.void,
+          display: "flex",
+          flexDirection: "column",
+          padding: isCollapsed ? "24px 12px" : "22px 16px",
+          borderTopRightRadius: isMobile ? 0 : 24,
+          overflowY: "auto",
+          ...asideStyle,
+        }}
+      >
+        {isMobile && (
+          <button
+            onClick={onCloseDrawer}
+            aria-label="Close menu"
             style={{
-              width: 34,
-              height: 34,
-              borderRadius: "50%",
-              background: C.gold,
+              alignSelf: "flex-end",
+              border: "none",
+              background: "transparent",
+              color: C.gold,
+              cursor: "pointer",
+              padding: 4,
+              marginBottom: 8,
+              display: "flex",
+            }}
+          >
+            <X size={22} />
+          </button>
+        )}
+
+        <nav style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {NAV.map((item) => {
+            const Icon = item.icon;
+            const isActive = active === item.key;
+            return (
+              <div key={item.key} style={{ position: "relative" }} className="sidebar-nav-item">
+                <button
+                  onClick={() => {
+                    setActive(item.key);
+                    if (isMobile) onCloseDrawer();
+                  }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                    padding: isCollapsed ? "12px 0" : "13px 14px",
+                    justifyContent: isCollapsed ? "center" : "flex-start",
+                    borderRadius: 10,
+                    border: "none",
+                    cursor: "pointer",
+                    background: isActive ? C.flame : "transparent",
+                    color: isActive ? "#ffffff" : "rgba(245,233,216,0.75)",
+                    fontFamily: "'Prata', serif",
+                    fontSize: isMobile ? 13 : 14,
+                    fontWeight: 600,
+                    textAlign: "left",
+                    transition: "all 0.15s ease",
+                    whiteSpace: "nowrap",
+                    width: "100%",
+                  }}
+                >
+                  <Icon size={17} style={{ flexShrink: 0 }} />
+                  <span
+                    style={{
+                      opacity: isCollapsed ? 0 : 1,
+                      width: isCollapsed ? 0 : "auto",
+                      overflow: "hidden",
+                      transition: "opacity 0.2s ease",
+                    }}
+                  >
+                    {item.label}
+                  </span>
+                </button>
+
+                {isCollapsed && (
+                  <span
+                    className="sidebar-tooltip"
+                    style={{
+                      position: "absolute",
+                      left: "calc(100% + 10px)",
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      background: C.void,
+                      color: "#f5e9d8",
+                      fontFamily: "'Prata', serif",
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      padding: "6px 12px",
+                      borderRadius: 6,
+                      whiteSpace: "nowrap",
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+                      opacity: 0,
+                      pointerEvents: "none",
+                      transition: "opacity 0.15s ease",
+                      zIndex: 50,
+                    }}
+                  >
+                    {item.label}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </nav>
+
+        <div
+          style={{
+            marginTop: "auto",
+            paddingTop: 20,
+            borderTop: `1px solid rgba(245,233,216,0.15)`,
+            position: "relative",
+          }}
+          ref={menuRef}
+        >
+          <button
+            onClick={() => setMenuOpen((prev) => !prev)}
+            style={{
               display: "flex",
               alignItems: "center",
-              justifyContent: "center",
-              fontWeight: 700,
-              color: C.void,
-              fontSize: 13,
-              flexShrink: 0,
-            }}
-          >
-            {displayName.charAt(0).toUpperCase()}
-          </div>
-          {!collapsed && (
-            <div style={{ whiteSpace: "nowrap", overflow: "hidden" }}>
-              <div style={{ color: C.gold, fontSize: 13, fontWeight: 600 }}>
-                {displayName}
-              </div>
-              <div
-                style={{
-                  color: "rgba(245,233,216,0.55)",
-                  fontSize: 11,
-                  textTransform: "capitalize",
-                }}
-              >
-                {displayRole}
-              </div>
-            </div>
-          )}
-        </button>
-
-        {menuOpen && (
-          <div
-            style={{
-              position: "absolute",
-              bottom: collapsed ? "auto" : "100%",
-              top: collapsed ? 0 : "auto",
-              left: collapsed ? "calc(100% + 10px)" : 8,
-              right: collapsed ? "auto" : 8,
-              marginBottom: collapsed ? 0 : 6,
-              width: collapsed ? 160 : "auto",
-              background: "#fff",
+              gap: 10,
+              padding: "8px",
+              border: "none",
+              background: "transparent",
+              cursor: "pointer",
+              width: "100%",
+              justifyContent: isCollapsed ? "center" : "flex-start",
+              textAlign: "left",
               borderRadius: 10,
-              boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
-              overflow: "hidden",
-              zIndex: 20,
             }}
           >
-            <button
-              onClick={() => {
-                onLogout();
-                setMenuOpen(false);
-              }}
+            <div
               style={{
-                width: "100%",
+                width: 34,
+                height: 34,
+                borderRadius: "50%",
+                background: C.gold,
                 display: "flex",
                 alignItems: "center",
-                gap: 8,
-                padding: "12px 16px",
-                border: "none",
-                background: "#fff",
-                cursor: "pointer",
-                fontFamily: "'Prata', serif",
+                justifyContent: "center",
+                fontWeight: 700,
+                color: C.void,
                 fontSize: 13,
-                color: "#c0392b",
-                textAlign: "left",
+                flexShrink: 0,
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "#faf2f2")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "#fff")}
             >
-              <LogOut size={15} /> Log out
-            </button>
-          </div>
-        )}
-      </div>
-    </aside>
+              {displayName.charAt(0).toUpperCase()}
+            </div>
+            {!isCollapsed && (
+              <div style={{ whiteSpace: "nowrap", overflow: "hidden" }}>
+                <div style={{ color: C.gold, fontSize: 13, fontWeight: 600 }}>
+                  {displayName}
+                </div>
+                <div
+                  style={{
+                    color: "rgba(245,233,216,0.55)",
+                    fontSize: 11,
+                    textTransform: "capitalize",
+                  }}
+                >
+                  {displayRole}
+                </div>
+              </div>
+            )}
+          </button>
+
+          {menuOpen && (
+            <div
+              style={{
+                position: "absolute",
+                bottom: isCollapsed ? "auto" : "100%",
+                top: isCollapsed ? 0 : "auto",
+                left: isCollapsed ? "calc(100% + 10px)" : 8,
+                right: isCollapsed ? "auto" : 8,
+                marginBottom: isCollapsed ? 0 : 6,
+                width: isCollapsed ? 160 : "auto",
+                background: "#fff",
+                borderRadius: 10,
+                boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
+                overflow: "hidden",
+                zIndex: 20,
+              }}
+            >
+              <button
+                onClick={() => {
+                  onLogout();
+                  setMenuOpen(false);
+                }}
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "12px 16px",
+                  border: "none",
+                  background: "#fff",
+                  cursor: "pointer",
+                  fontFamily: "'Prata', serif",
+                  fontSize: 13,
+                  color: "#c0392b",
+                  textAlign: "left",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#faf2f2")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "#fff")}
+              >
+                <LogOut size={15} /> Log out
+              </button>
+            </div>
+          )}
+        </div>
+      </aside>
+    </>
   );
 }
 
@@ -893,6 +1012,7 @@ function StatCard({ label, value, icon: Icon }) {
           justifyContent: "space-between",
           alignItems: "flex-start",
           marginBottom: 14,
+          gap: 8,
         }}
       >
         <div style={{ color: C.inkSoft, fontSize: 12.5, fontWeight: 600 }}>
@@ -918,9 +1038,10 @@ function StatCard({ label, value, icon: Icon }) {
       <div
         style={{
           fontFamily: "'Prata', serif",
-          fontSize: 24,
+          fontSize: "clamp(18px, 4.5vw, 24px)",
           color: C.ink,
           WebkitTextStroke: "0.5px " + C.ink,
+          wordBreak: "break-word",
         }}
       >
         {value}
@@ -958,6 +1079,7 @@ function PeriodDropdown({ value, onChange }) {
           display: "flex",
           alignItems: "center",
           gap: 6,
+          whiteSpace: "nowrap",
         }}
       >
         {value}
@@ -1038,7 +1160,7 @@ function getPeriodRange(period, offset) {
   return { start, end };
 }
 
-function DashboardPage() {
+function DashboardPage({ isMobile, isTablet }) {
   const [period, setPeriod] = useState("Today");
   const [offset, setOffset] = useState(0);
   const [showExportToast, setShowExportToast] = useState(false);
@@ -1105,11 +1227,13 @@ function DashboardPage() {
   const periodLabel = (() => {
     const long = (d) =>
       d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+    const short = (d) =>
+      d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
     if (period === "Today") {
       return rangeStart.toLocaleDateString("en-US", {
-        weekday: "long",
-        month: "long",
+        weekday: isMobile ? "short" : "long",
+        month: isMobile ? "short" : "long",
         day: "numeric",
         year: "numeric",
       });
@@ -1120,7 +1244,9 @@ function DashboardPage() {
     if (period === "Year") {
       return String(rangeStart.getFullYear());
     }
-    return `${long(rangeStart)} – ${long(rangeEnd)}`;
+    return isMobile
+      ? `${short(rangeStart)} – ${short(rangeEnd)}`
+      : `${long(rangeStart)} – ${long(rangeEnd)}`;
   })();
 
   // --- Real computed stats (filtered by the selected range) ---
@@ -1276,14 +1402,19 @@ function DashboardPage() {
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.4 : 1,
     color: C.ink,
+    flexShrink: 0,
   });
 
+  // One column on a phone, two on a tablet, the roomy layout on desktop
+  const statsColumns = isMobile ? "1fr" : "repeat(3, 1fr)";
+  const splitColumns = isMobile || isTablet ? "1fr" : "1.6fr 1fr";
+
   return (
-    <div style={{ padding: 28 }}>
+    <div style={{ padding: isMobile ? 16 : 28 }}>
       <div
         style={{
           fontFamily: "'Prata', serif",
-          fontSize: 39,
+          fontSize: "clamp(26px, 6vw, 39px)",
           color: C.ink,
           WebkitTextStroke: "0.4px " + C.ink,
           marginBottom: 20,
@@ -1299,12 +1430,12 @@ function DashboardPage() {
       ) : (
         <div
           style={{
-            padding: 24,
+            padding: isMobile ? 14 : 24,
             background: "#faf7f6",
-            borderRadius: 28,
+            borderRadius: isMobile ? 20 : 28,
             display: "flex",
             flexDirection: "column",
-            gap: 20,
+            gap: isMobile ? 14 : 20,
             boxShadow: "0 4px 24px rgba(23,3,16,0.06)",
           }}
         >
@@ -1317,17 +1448,18 @@ function DashboardPage() {
               flexWrap: "wrap",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
               <button onClick={() => setOffset((o) => o - 1)} style={arrowStyle(false)}>
                 <ChevronLeft size={15} />
               </button>
               <div
                 style={{
-                  fontSize: 13.5,
+                  fontSize: isMobile ? 12 : 13.5,
                   color: C.ink,
                   fontFamily: "'Prata', serif",
-                  minWidth: 200,
+                  minWidth: isMobile ? 0 : 200,
                   textAlign: "center",
+                  flex: isMobile ? 1 : "none",
                 }}
               >
                 {periodLabel}
@@ -1349,7 +1481,7 @@ function DashboardPage() {
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: statsColumns, gap: isMobile ? 12 : 16 }}>
             <StatCard
               label="Total Revenue"
               value={`₱ ${totalRevenue.toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
@@ -1359,25 +1491,30 @@ function DashboardPage() {
             <StatCard label="Total Guests" value={totalGuests} icon={Users} />
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: splitColumns, gap: isMobile ? 12 : 16 }}>
             <Card>
               <SectionTitle>Category Breakdown</SectionTitle>
               <p style={{ fontSize: 11.5, color: C.inkSoft, marginTop: -8, marginBottom: 12 }}>
                 (Estimate — menu categories aren't tracked in orders yet)
               </p>
-              <ResponsiveContainer width="100%" height={260}>
+              <ResponsiveContainer width="100%" height={isMobile ? 220 : 260}>
                 <BarChart data={categoryBreakdown} margin={{ bottom: 60 }}>
                   <CartesianGrid vertical={false} stroke={C.hair} />
                   <XAxis
                     dataKey="name"
-                    tick={{ fontSize: 10, fill: C.inkSoft }}
+                    tick={{ fontSize: isMobile ? 8 : 10, fill: C.inkSoft }}
                     axisLine={false}
                     tickLine={false}
                     angle={-40}
                     textAnchor="end"
                     interval={0}
                   />
-                  <YAxis tick={{ fontSize: 11, fill: C.inkSoft }} axisLine={false} tickLine={false} />
+                  <YAxis
+                    tick={{ fontSize: isMobile ? 9 : 11, fill: C.inkSoft }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={isMobile ? 34 : 60}
+                  />
                   <Tooltip />
                   <Bar dataKey="value" fill={C.azure} radius={[6, 6, 0, 0]} />
                 </BarChart>
@@ -1393,10 +1530,15 @@ function DashboardPage() {
                   computedTopSelling.map((it) => (
                     <div
                       key={it.name}
-                      style={{ display: "flex", justifyContent: "space-between", fontSize: 14 }}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: 10,
+                        fontSize: 14,
+                      }}
                     >
-                      <span style={{ color: C.ink, fontWeight: 600 }}>{it.name}</span>
-                      <span style={{ color: C.inkSoft }}>{it.amount}</span>
+                      <span style={{ color: C.ink, fontWeight: 600, minWidth: 0 }}>{it.name}</span>
+                      <span style={{ color: C.inkSoft, whiteSpace: "nowrap" }}>{it.amount}</span>
                     </div>
                   ))
                 )}
@@ -1404,17 +1546,19 @@ function DashboardPage() {
             </Card>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: splitColumns, gap: isMobile ? 12 : 16 }}>
             <Card>
               <div
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "flex-start",
+                  gap: 12,
                   marginBottom: 18,
+                  flexWrap: "wrap",
                 }}
               >
-                <div>
+                <div style={{ minWidth: 0 }}>
                   <div
                     style={{
                       fontFamily: "'Prata', serif",
@@ -1452,7 +1596,7 @@ function DashboardPage() {
                 </div>
               </div>
 
-              <ResponsiveContainer width="100%" height={200}>
+              <ResponsiveContainer width="100%" height={isMobile ? 180 : 200}>
                 <AreaChart data={trendData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
                   <defs>
                     <linearGradient id="salesGradient" x1="0" y1="0" x2="0" y2="1">
@@ -1463,11 +1607,15 @@ function DashboardPage() {
                   <CartesianGrid vertical={false} stroke={C.hair} strokeDasharray="4 4" />
                   <XAxis
                     dataKey="label"
-                    tick={{ fontSize: 10, fill: C.inkSoft }}
+                    tick={{ fontSize: isMobile ? 9 : 10, fill: C.inkSoft }}
                     axisLine={false}
                     tickLine={false}
                   />
-                  <YAxis tick={{ fontSize: 11, fill: C.inkSoft }} axisLine={false} tickLine={false} />
+                  <YAxis
+                    tick={{ fontSize: isMobile ? 9 : 11, fill: C.inkSoft }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
                   <Tooltip />
                   <Area
                     type="monotone"
@@ -1501,7 +1649,7 @@ function DashboardPage() {
             </Card>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: isMobile ? 12 : 16 }}>
             <Card>
               <SectionTitle>Revenue &amp; Profit Summary</SectionTitle>
               <div style={{ marginBottom: 18 }}>
@@ -1509,9 +1657,10 @@ function DashboardPage() {
                 <div
                   style={{
                     fontFamily: "'Prata', serif",
-                    fontSize: 22,
+                    fontSize: "clamp(18px, 4.5vw, 22px)",
                     color: C.green,
                     WebkitTextStroke: "0.4px " + C.green,
+                    wordBreak: "break-word",
                   }}
                 >
                   ₱ {totalRevenue.toLocaleString("en-US", { minimumFractionDigits: 2 })}
@@ -1524,9 +1673,10 @@ function DashboardPage() {
                 <div
                   style={{
                     fontFamily: "'Prata', serif",
-                    fontSize: 22,
+                    fontSize: "clamp(18px, 4.5vw, 22px)",
                     color: C.green,
                     WebkitTextStroke: "0.4px " + C.green,
+                    wordBreak: "break-word",
                   }}
                 >
                   ₱ {estimatedProfit.toLocaleString("en-US", { minimumFractionDigits: 2 })}
@@ -1539,8 +1689,9 @@ function DashboardPage() {
             <div
               style={{
                 position: "fixed",
-                bottom: 28,
-                right: 28,
+                bottom: 20,
+                right: 20,
+                left: isMobile ? 20 : "auto",
                 background: C.void,
                 color: "#fff",
                 padding: "14px 20px",
@@ -1564,6 +1715,7 @@ function DashboardPage() {
                   alignItems: "center",
                   justifyContent: "center",
                   fontSize: 12,
+                  flexShrink: 0,
                 }}
               >
                 ✓
@@ -1577,7 +1729,7 @@ function DashboardPage() {
   );
 }
 
-function HistoryPage() {
+function HistoryPage({ isMobile }) {
   const [tab, setTab] = useState("reservations");
   const [pastReservations, setPastReservations] = useState([]);
   const [completedOrders, setCompletedOrders] = useState([]);
@@ -1617,14 +1769,27 @@ function HistoryPage() {
   const sortedOrders = sortByDate(completedOrders, "created_at");
   const sortedPayments = sortByDate(payments, "created_at");
 
-  const cellStyle = { padding: "12px 20px", borderBottom: `1px solid ${C.hair}` };
+  const cellStyle = {
+    padding: isMobile ? "10px 14px" : "12px 20px",
+    borderBottom: `1px solid ${C.hair}`,
+    whiteSpace: "nowrap",
+  };
+
+  // Tables keep their columns and scroll sideways instead of squashing
+  const tableWrap = { overflowX: "auto", WebkitOverflowScrolling: "touch" };
+  const tableStyle = {
+    width: "100%",
+    minWidth: 560,
+    borderCollapse: "collapse",
+    textAlign: "left",
+  };
 
   return (
-    <div style={{ padding: 28 }}>
+    <div style={{ padding: isMobile ? 16 : 28 }}>
       <div
         style={{
           fontFamily: "'Prata', serif",
-          fontSize: 39,
+          fontSize: "clamp(26px, 6vw, 39px)",
           color: C.ink,
           WebkitTextStroke: "0.4px " + C.ink,
           marginBottom: 20,
@@ -1633,7 +1798,15 @@ function HistoryPage() {
         History
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          marginBottom: 20,
+          flexWrap: "wrap",
+        }}
+      >
         <div
           style={{
             display: "flex",
@@ -1652,12 +1825,13 @@ function HistoryPage() {
               style={{
                 border: "none",
                 borderRadius: 8,
-                padding: "9px 18px",
-                fontSize: 13,
+                padding: isMobile ? "8px 12px" : "9px 18px",
+                fontSize: isMobile ? 12 : 13,
                 fontFamily: "'Prata', serif",
                 cursor: "pointer",
                 background: tab === t.key ? C.void : "transparent",
                 color: tab === t.key ? "#f5e9d8" : C.ink,
+                whiteSpace: "nowrap",
               }}
             >
               {t.label}
@@ -1673,12 +1847,13 @@ function HistoryPage() {
             gap: 6,
             border: `1px solid ${C.hair}`,
             borderRadius: 10,
-            padding: "9px 16px",
-            fontSize: 13,
+            padding: isMobile ? "8px 12px" : "9px 16px",
+            fontSize: isMobile ? 12 : 13,
             fontFamily: "'Prata', serif",
             background: "#fff",
             color: C.ink,
             cursor: "pointer",
+            whiteSpace: "nowrap",
           }}
         >
           {sortNewest ? "Newest first" : "Oldest first"}
@@ -1691,108 +1866,114 @@ function HistoryPage() {
       ) : (
         <>
           {tab === "reservations" && (
-            <Card style={{ padding: 0 }}>
+            <Card style={{ padding: 0, overflow: "hidden" }}>
               {sortedReservations.length === 0 ? (
                 <div style={{ padding: 32, textAlign: "center", color: C.inkSoft, fontSize: 13 }}>
                   No reservation history yet.
                 </div>
               ) : (
-                <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
-                  <thead>
-                    <tr style={{ textAlign: "left", fontSize: 12, color: C.inkSoft }}>
-                      {["Date", "Time", "Name", "Pax", "Status"].map((h) => (
-                        <th key={h} style={cellStyle}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedReservations.map((r) => (
-                      <tr key={r.id} style={{ fontSize: 13.5 }}>
-                        <td style={cellStyle}>{formatDBDate(r.reservation_date)}</td>
-                        <td style={cellStyle}>{to12hFromDBTime(r.reservation_time)}</td>
-                        <td style={cellStyle}>{r.guest_name}</td>
-                        <td style={cellStyle}>{r.party_size}</td>
-                        <td style={cellStyle}>
-                          <Badge tone={r.status === "completed" ? "green" : "red"}>
-                            {r.status === "completed"
-                              ? "Completed"
-                              : r.status === "no_show"
-                              ? "No Show"
-                              : "Cancelled"}
-                          </Badge>
-                        </td>
+                <div style={tableWrap}>
+                  <table style={tableStyle}>
+                    <thead>
+                      <tr style={{ textAlign: "left", fontSize: 12, color: C.inkSoft }}>
+                        {["Date", "Time", "Name", "Pax", "Status"].map((h) => (
+                          <th key={h} style={cellStyle}>{h}</th>
+                        ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {sortedReservations.map((r) => (
+                        <tr key={r.id} style={{ fontSize: 13.5 }}>
+                          <td style={cellStyle}>{formatDBDate(r.reservation_date)}</td>
+                          <td style={cellStyle}>{to12hFromDBTime(r.reservation_time)}</td>
+                          <td style={cellStyle}>{r.guest_name}</td>
+                          <td style={cellStyle}>{r.party_size}</td>
+                          <td style={cellStyle}>
+                            <Badge tone={r.status === "completed" ? "green" : "red"}>
+                              {r.status === "completed"
+                                ? "Completed"
+                                : r.status === "no_show"
+                                ? "No Show"
+                                : "Cancelled"}
+                            </Badge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </Card>
           )}
 
           {tab === "orders" && (
-            <Card style={{ padding: 0 }}>
+            <Card style={{ padding: 0, overflow: "hidden" }}>
               {sortedOrders.length === 0 ? (
                 <div style={{ padding: 32, textAlign: "center", color: C.inkSoft, fontSize: 13 }}>
                   No completed orders yet.
                 </div>
               ) : (
-                <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
-                  <thead>
-                    <tr style={{ textAlign: "left", fontSize: 12, color: C.inkSoft }}>
-                      {["Order #", "Customer", "Total", "Date & Time"].map((h) => (
-                        <th key={h} style={cellStyle}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedOrders.map((o) => (
-                      <tr key={o.id} style={{ fontSize: 13.5 }}>
-                        <td style={cellStyle}>{o.daily_number ?? o.id}</td>
-                        <td style={cellStyle}>{o.customer_name || "—"}</td>
-                        <td style={cellStyle}>Php. {Number(o.total).toLocaleString()}</td>
-                        <td style={{ ...cellStyle, color: C.inkSoft }}>{formatDBDateTime(o.created_at)}</td>
+                <div style={tableWrap}>
+                  <table style={tableStyle}>
+                    <thead>
+                      <tr style={{ textAlign: "left", fontSize: 12, color: C.inkSoft }}>
+                        {["Order #", "Customer", "Total", "Date & Time"].map((h) => (
+                          <th key={h} style={cellStyle}>{h}</th>
+                        ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {sortedOrders.map((o) => (
+                        <tr key={o.id} style={{ fontSize: 13.5 }}>
+                          <td style={cellStyle}>{o.daily_number ?? o.id}</td>
+                          <td style={cellStyle}>{o.customer_name || "—"}</td>
+                          <td style={cellStyle}>Php. {Number(o.total).toLocaleString()}</td>
+                          <td style={{ ...cellStyle, color: C.inkSoft }}>{formatDBDateTime(o.created_at)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </Card>
           )}
 
           {tab === "payments" && (
-            <Card style={{ padding: 0 }}>
+            <Card style={{ padding: 0, overflow: "hidden" }}>
               {sortedPayments.length === 0 ? (
                 <div style={{ padding: 32, textAlign: "center", color: C.inkSoft, fontSize: 13 }}>
                   No payment history yet.
                 </div>
               ) : (
-                <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
-                  <thead>
-                    <tr style={{ textAlign: "left", fontSize: 12, color: C.inkSoft }}>
-                      {["Order #", "Customer", "Method", "Amount", "Status", "Date & Time"].map((h) => (
-                        <th key={h} style={cellStyle}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedPayments.map((p) => (
-                      <tr key={p.id} style={{ fontSize: 13.5 }}>
-                        <td style={cellStyle}>{p.daily_number ?? p.id}</td>
-                        <td style={cellStyle}>{p.customer_name || "—"}</td>
-                        <td style={{ ...cellStyle, textTransform: "capitalize" }}>
-                          {p.payment_method || "—"}
-                        </td>
-                        <td style={cellStyle}>Php. {Number(p.total).toLocaleString()}</td>
-                        <td style={cellStyle}>
-                          <Badge tone={p.payment_status === "verified" ? "green" : "red"}>
-                            {p.payment_status === "verified" ? "Completed" : "Failed"}
-                          </Badge>
-                        </td>
-                        <td style={{ ...cellStyle, color: C.inkSoft }}>{formatDBDateTime(p.created_at)}</td>
+                <div style={tableWrap}>
+                  <table style={{ ...tableStyle, minWidth: 700 }}>
+                    <thead>
+                      <tr style={{ textAlign: "left", fontSize: 12, color: C.inkSoft }}>
+                        {["Order #", "Customer", "Method", "Amount", "Status", "Date & Time"].map((h) => (
+                          <th key={h} style={cellStyle}>{h}</th>
+                        ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {sortedPayments.map((p) => (
+                        <tr key={p.id} style={{ fontSize: 13.5 }}>
+                          <td style={cellStyle}>{p.daily_number ?? p.id}</td>
+                          <td style={cellStyle}>{p.customer_name || "—"}</td>
+                          <td style={{ ...cellStyle, textTransform: "capitalize" }}>
+                            {p.payment_method || "—"}
+                          </td>
+                          <td style={cellStyle}>Php. {Number(p.total).toLocaleString()}</td>
+                          <td style={cellStyle}>
+                            <Badge tone={p.payment_status === "verified" ? "green" : "red"}>
+                              {p.payment_status === "verified" ? "Completed" : "Failed"}
+                            </Badge>
+                          </td>
+                          <td style={{ ...cellStyle, color: C.inkSoft }}>{formatDBDateTime(p.created_at)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </Card>
           )}
@@ -1804,6 +1985,9 @@ function HistoryPage() {
 
 export default function EurasiaAdmin() {
   const navigate = useNavigate();
+  const isMobile = useMediaQuery(MOBILE_QUERY);
+  const isTablet = useMediaQuery(TABLET_QUERY);
+
   const [active, setActiveState] = useState(
     () => localStorage.getItem("eurasia_admin_active_tab") || "dashboard"
   );
@@ -1811,8 +1995,29 @@ export default function EurasiaAdmin() {
     setActiveState(key);
     localStorage.setItem("eurasia_admin_active_tab", key);
   };
+
+  // Desktop: expanded. Tablet: collapsed to icons so the content keeps its room.
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+  useEffect(() => {
+    setSidebarOpen(!isTablet);
+  }, [isTablet]);
+
+  // Leaving phone width should never strand the page behind a dimmed overlay
+  useEffect(() => {
+    if (!isMobile) setDrawerOpen(false);
+  }, [isMobile]);
+
+  // Lock the page behind the drawer so only the menu scrolls
+  useEffect(() => {
+    if (isMobile && drawerOpen) {
+      const previous = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => { document.body.style.overflow = previous; };
+    }
+  }, [isMobile, drawerOpen]);
 
   // --- Notifications ---
   const [notifications, setNotifications] = useState([]);
@@ -1859,7 +2064,6 @@ export default function EurasiaAdmin() {
   };
 
   const openNotification = (n) => {
-    console.log("Notification clicked:", n.kind, "→ page:", NOTIF_STYLES[n.kind].page, "target:", n.target);
     markRead([n.id]);
     setActive(NOTIF_STYLES[n.kind].page);
     setHighlight(n.target);
@@ -1877,15 +2081,15 @@ export default function EurasiaAdmin() {
   const renderPage = () => {
     switch (active) {
       case "frontdesk":
-        return <Reservations embedded highlightTarget={highlight} />;
+        return <Reservations embedded highlightTarget={highlight} isMobile={isMobile} />;
       case "kitchen":
-        return <OrderQueue embedded highlightTarget={highlight} />;
+        return <OrderQueue embedded highlightTarget={highlight} isMobile={isMobile} />;
       case "cashier":
-        return <PaymentTransactions embedded highlightTarget={highlight} />;
+        return <PaymentTransactions embedded highlightTarget={highlight} isMobile={isMobile} />;
       case "history":
-        return <HistoryPage />;
+        return <HistoryPage isMobile={isMobile} />;
       default:
-        return <DashboardPage />;
+        return <DashboardPage isMobile={isMobile} isTablet={isTablet} />;
     }
   };
 
@@ -1894,13 +2098,19 @@ export default function EurasiaAdmin() {
       <style>{`
         ${FONT_IMPORT}
         * { box-sizing: border-box; }
+        html, body { overflow-x: hidden; }
         .sidebar-nav-item:hover .sidebar-tooltip {
           opacity: 1 !important;
         }
       `}</style>
 
       <div style={{ minHeight: "100vh", background: C.canvas, textAlign: "left" }}>
-        <TopHeader onLogoClick={() => setSidebarOpen((prev) => !prev)}>
+        <TopHeader
+          isMobile={isMobile}
+          onToggleSidebar={() =>
+            isMobile ? setDrawerOpen((prev) => !prev) : setSidebarOpen((prev) => !prev)
+          }
+        >
           <NotificationBell
             notifications={notifications}
             readIds={readIds}
@@ -1915,9 +2125,12 @@ export default function EurasiaAdmin() {
             setActive={setActive}
             collapsed={!sidebarOpen}
             onLogout={() => setShowLogoutConfirm(true)}
+            isMobile={isMobile}
+            drawerOpen={drawerOpen}
+            onCloseDrawer={() => setDrawerOpen(false)}
           />
-          <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-            <div style={{ flex: 1, overflow: "auto" }}>{renderPage()}</div>
+          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+            <div style={{ flex: 1, minWidth: 0 }}>{renderPage()}</div>
           </div>
         </div>
       </div>

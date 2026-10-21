@@ -121,10 +121,21 @@ function Homepage() {
 
   const scrollRef = useRef(null);
   const isJumping = useRef(false);
+  const videoRef = useRef(null);
   const [reviews, setReviews] = useState([]);
 
   useEffect(() => {
-    setReviews(getReviews());
+    getReviews()
+      .then(setReviews)
+      .catch(() => setReviews([]));
+  }, []);
+
+    useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.play().catch(() => {
+      // Autoplay blocked — poster image shows as fallback
+    });
   }, []);
 
   // I-set ang scroll sa gitnang set sa unang render
@@ -179,12 +190,14 @@ function Homepage() {
     <div className="bg-white">
       <div className="relative h-[500px] flex flex-col items-center justify-center text-center overflow-hidden">
         <video
+          ref={videoRef}
           src={heroVideo}
           poster={bgPoster}
           autoPlay
           muted
           loop
           playsInline
+          preload="auto"
           className="absolute inset-0 w-full h-full object-cover"
         />
         <div className="absolute inset-0" />

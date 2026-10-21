@@ -1,29 +1,36 @@
-const STORAGE_KEY = "eurasia_reviews";
+const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000') + '/api/reviews';
 
-export function getReviews() {
+export async function getReviews() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    const res = await fetch(API_URL);
+    if (!res.ok) throw new Error('Failed to load reviews');
+    return res.json();
   } catch {
     return [];
   }
 }
 
-export function addReview(review) {
-  const current = getReviews();
-  const updated = [...current, { ...review, date: new Date().toISOString() }];
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-  return updated;
+export async function addReview(review) {
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(review),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to save review.');
+  }
+  return res.json();
 }
 
-// Returns a map of { [dishName]: { average, count } } from all reviews' per-dish ratings
-export function getDishRatings() {
-  const reviews = getReviews();
-  const totals = {}; // { dishName: { sum, count } }
+// Returns a map of { [dishName]: { average, count } } from all reviews
+export async function getDishRatings() {
+  const reviews = await getReviews();
+  const totals = {};
 
   reviews.forEach((review) => {
     (review.dishRatings || []).forEach(({ dish, rating }) => {
-      if (!dish || !rating) return; // skip un-rated dishes (rating 0)
+      if (!dish || !rating) return;
       if (!totals[dish]) totals[dish] = { sum: 0, count: 0 };
       totals[dish].sum += Number(rating);
       totals[dish].count += 1;

@@ -23,7 +23,6 @@ const C = {
 
 const FONT = "'Prata', serif";
 
-// Small reusable star row (used for per-dish ratings)
 function StarRow({ value, onChange, size = 26 }) {
   const [hover, setHover] = useState(0);
   return (
@@ -55,11 +54,12 @@ export default function Feedback() {
   const [name, setName] = useState("");
   const [message, setMessage] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
   const [dishes, setDishes] = useState([]);
   const [dishRatings, setDishRatings] = useState({});
 
-  // Load the dishes the customer actually ordered, so they can rate each one
   useEffect(() => {
     const loadDishes = async () => {
       try {
@@ -98,27 +98,36 @@ export default function Feedback() {
     setName("");
     setMessage("");
     setDishRatings({});
+    setError("");
   };
 
-  const handleSubmit = () => {
-    if (!isValid) return;
+  const handleSubmit = async () => {
+    if (!isValid || submitting) return;
 
-    addReview({
-      name: name.trim(),
-      message: message.trim(),
-      rating,
-      dishRatings: dishes.map((dish) => ({
-        dish,
-        rating: dishRatings[dish] || 0,
-      })),
-    });
+    try {
+      setSubmitting(true);
+      setError("");
 
-    setSubmitted(true);
+      await addReview({
+        name: name.trim(),
+        message: message.trim(),
+        rating,
+        dishRatings: dishes.map((dish) => ({
+          dish,
+          rating: dishRatings[dish] || 0,
+        })),
+      });
+
+      setSubmitted(true);
+    } catch (err) {
+      setError(err.message || "Failed to submit feedback. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
     <div style={{ fontFamily: FONT, color: C.ink, background: C.bg }}>
-      {/* Hero Header — matches Menu.jsx */}
       <div className="relative h-64 overflow-hidden shrink-0 md:h-60">
         <img
           src={heroImage}
@@ -146,7 +155,6 @@ export default function Feedback() {
             boxShadow: "0 -4px 24px rgba(0,0,0,0.06)",
           }}
         >
-          {/* Tabs */}
           <div style={{ display: "flex", gap: 10, marginBottom: 30 }}>
             <div
               style={{
@@ -192,7 +200,6 @@ export default function Feedback() {
                   ))}
                 </div>
 
-                {/* Per-dish ratings — only shown if the customer has ordered dishes */}
                 {dishes.length > 0 && (
                   <div
                     style={{
@@ -206,7 +213,7 @@ export default function Feedback() {
                       style={{
                         fontFamily: FONT,
                         fontSize: 16,
-                        margin: "0 0 4px",
+                        margin: "0 0 14px",
                         textAlign: "center",
                       }}
                     >
@@ -278,28 +285,36 @@ export default function Feedback() {
                   />
                 </div>
 
+                {error && (
+                  <p style={{ color: C.red, fontSize: 13, textAlign: "center", marginBottom: 12, fontFamily: FONT }}>
+                    {error}
+                  </p>
+                )}
+
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 24 }}>
                   <button
                     onClick={handleCancel}
+                    disabled={submitting}
                     style={{
                       padding: 18,
                       border: "none",
                       borderRadius: 8,
                       fontSize: 16,
                       fontWeight: 700,
-                      cursor: "pointer",
+                      cursor: submitting ? "not-allowed" : "pointer",
                       fontFamily: FONT,
                       background: C.red,
                       color: "#fff",
+                      opacity: submitting ? 0.6 : 1,
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = C.redHover)}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = C.red)}
+                    onMouseEnter={(e) => { if (!submitting) e.currentTarget.style.background = C.redHover; }}
+                    onMouseLeave={(e) => { if (!submitting) e.currentTarget.style.background = C.red; }}
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleSubmit}
-                    disabled={!isValid}
+                    disabled={!isValid || submitting}
                     style={{
                       padding: 18,
                       border: "none",
@@ -307,18 +322,14 @@ export default function Feedback() {
                       fontSize: 16,
                       fontWeight: 700,
                       fontFamily: FONT,
-                      cursor: isValid ? "pointer" : "default",
-                      background: isValid ? C.maroon : C.disabled,
+                      cursor: isValid && !submitting ? "pointer" : "default",
+                      background: isValid && !submitting ? C.maroon : C.disabled,
                       color: "#fff",
                     }}
-                    onMouseEnter={(e) => {
-                      if (isValid) e.currentTarget.style.background = C.maroonHover;
-                    }}
-                    onMouseLeave={(e) => {
-                      if (isValid) e.currentTarget.style.background = C.maroon;
-                    }}
+                    onMouseEnter={(e) => { if (isValid && !submitting) e.currentTarget.style.background = C.maroonHover; }}
+                    onMouseLeave={(e) => { if (isValid && !submitting) e.currentTarget.style.background = C.maroon; }}
                   >
-                    Submit Feedback
+                    {submitting ? "Submitting..." : "Submit Feedback"}
                   </button>
                 </div>
               </>

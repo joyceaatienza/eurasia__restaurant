@@ -130,11 +130,20 @@ function Homepage() {
       .catch(() => setReviews([]));
   }, []);
 
-    useEffect(() => {
+  useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+
+    // Try autoplay first
     video.play().catch(() => {
-      // Autoplay blocked — poster image shows as fallback
+      // iOS Safari blocks autoplay — play on first touch instead
+      const playOnTouch = () => {
+        video.play().catch(() => {});
+        document.removeEventListener('touchstart', playOnTouch);
+        document.removeEventListener('click', playOnTouch);
+      };
+      document.addEventListener('touchstart', playOnTouch, { once: true });
+      document.addEventListener('click', playOnTouch, { once: true });
     });
   }, []);
 

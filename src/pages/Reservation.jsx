@@ -1,9 +1,10 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, ChevronDown, Check, X, Clock, Upload } from 'lucide-react'
+import { useNavigate, useLocation } from 'react-router-dom'
+import { ChevronLeft, ChevronRight, ChevronDown, Check, X, Clock, Upload, AlertTriangle } from 'lucide-react'
 import heroImage from '../assets/bgHero.jpg'
 import { reservationsApi } from '../services/reservationsApi'
 import { useAuth } from '../context/AuthContext'
+import { readCachedReservations, cacheReservations } from '../hooks/CustomerNotif'
 
 const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"]
 const ITEM_H = 40
@@ -35,6 +36,9 @@ const PAYMENT_ACCOUNTS = {
     accountNumber: "BDO • 0012 3456 7890",
   },
 };
+
+// Reservations that are finished one way or another go to the History section
+const CLOSED_STATUSES = ['cancelled', 'completed', 'no_show']
 
 function to24Hour(hour12, ampm) {
   let h = parseInt(hour12, 10)
@@ -450,9 +454,72 @@ function ConfirmDialog({ open, title, message, confirmLabel, onConfirm, onCancel
     </div>
   )
 }
+/* A photo the customer can tap to see full size and make sure it's the right one */
+function ZoomableImage({ src, alt, className }) {
+  const [zoomed, setZoomed] = useState(false)
+
+  // While the full-size view is open: lock the page behind it and let Esc close it
+  useEffect(() => {
+    if (!zoomed) return
+    const onKey = (e) => {
+      if (e.key === 'Escape') setZoomed(false)
+    }
+    const previous = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.body.style.overflow = previous
+    }
+  }, [zoomed])
+
+  if (!src) return null
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setZoomed(true)}
+        title="Tap to view full size"
+        className="relative block w-full cursor-zoom-in"
+      >
+        <img src={src} alt={alt} className={className} />
+        <span className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/60 text-white text-xs font-[Prata] px-3 py-1 rounded-full pointer-events-none whitespace-nowrap">
+          Tap to view full size
+        </span>
+      </button>
+
+      {zoomed && (
+        <div
+          onClick={() => setZoomed(false)}
+          className="fixed inset-0 z-[160] bg-black/85 flex flex-col items-center justify-center p-4 cursor-zoom-out"
+        >
+          <button
+            type="button"
+            onClick={() => setZoomed(false)}
+            aria-label="Close"
+            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/15 text-white flex items-center justify-center hover:bg-white/25 transition"
+          >
+            <X size={22} />
+          </button>
+          <img
+            src={src}
+            alt={alt}
+            onClick={(e) => e.stopPropagation()}
+            className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl cursor-default"
+          />
+          <p className="mt-3 text-sm text-white/80 font-[Prata] text-center">
+            Tap anywhere outside the photo to close
+          </p>
+        </div>
+      )}
+    </>
+  )
+}
 
 function Reservation() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { user, isAuthenticated, loading: authLoading } = useAuth()
 
   const [tab, setTab] = useState("table")
@@ -468,10 +535,16 @@ function Reservation() {
   const [themeImagePreview, setThemeImagePreview] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
-  const [reservations, setReservations] = useState([])
+  const [reservations, setReservations] = useState(() => readCachedReservations() || [])
   const [loadingReservations, setLoadingReservations] = useState(false)
   const [toast, setToast] = useState({ message: '', tone: 'error' })
   const [cancelTarget, setCancelTarget] = useState(null)
+
+  // --- Jumping to a reservation from a notification ---
+  const [highlightId, setHighlightId] = useState(null)
+  const highlightRef = useRef(null)
+  const [reservationsLoaded, setReservationsLoaded] = useState(() => readCachedReservations() !== null)
+  const [pendingReservationId, setPendingReservationId] = useState(null)
 
   const showError = (message) => setToast({ message, tone: 'error' })
   const closeToast = () => setToast({ message: '', tone: 'error' })
@@ -490,12 +563,74 @@ function Reservation() {
       setReservations([])
       return
     }
-    setLoadingReservations(true)
+    // Only show "Loading..." when there's no saved copy to show in the meantime
+    if (readCachedReservations() === null) setLoadingReservations(true)
     reservationsApi.getMine()
-      .then((data) => setReservations(data))
+      .then((data) => {
+        setReservations(data)
+        cacheReservations(data)
+      })
       .catch((err) => console.error('Failed to load reservations:', err))
-      .finally(() => setLoadingReservations(false))
+      .finally(() => {
+        setLoadingReservations(false)
+        setReservationsLoaded(true)
+      })
   }, [isAuthenticated])
+
+  // A notification tap lands here with the reservation it's about
+  useEffect(() => {
+    const target = location.state?.highlight
+    if (!target || target.type !== 'reservation') return
+    setTab('history')
+    setPendingReservationId(target.id)
+    // Clear it so a refresh doesn't jump again
+    navigate(location.pathname, { replace: true, state: null })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state])
+
+  // As soon as the reservations are on hand, jump to the one that was tapped —
+  // reuses the list the page already loads instead of fetching it a second time
+  useEffect(() => {
+    if (pendingReservationId == null || !reservationsLoaded) return
+    const found = reservations.find((r) => String(r.id) === String(pendingReservationId))
+    setPendingReservationId(null)
+    if (found) {
+      setHighlightId(found.id)
+    } else {
+      showError('That reservation could no longer be found.')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingReservationId, reservationsLoaded, reservations])
+
+  // Scroll to the highlighted reservation right away, then fade the highlight after 4 seconds
+  useEffect(() => {
+    if (!highlightId) return
+    const frame = requestAnimationFrame(() => {
+      highlightRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+    const clear = setTimeout(() => setHighlightId(null), 4000)
+    return () => {
+      cancelAnimationFrame(frame)
+      clearTimeout(clear)
+    }
+  }, [highlightId])
+
+  // Split into what's still coming up and what's already done
+  const { upcomingReservations, pastReservations } = useMemo(() => {
+    const upcoming = []
+    const past = []
+    reservations.forEach((r) => {
+      const remaining = daysUntil(r.reservation_date)
+      const isClosed = CLOSED_STATUSES.includes(r.status)
+      const isPastDate = remaining !== null && remaining < 0
+      if (isClosed || isPastDate) past.push(r)
+      else upcoming.push(r)
+    })
+    // Soonest first for upcoming, most recent first for history
+    upcoming.sort((a, b) => toLocalDate(a.reservation_date) - toLocalDate(b.reservation_date))
+    past.sort((a, b) => toLocalDate(b.reservation_date) - toLocalDate(a.reservation_date))
+    return { upcomingReservations: upcoming, pastReservations: past }
+  }, [reservations])
 
   const cells = useMemo(
     () => buildCalendar(viewDate.getFullYear(), viewDate.getMonth()),
@@ -604,6 +739,115 @@ function Reservation() {
     }
   }
 
+  // One reservation card — used by both the Upcoming and History sections
+  const renderReservationCard = (r) => {
+    const remainingDays = daysUntil(r.reservation_date)
+    const isClosed = CLOSED_STATUSES.includes(r.status)
+    const isPastDate = remainingDays !== null && remainingDays < 0
+    const pastCutoff = remainingDays !== null && remainingDays < CANCEL_CUTOFF_DAYS
+    const cancelDisabled = isClosed || pastCutoff
+    const isHighlighted = r.id === highlightId
+
+    return (
+      <div
+        key={r.id}
+        ref={isHighlighted ? highlightRef : null}
+        className={`rounded-xl p-6 mb-4 transition-shadow duration-500 ${
+          r.status === 'cancelled' || r.status === 'no_show'
+            ? 'bg-neutral-100 opacity-60'
+            : 'bg-white'
+        } ${isHighlighted ? 'ring-4 ring-[#f2c14e]/70 !opacity-100' : ''}`}
+        style={{ textAlign: 'left' }}
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm font-[Prata] text-left">
+          <div className="flex flex-col gap-3">
+            <div>
+              <span className="block text-xs text-neutral-400">Date</span>
+              <span>{formatDateDisplay(r.reservation_date)}</span>
+            </div>
+            <div>
+              <span className="block text-xs text-neutral-400">Name</span>
+              <span>{r.guest_name}</span>
+            </div>
+            <div>
+              <span className="block text-xs text-neutral-400">Contact No.</span>
+              <span>{r.contact_number}</span>
+            </div>
+            <div>
+              <span className="block text-xs text-neutral-400">Email Address</span>
+              <span>{r.email}</span>
+            </div>
+            <div>
+              <span className="block text-xs text-neutral-400">Occasion</span>
+              <span>{r.occasion || '—'}</span>
+            </div>
+          </div>
+          <div className="flex flex-col gap-3">
+            <div>
+              <span className="block text-xs text-neutral-400">Time</span>
+              <span>{formatTimeDisplay(r.reservation_time)}</span>
+            </div>
+            <div>
+              <span className="block text-xs text-neutral-400">Number of Pax</span>
+              <span>{r.party_size}</span>
+            </div>
+            <div>
+              <span className="block text-xs text-neutral-400">Downpayment</span>
+              <span>
+                {r.downpayment_amount ? `Php. ${Number(r.downpayment_amount).toLocaleString()} (${formatPaymentStatus(r.payment_status)})` : '—'}
+              </span>
+            </div>
+            <div>
+              <span className="block text-xs text-neutral-400">Payment Method</span>
+              <span>{r.payment_method || '—'}</span>
+            </div>
+            <div>
+              <span className="block text-xs text-neutral-400 mb-1">Status</span>
+              <StatusBadge status={r.status} />
+            </div>
+
+            {/* Only upcoming reservations can still be cancelled */}
+            {!isClosed && !isPastDate && (
+              <div>
+                <button
+                  onClick={() => setCancelTarget(r.id)}
+                  disabled={cancelDisabled}
+                  className="w-full bg-[#c0392b] text-white font-[Prata] font-bold py-3 rounded-full hover:opacity-90 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Cancel Reservation
+                </button>
+                <p className="text-[11px] text-neutral-500 font-[Prata] mt-2 text-center leading-relaxed">
+                  {pastCutoff
+                    ? `This can no longer be cancelled. Cancellations must be made at least ${CANCEL_CUTOFF_DAYS} days before your reservation date.`
+                    : `You can cancel until ${CANCEL_CUTOFF_DAYS} days before your reservation date (${remainingDays} days left).`}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {r.payment_proof && (
+          <div className="mt-4">
+            <span className="block text-xs text-neutral-400 font-[Prata] mb-2">Proof of Payment</span>
+            <ZoomableImage
+              src={r.payment_proof}
+              alt="Proof of payment"
+              className="w-full max-h-48 object-contain rounded-md bg-neutral-50"
+            />
+          </div>
+        )}
+
+        {r.theme_image && (
+          <ZoomableImage
+            src={r.theme_image}
+            alt="Theme inspiration"
+            className="mt-4 w-full max-h-48 object-cover rounded-md"
+          />
+        )}
+      </div>
+    )
+  }
+
   const inputClass =
     "w-full bg-white rounded-md px-4 py-3.5 text-[#1d080f] placeholder:text-neutral-400 font-[Prata] focus:outline-none focus:ring-1 focus:ring-[#1d080f]"
 
@@ -686,7 +930,7 @@ function Reservation() {
                       : 'bg-neutral-200/70 text-[#1d080f] hover:bg-neutral-300/70'
                   }`}
                 >
-                  History
+                  My Reservation
                 </button>
               </div>
 
@@ -783,7 +1027,7 @@ function Reservation() {
                             className="hidden"
                           />
                           {themeImagePreview && (
-                            <img
+                            <ZoomableImage
                               src={themeImagePreview}
                               alt="Theme preview"
                               className="mt-3 w-full max-h-40 object-cover rounded-md"
@@ -874,7 +1118,7 @@ function Reservation() {
                             className="hidden"
                           />
                           {paymentProofPreview ? (
-                            <img
+                            <ZoomableImage
                               src={paymentProofPreview}
                               alt="Proof of payment preview"
                               className="mt-3 w-full max-h-48 object-contain rounded-md bg-neutral-50"
@@ -914,125 +1158,48 @@ function Reservation() {
                 </div>
               )}
 
+              {/* ---------------- MY RESERVATION ---------------- */}
               {tab === "history" && (
                 <div>
-                  {loadingReservations && (
+                  {/* The 3-day cancellation policy, up front where people see it */}
+                  <div className="flex items-start gap-3 bg-amber-50 border border-amber-300 text-amber-900 rounded-xl px-5 py-4 mb-6 text-left">
+                    <AlertTriangle size={18} className="shrink-0 mt-0.5" />
+                    <div className="text-sm font-[Prata] leading-relaxed">
+                      <p className="font-bold">Cancellation policy</p>
+                      <p>
+                        Reservations can only be cancelled at least {CANCEL_CUTOFF_DAYS} days before the reservation date.
+                        Downpayments are non-refundable.
+                      </p>
+                    </div>
+                  </div>
+
+                  {loadingReservations ? (
                     <p className="text-neutral-500 text-center py-8 text-sm font-[Prata]">Loading...</p>
+                  ) : (
+                    <>
+                      <h3 className="font-[Prata] text-lg text-[#1d080f] mb-4 text-left">
+                        Upcoming ({upcomingReservations.length})
+                      </h3>
+                      {upcomingReservations.length === 0 ? (
+                        <p className="bg-white/60 rounded-xl text-neutral-500 text-center py-8 mb-8 text-sm font-[Prata]">
+                          No upcoming reservations.
+                        </p>
+                      ) : (
+                        <div className="mb-8">{upcomingReservations.map(renderReservationCard)}</div>
+                      )}
+
+                      <h3 className="font-[Prata] text-lg text-[#1d080f] mb-4 text-left">
+                        History ({pastReservations.length})
+                      </h3>
+                      {pastReservations.length === 0 ? (
+                        <p className="bg-white/60 rounded-xl text-neutral-500 text-center py-8 text-sm font-[Prata]">
+                          No past reservations yet.
+                        </p>
+                      ) : (
+                        pastReservations.map(renderReservationCard)
+                      )}
+                    </>
                   )}
-
-                  {!loadingReservations && reservations.length === 0 && (
-                    <p className="text-neutral-500 text-center py-8 text-sm font-[Prata]">
-                      No reservations yet.
-                    </p>
-                  )}
-
-                  {[...reservations]
-                    .sort((a, b) => {
-                      const aClosed = ['cancelled', 'no_show'].includes(a.status) ? 1 : 0
-                      const bClosed = ['cancelled', 'no_show'].includes(b.status) ? 1 : 0
-                      return aClosed - bClosed
-                    })
-                    .map((r) => {
-                      const remainingDays = daysUntil(r.reservation_date)
-                      const isClosed = r.status === 'cancelled' || r.status === 'completed' || r.status === 'no_show'
-                      const pastCutoff = remainingDays !== null && remainingDays < CANCEL_CUTOFF_DAYS
-                      const cancelDisabled = isClosed || pastCutoff
-
-                      return (
-                        <div
-                          key={r.id}
-                          className={`rounded-xl p-6 mb-4 ${
-                            r.status === 'cancelled' || r.status === 'no_show'
-                              ? 'bg-neutral-100 opacity-60'
-                              : 'bg-white'
-                          }`}
-                          style={{ textAlign: 'left' }}
-                        >
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm font-[Prata] text-left">
-                            <div className="flex flex-col gap-3">
-                              <div>
-                                <span className="block text-xs text-neutral-400">Date</span>
-                                <span>{formatDateDisplay(r.reservation_date)}</span>
-                              </div>
-                              <div>
-                                <span className="block text-xs text-neutral-400">Name</span>
-                                <span>{r.guest_name}</span>
-                              </div>
-                              <div>
-                                <span className="block text-xs text-neutral-400">Contact No.</span>
-                                <span>{r.contact_number}</span>
-                              </div>
-                              <div>
-                                <span className="block text-xs text-neutral-400">Email Address</span>
-                                <span>{r.email}</span>
-                              </div>
-                              <div>
-                                <span className="block text-xs text-neutral-400">Occasion</span>
-                                <span>{r.occasion || '—'}</span>
-                              </div>
-                            </div>
-                            <div className="flex flex-col gap-3">
-                              <div>
-                                <span className="block text-xs text-neutral-400">Time</span>
-                                <span>{formatTimeDisplay(r.reservation_time)}</span>
-                              </div>
-                              <div>
-                                <span className="block text-xs text-neutral-400">Number of Pax</span>
-                                <span>{r.party_size}</span>
-                              </div>
-                              <div>
-                                <span className="block text-xs text-neutral-400">Downpayment</span>
-                                <span>
-                                  {r.downpayment_amount ? `Php. ${Number(r.downpayment_amount).toLocaleString()} (${formatPaymentStatus(r.payment_status)})` : '—'}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="block text-xs text-neutral-400">Payment Method</span>
-                                <span>{r.payment_method || '—'}</span>
-                              </div>
-                              <div>
-                                <span className="block text-xs text-neutral-400 mb-1">Status</span>
-                                <StatusBadge status={r.status} />
-                              </div>
-
-                              <div>
-                                <button
-                                  onClick={() => setCancelTarget(r.id)}
-                                  disabled={cancelDisabled}
-                                  className="w-full bg-[#c0392b] text-white font-[Prata] font-bold py-3 rounded-full hover:opacity-90 transition disabled:opacity-40 disabled:cursor-not-allowed"
-                                >
-                                  Cancel Reservation
-                                </button>
-                                {pastCutoff && !isClosed && (
-                                  <p className="text-[11px] text-neutral-500 font-[Prata] mt-2 text-center leading-relaxed">
-                                    Cancellations must be made at least {CANCEL_CUTOFF_DAYS} days before your reservation date.
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-
-                          {r.payment_proof && (
-                            <div className="mt-4">
-                              <span className="block text-xs text-neutral-400 font-[Prata] mb-2">Proof of Payment</span>
-                              <img
-                                src={r.payment_proof}
-                                alt="Proof of payment"
-                                className="w-full max-h-48 object-contain rounded-md bg-neutral-50"
-                              />
-                            </div>
-                          )}
-
-                          {r.theme_image && (
-                            <img
-                              src={r.theme_image}
-                              alt="Theme inspiration"
-                              className="mt-4 w-full max-h-48 object-cover rounded-md"
-                            />
-                          )}
-                        </div>
-                      )
-                    })}
                 </div>
               )}
             </>
@@ -1043,7 +1210,7 @@ function Reservation() {
       <ConfirmDialog
         open={Boolean(cancelTarget)}
         title="Cancel this reservation?"
-        message="Your downpayment is non-refundable. This cannot be undone."
+        message={`Your downpayment is non-refundable, and reservations can only be cancelled at least ${CANCEL_CUTOFF_DAYS} days before the date. This cannot be undone.`}
         confirmLabel="Yes, Cancel"
         onConfirm={handleCancelReservation}
         onCancel={() => setCancelTarget(null)}
@@ -1080,5 +1247,5 @@ function Reservation() {
     </div>
   )
 }
- 
+
 export default Reservation

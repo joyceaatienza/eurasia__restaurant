@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useLocation } from "react-router-dom";
-import { X, Check, Ban, Eye } from "lucide-react";
+import { X, Check, Ban, Eye, ArrowUpDown, Search } from "lucide-react";
 import StaffHeader from "../components/StaffHeader";
 import { ordersApi } from "../services/ordersApi";
 import { reservationsApi } from "../services/reservationsApi";
@@ -8,6 +8,9 @@ import { reservationsApi } from "../services/reservationsApi";
 const POLL_MS = 8000;
 const HIGHLIGHT_MS = 4000;
 const STATUS_LABEL = { pending: "Pending", verified: "Completed", failed: "Failed" };
+
+// Reservations in these states are done, so their downpayments leave the Cashier list
+const CLOSED_RESERVATION_STATUSES = ["completed", "cancelled", "no_show"];
 
 const MOBILE_QUERY = "(max-width: 767px)";
 
@@ -171,13 +174,6 @@ function ValidateModal({ transaction, busy, onClose, onConfirm, onFail }) {
 
         <div className="flex flex-col gap-2">
           <button
-            onClick={onClose}
-            disabled={busy}
-            className="w-full py-2.5 rounded-lg bg-white text-[#1d080f] text-sm border border-gray-300 hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Cancel
-          </button>
-          <button
             onClick={() => onFail(transaction.id)}
             disabled={busy}
             className="w-full py-2.5 rounded-lg bg-[#f8d7da] text-[#842029] text-sm hover:bg-[#f1c1c6] transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -261,6 +257,10 @@ function DownpaymentModal({ reservation, busy, onClose, onConfirm, onFail }) {
             <span className="text-[#1d080f] text-right">{reservation.date} · {reservation.time}</span>
           </div>
           <div className="flex justify-between gap-3">
+            <span className="text-gray-600 shrink-0">Booked On</span>
+            <span className="text-[#1d080f] text-right">{reservation.booked}</span>
+          </div>
+          <div className="flex justify-between gap-3">
             <span className="text-gray-600 shrink-0">Payment Method</span>
             <span className="text-[#1d080f] capitalize text-right">{reservation.method || "—"}</span>
           </div>
@@ -299,13 +299,6 @@ function DownpaymentModal({ reservation, busy, onClose, onConfirm, onFail }) {
         </div>
 
         <div className="flex flex-col gap-2">
-          <button
-            onClick={onClose}
-            disabled={busy}
-            className="w-full py-2.5 rounded-lg bg-white text-[#1d080f] text-sm border border-gray-300 hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Cancel
-          </button>
           <button
             onClick={() => onFail(reservation.id)}
             disabled={busy}
@@ -356,23 +349,37 @@ function normalizeDownpayment(r) {
   const [h, m] = rawTime.split(":").map(Number);
   const period = h >= 12 ? "pm" : "am";
   const hour12 = h % 12 === 0 ? 12 : h % 12;
+  const validDate = !isNaN(resDate.getTime());
+  const createdAt = new Date(r.created_at);
 
   return {
     id: r.id,
     guestName: r.guest_name,
+    contact: r.contact_number || "",
+    email: r.email || "",
     type: r.reservation_type,
     pax: r.party_size,
     method: r.payment_method,
     amount: Number(r.downpayment_amount || 0),
-    status: STATUS_LABEL[r.payment_status] || "Pending",
+    status: STATUS_LABEL[String(r.payment_status || "").toLowerCase()] || "Pending",
+    reservationStatus: String(r.status || "").toLowerCase(),
     hasProof: Boolean(r.has_payment_proof ?? r.payment_proof),
     // Cash is handed over at the counter, so there's no upload to check
     isCash: (r.payment_method || "").toLowerCase() === "cash",
-    createdAt: new Date(r.created_at),
-    date: isNaN(resDate.getTime())
-      ? "—"
-      : resDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+    createdAt,
+    // The reservation day (midnight) — used to drop reservations that already passed
+    resDay: validDate ? new Date(resDate.getFullYear(), resDate.getMonth(), resDate.getDate()) : null,
+    // The reservation day and time together — used when sorting by reservation date
+    resDateTime: validDate
+      ? new Date(resDate.getFullYear(), resDate.getMonth(), resDate.getDate(), isNaN(h) ? 0 : h, isNaN(m) ? 0 : m)
+      : null,
+    date: validDate
+      ? resDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+      : "—",
     time: isNaN(h) ? "—" : `${hour12}:${String(m).padStart(2, "0")} ${period}`,
+    booked: isNaN(createdAt.getTime())
+      ? "—"
+      : createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
   };
 }
 
@@ -393,6 +400,33 @@ function assignDailyNumbers(list) {
     ...t,
     displayNo: t.dailyNumber != null ? t.dailyNumber : numberMap[t.id],
   }));
+}
+
+/* ---------------------------------------------------------------- */
+/* Search                                                            */
+/* ---------------------------------------------------------------- */
+// Orders match on customer name or order number ("12" or "#12")
+function orderMatches(t, query) {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const num = q.replace(/^#/, "");
+  return (
+    (t.customer || "").toLowerCase().includes(q) ||
+    String(t.displayNo ?? "") === num
+  );
+}
+
+// Downpayments match on guest name, email, or contact number (digits only,
+// so "0917 123" finds "09171234567")
+function downpaymentMatches(d, query) {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const digits = q.replace(/\D/g, "");
+  return (
+    (d.guestName || "").toLowerCase().includes(q) ||
+    (d.email || "").toLowerCase().includes(q) ||
+    (digits.length >= 3 && (d.contact || "").replace(/\D/g, "").includes(digits))
+  );
 }
 
 /* ---------------------------------------------------------------- */
@@ -458,7 +492,7 @@ function PaymentCard({ t, highlighted, cardRef, loadingId, onView, onVerify, sho
   );
 }
 
-function DownpaymentCard({ d, highlighted, cardRef, onOpen }) {
+function DownpaymentCard({ d, highlighted, cardRef, onOpen, showStatusOnly }) {
   return (
     <div
       ref={cardRef}
@@ -491,11 +525,16 @@ function DownpaymentCard({ d, highlighted, cardRef, onOpen }) {
         <span className="text-xs text-gray-700">{d.pax} pax</span>
       </div>
 
-      <div className="text-xs text-gray-600 mb-3">
+      <div className="text-xs text-gray-600 mb-1">
         <span className="capitalize">{d.method || "—"}</span> · {d.date} · {d.time}
       </div>
+      <div className="text-[11px] text-gray-500 mb-3">Booked {d.booked}</div>
 
-      {d.isCash || d.hasProof ? (
+      {showStatusOnly ? (
+        <div className="flex justify-center">
+          <StatusBadge status={d.status} />
+        </div>
+      ) : d.isCash || d.hasProof ? (
         <button
           onClick={() => onOpen(d)}
           className="w-full text-xs font-[Prata] py-2.5 rounded-lg bg-[#f5e79e] text-[#5e5113] hover:opacity-80 transition"
@@ -532,6 +571,19 @@ export default function PaymentTransactions({
   // A notification click asks this page to surface one row
   const [highlight, setHighlight] = useState(null);
   const highlightRef = useRef(null);
+  // Downpayment sorting: by the day it was booked or the reservation day, newest or oldest first
+  const [dpSortBy, setDpSortBy] = useState("created");
+  const [dpNewestFirst, setDpNewestFirst] = useState(true);
+  // Search covers every order and every downpayment, whatever tab is open
+  const [search, setSearch] = useState("");
+  const isSearching = search.trim().length > 0;
+  // History keeps every payment from every day, so all orders load separately
+  // (only while History or a search needs them — the main tabs stay on today)
+  const [allOrders, setAllOrders] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+  // Which list History shows: order payments or downpayments
+  const [historyType, setHistoryType] = useState("orders");
 
   const fetchAll = useCallback(() => {
     return Promise.all([
@@ -559,6 +611,27 @@ export default function PaymentTransactions({
     const interval = setInterval(fetchAll, POLL_MS);
     return () => clearInterval(interval);
   }, [fetchAll]);
+
+  // Every order from every day, for History and search
+  const loadHistory = useCallback((showSpinner = false) => {
+    if (showSpinner) setHistoryLoading(true);
+    return ordersApi.getAll()
+      .then((data) => {
+        setAllOrders(assignDailyNumbers(data.map(normalizeTransaction)));
+        setHistoryLoaded(true);
+      })
+      .catch((err) => console.error("Failed to load payment history:", err))
+      .finally(() => { if (showSpinner) setHistoryLoading(false); });
+  }, []);
+
+  const needsHistory = view === "history" || isSearching;
+  useEffect(() => {
+    if (!needsHistory) return;
+    loadHistory(!historyLoaded);
+    const interval = setInterval(() => loadHistory(), POLL_MS);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needsHistory, loadHistory]);
 
   // Jump to the right tab and flag the row the notification pointed at. The
   // target arrives as a prop inside the Owner shell, or through router state
@@ -593,16 +666,58 @@ export default function PaymentTransactions({
   const showError = (message) => showToast(message, "error");
 
   const pendingTransactions = transactions.filter((t) => t.status === "Pending");
-  const pendingDownpayments = downpayments.filter((d) => d.status === "Pending");
+
+  // Downpayments only matter while the reservation is still ahead: anything
+  // completed, cancelled, no-show, or dated before today drops off this page
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const activeDownpayments = downpayments.filter(
+    (d) =>
+      !CLOSED_RESERVATION_STATUSES.includes(d.reservationStatus) &&
+      (!d.resDay || d.resDay >= today)
+  );
+
+  const dpSortValue = (d) =>
+    dpSortBy === "reservation"
+      ? d.resDateTime?.getTime() ?? 0
+      : d.createdAt?.getTime() ?? 0;
+
+  const pendingDownpayments = activeDownpayments
+    .filter((d) => d.status === "Pending")
+    .sort((a, b) => {
+      const diff = dpSortValue(b) - dpSortValue(a);
+      return dpNewestFirst ? diff : -diff;
+    });
 
   const pendingCount = pendingTransactions.length + pendingDownpayments.length;
   const completedCount =
     transactions.filter((t) => t.status === "Completed").length +
     downpayments.filter((d) => d.status === "Completed").length;
 
-  const historyTransactions = [...transactions]
+  // Until every day's orders arrive, today's stand in so nothing looks empty
+  const orderSource = historyLoaded ? allOrders : transactions;
+
+  // Every verified or failed order payment from every day, newest first
+  const historyTransactions = [...orderSource]
     .filter((t) => t.status === "Completed" || t.status === "Failed")
     .sort((a, b) => b.createdAt - a.createdAt);
+
+  // Every downpayment the cashier has already acted on, newest booking first
+  const historyDownpayments = downpayments
+    .filter((d) => d.status === "Completed" || d.status === "Failed")
+    .sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0));
+
+  const orderResults = isSearching
+    ? orderSource.filter((t) => orderMatches(t, search)).sort((a, b) => b.createdAt - a.createdAt)
+    : [];
+  // Newest booking first, so the one the guest just made is on top
+  const downpaymentResults = isSearching
+    ? downpayments
+        .filter((d) => downpaymentMatches(d, search))
+        .sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0))
+    : [];
+  // A downpayment can still be acted on only while it's pending and the reservation is ahead
+  const isActiveDownpayment = (d) => activeDownpayments.includes(d) && d.status === "Pending";
 
   // The list endpoint leaves out the images to stay light, so pull the full order on demand
   const openVerify = async (t) => {
@@ -644,11 +759,12 @@ export default function PaymentTransactions({
   };
 
   const handleConfirm = async (id) => {
-    const tx = transactions.find((t) => t.id === id);
+    const tx = transactions.find((t) => t.id === id) || allOrders.find((t) => t.id === id);
     setSaving(true);
     try {
       await ordersApi.updatePaymentStatus(id, "verified");
       setTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, status: "Completed" } : t)));
+      setAllOrders((prev) => prev.map((t) => (t.id === id ? { ...t, status: "Completed" } : t)));
       setModalTx(null);
       showToast(`Payment #${tx?.displayNo ?? id} confirmed successfully`);
     } catch (err) {
@@ -660,11 +776,12 @@ export default function PaymentTransactions({
   };
 
   const handleFail = async (id) => {
-    const tx = transactions.find((t) => t.id === id);
+    const tx = transactions.find((t) => t.id === id) || allOrders.find((t) => t.id === id);
     setSaving(true);
     try {
       await ordersApi.updatePaymentStatus(id, "failed");
       setTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, status: "Failed" } : t)));
+      setAllOrders((prev) => prev.map((t) => (t.id === id ? { ...t, status: "Failed" } : t)));
       setModalTx(null);
       showToast(`Payment #${tx?.displayNo ?? id} marked as failed`);
     } catch (err) {
@@ -716,16 +833,12 @@ export default function PaymentTransactions({
   const emptyClass =
     "bg-white rounded-xl p-8 sm:p-12 text-center text-gray-500 font-[Prata] text-sm shadow-sm border border-gray-100";
 
-  const tabs = embedded
-    ? [
-        { key: "pending", label: "Orders" },
-        { key: "downpayments", label: "Downpayments" },
-      ]
-    : [
-        { key: "pending", label: "Orders" },
-        { key: "downpayments", label: "Downpayments" },
-        { key: "history", label: "History" },
-      ];
+  // History shows in the Owner view too, so the owner can look back at every payment
+  const tabs = [
+    { key: "pending", label: "Orders" },
+    { key: "downpayments", label: "Downpayments" },
+    { key: "history", label: "History" },
+  ];
 
   return (
     <div className="min-h-screen bg-[#f0eff3] font-[Prata] text-[#1d080f] text-left">
@@ -751,7 +864,30 @@ export default function PaymentTransactions({
           <StatCard label="Completed Payments" value={completedCount} />
         </div>
 
+        {/* Search by customer, order number, or the guest behind a downpayment */}
+        <div className="relative w-full sm:max-w-md mb-4">
+          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => e.key === "Escape" && setSearch("")}
+            placeholder="Search customer, order #, or guest contact"
+            className="w-full bg-white border border-gray-200 rounded-lg pl-10 pr-10 py-2.5 text-sm font-[Prata] text-[#1d080f] shadow-sm focus:outline-none focus:ring-1 focus:ring-[#1d080f]"
+          />
+          {isSearching && (
+            <button
+              onClick={() => setSearch("")}
+              aria-label="Clear search"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-[#1d080f] p-1"
+            >
+              <X size={16} />
+            </button>
+          )}
+        </div>
+
         {/* The tab strip scrolls sideways rather than wrapping on a phone */}
+        {!isSearching && (
         <div className="overflow-x-auto mb-5 sm:mb-6 -mx-4 px-4 sm:mx-0 sm:px-0">
           <div className="flex gap-1.5 bg-white p-1 rounded-lg w-fit shadow-sm border border-gray-100">
             {tabs.map((t) => (
@@ -772,9 +908,204 @@ export default function PaymentTransactions({
             ))}
           </div>
         </div>
+        )}
+
+        {/* Downpayment sorting: which date to go by, and which way */}
+        {view === "downpayments" && !loading && !isSearching && (
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-4">
+            <span className="text-xs text-gray-600">Sort by</span>
+            <div className="flex gap-1 bg-white p-1 rounded-lg shadow-sm border border-gray-100">
+              {[
+                { key: "created", label: "Date Booked" },
+                { key: "reservation", label: "Reservation Date" },
+              ].map((opt) => (
+                <button
+                  key={opt.key}
+                  onClick={() => setDpSortBy(opt.key)}
+                  className={`px-3 py-1.5 rounded-md text-xs font-[Prata] transition whitespace-nowrap ${
+                    dpSortBy === opt.key ? "bg-[#1d080f] text-white" : "text-[#1d080f] hover:bg-gray-50"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setDpNewestFirst((prev) => !prev)}
+              className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs font-[Prata] text-[#1d080f] shadow-sm hover:bg-gray-50 transition whitespace-nowrap"
+            >
+              {dpNewestFirst ? "Newest first" : "Oldest first"}
+              <ArrowUpDown size={14} />
+            </button>
+          </div>
+        )}
 
         {loading ? (
           <div className={emptyClass}>Loading transactions...</div>
+        ) : isSearching ? (
+          <div className="grid gap-6">
+            {/* ---------- Order payments ---------- */}
+            <section>
+              <h2 className="text-base text-[#1d080f] mb-3" style={{ WebkitTextStroke: "0.3px #1d080f" }}>
+                Order Payments{" "}
+                <span className="text-xs text-gray-500">
+                  {historyLoaded ? "(all dates)" : "(today — loading older orders...)"} · {orderResults.length}
+                </span>
+              </h2>
+              {orderResults.length === 0 ? (
+                <div className={emptyClass}>No orders match "{search.trim()}".</div>
+              ) : isMobile ? (
+                <div className="grid gap-3">
+                  {orderResults.map((t) => (
+                    <PaymentCard
+                      key={t.id}
+                      t={t}
+                      highlighted={false}
+                      cardRef={null}
+                      loadingId={loadingId}
+                      onView={viewReceipt}
+                      onVerify={openVerify}
+                      showStatusOnly={t.status !== "Pending"}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
+                  <table className="w-full text-left" style={{ minWidth: 800 }}>
+                    <thead>
+                      <tr className="text-xs text-gray-600 border-b border-gray-100">
+                        {["Order #", "Customer", "Method", "Amount", "Receipt", "Status", "Date & Time"].map((h) => (
+                          <th key={h} className="px-6 py-4 font-[Prata] font-normal text-left whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {orderResults.map((t) => (
+                        <tr key={t.id} className="border-b border-gray-100 last:border-0 text-sm">
+                          <td className={cellClass} style={{ WebkitTextStroke: "0.3px #1d080f" }}>{t.displayNo}</td>
+                          <td className={cellClass}>{t.customer}</td>
+                          <td className={`${cellClass} capitalize`}>
+                            {t.method || <span className="text-gray-500">—</span>}
+                          </td>
+                          <td className={`${cellClass} whitespace-nowrap`}>Php. {t.amount.toLocaleString()}</td>
+                          <td className={cellClass}>
+                            {t.hasReceipt ? (
+                              <button
+                                onClick={() => viewReceipt(t)}
+                                disabled={loadingId === t.id}
+                                className={viewButtonClass}
+                              >
+                                <Eye size={14} />
+                                {loadingId === t.id ? "Loading..." : "View"}
+                              </button>
+                            ) : (
+                              <span className="text-xs text-gray-500">—</span>
+                            )}
+                          </td>
+                          <td className={cellClass}>
+                            {t.status !== "Pending" ? (
+                              <StatusBadge status={t.status} />
+                            ) : t.hasReceipt ? (
+                              <button
+                                onClick={() => openVerify(t)}
+                                disabled={loadingId === t.id}
+                                className="text-xs font-[Prata] px-3 py-1.5 rounded-lg bg-[#f5e79e] text-[#5e5113] hover:opacity-80 transition disabled:opacity-50 disabled:cursor-wait whitespace-nowrap"
+                              >
+                                {loadingId === t.id ? "Loading..." : "Verify Payment"}
+                              </button>
+                            ) : (
+                              <span className="text-xs text-gray-500 italic">Awaiting payment</span>
+                            )}
+                          </td>
+                          <td className={`${cellClass} text-gray-600 whitespace-nowrap`}>
+                            {t.date}<br />{t.time}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+
+            {/* ---------- Downpayments (every date) ---------- */}
+            <section>
+              <h2 className="text-base text-[#1d080f] mb-3" style={{ WebkitTextStroke: "0.3px #1d080f" }}>
+                Downpayments <span className="text-xs text-gray-500">(all dates) · {downpaymentResults.length}</span>
+              </h2>
+              {downpaymentResults.length === 0 ? (
+                <div className={emptyClass}>No downpayments match "{search.trim()}".</div>
+              ) : isMobile ? (
+                <div className="grid gap-3">
+                  {downpaymentResults.map((d) => (
+                    <DownpaymentCard
+                      key={d.id}
+                      d={d}
+                      highlighted={false}
+                      cardRef={null}
+                      onOpen={setModalDp}
+                      showStatusOnly={!isActiveDownpayment(d)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
+                  <table className="w-full text-left" style={{ minWidth: 1000 }}>
+                    <thead>
+                      <tr className="text-xs text-gray-600 border-b border-gray-100">
+                        {["Guest", "Contact", "Reservation", "Pax", "Method", "Amount", "Status", "Reservation Date", "Booked On"].map((h) => (
+                          <th key={h} className="px-6 py-4 font-[Prata] font-normal text-left whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {downpaymentResults.map((d) => (
+                        <tr key={d.id} className="border-b border-gray-100 last:border-0 text-sm">
+                          <td className={cellClass} style={{ WebkitTextStroke: "0.3px #1d080f" }}>{d.guestName}</td>
+                          <td className={`${cellClass} text-gray-600`}>
+                            <div className="whitespace-nowrap">{d.contact || "—"}</div>
+                            {d.email && <div className="text-xs">{d.email}</div>}
+                          </td>
+                          <td className={cellClass}>
+                            <span className={`text-xs font-[Prata] px-3 py-1 rounded-lg whitespace-nowrap ${
+                              d.type === "event"
+                                ? "bg-[#fdf3df] text-[#9c7a1f]"
+                                : "bg-[#e5f0e6] text-[#296c39]"
+                            }`}>
+                              {d.type === "event" ? "Event" : "Table"}
+                            </span>
+                          </td>
+                          <td className={cellClass}>{d.pax}</td>
+                          <td className={`${cellClass} capitalize`}>
+                            {d.method || <span className="text-gray-500">—</span>}
+                          </td>
+                          <td className={`${cellClass} whitespace-nowrap`}>Php. {d.amount.toLocaleString()}</td>
+                          <td className={cellClass}>
+                            {!isActiveDownpayment(d) ? (
+                              <StatusBadge status={d.status} />
+                            ) : d.isCash || d.hasProof ? (
+                              <button
+                                onClick={() => setModalDp(d)}
+                                className="text-xs font-[Prata] px-3 py-1.5 rounded-lg bg-[#f5e79e] text-[#5e5113] hover:opacity-80 transition whitespace-nowrap"
+                              >
+                                {d.isCash ? "Mark as Received" : "Verify Downpayment"}
+                              </button>
+                            ) : (
+                              <span className="text-xs text-gray-500 italic">No proof uploaded</span>
+                            )}
+                          </td>
+                          <td className={`${cellClass} text-gray-600 whitespace-nowrap`}>
+                            {d.date}<br />{d.time}
+                          </td>
+                          <td className={`${cellClass} text-gray-600 whitespace-nowrap`}>{d.booked}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          </div>
         ) : (
           <>
             {view === "pending" && (
@@ -868,10 +1199,10 @@ export default function PaymentTransactions({
                 </div>
               ) : (
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
-                  <table className="w-full text-left" style={{ minWidth: 800 }}>
+                  <table className="w-full text-left" style={{ minWidth: 900 }}>
                     <thead>
                       <tr className="text-xs text-gray-600 border-b border-gray-100">
-                        {["Guest", "Reservation", "Pax", "Method", "Amount", "Status", "Date & Time"].map((h) => (
+                        {["Guest", "Reservation", "Pax", "Method", "Amount", "Status", "Reservation Date", "Booked On"].map((h) => (
                           <th key={h} className="px-6 py-4 font-[Prata] font-normal text-left whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
@@ -909,6 +1240,9 @@ export default function PaymentTransactions({
                           <td className={`${cellClass} text-gray-600 whitespace-nowrap`}>
                             {d.date}<br />{d.time}
                           </td>
+                          <td className={`${cellClass} text-gray-600 whitespace-nowrap`}>
+                            {d.booked}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -918,73 +1252,183 @@ export default function PaymentTransactions({
             )}
 
             {view === "history" && (
-              historyTransactions.length === 0 ? (
-                <div className={emptyClass}>No payment history yet.</div>
-              ) : isMobile ? (
-                <div className="grid gap-3">
-                  {historyTransactions.map((t) => (
-                    <PaymentCard
-                      key={t.id}
-                      t={t}
-                      highlighted={false}
-                      cardRef={null}
-                      loadingId={loadingId}
-                      onView={viewReceipt}
-                      onVerify={openVerify}
-                      showStatusOnly
-                    />
-                  ))}
-                </div>
+              historyLoading && historyTransactions.length === 0 && historyType === "orders" ? (
+                <div className={emptyClass}>Loading payment history...</div>
               ) : (
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
-                  <table className="w-full text-left" style={{ minWidth: 800 }}>
-                    <thead>
-                      <tr className="text-xs text-gray-600 border-b border-gray-100">
-                        {["Order #", "Customer", "Method", "Amount", "Receipt", "Status", "Date & Time"].map((h) => (
-                          <th key={h} className="px-6 py-4 font-[Prata] font-normal text-left whitespace-nowrap">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {historyTransactions.map((t) => (
-                        <tr key={t.id} className="border-b border-gray-100 last:border-0 text-sm">
-                          <td className={cellClass} style={{ WebkitTextStroke: "0.3px #1d080f" }}>{t.displayNo}</td>
-                          <td className={cellClass}>{t.customer}</td>
-                          <td className={`${cellClass} capitalize`}>
-                            {t.method || <span className="text-gray-500">—</span>}
-                          </td>
-                          <td className={`${cellClass} whitespace-nowrap`}>Php. {t.amount.toLocaleString()}</td>
-                          <td className={cellClass}>
-                            {t.hasReceipt ? (
-                              <button
-                                onClick={() => openVerify(t)}
-                                disabled={loadingId === t.id}
-                                className={viewButtonClass}
-                              >
-                                <Eye size={14} />
-                                {loadingId === t.id ? "Loading..." : "View"}
-                              </button>
-                            ) : (
-                              <span className="text-xs text-gray-500">—</span>
-                            )}
-                          </td>
-                          <td className={cellClass}>
-                            {t.hasReceipt ? (
-                              <button onClick={() => openVerify(t)} className="hover:opacity-80 transition">
-                                <StatusBadge status={t.status} />
-                              </button>
-                            ) : (
-                              <StatusBadge status={t.status} />
-                            )}
-                          </td>
-                          <td className={`${cellClass} text-gray-600 whitespace-nowrap`}>
-                            {t.date}<br />{t.time}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+              <div className="grid gap-6">
+                {/* Choose which history to look at */}
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                  <span className="text-xs text-gray-600">Show</span>
+                  <div className="flex gap-1 bg-white p-1 rounded-lg shadow-sm border border-gray-100">
+                    {[
+                      { key: "orders", label: "Order Payments", count: historyTransactions.length },
+                      { key: "downpayments", label: "Downpayments", count: historyDownpayments.length },
+                    ].map((opt) => (
+                      <button
+                        key={opt.key}
+                        onClick={() => setHistoryType(opt.key)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-[Prata] transition whitespace-nowrap ${
+                          historyType === opt.key ? "bg-[#1d080f] text-white" : "text-[#1d080f] hover:bg-gray-50"
+                        }`}
+                      >
+                        {opt.label}
+                        <span
+                          className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                            historyType === opt.key ? "bg-white/20 text-white" : "bg-gray-100 text-gray-600"
+                          }`}
+                        >
+                          {opt.count}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
+
+                {/* ---------- Order payments (every day) ---------- */}
+                {historyType === "orders" && (
+                <section>
+                  <h2 className="text-base text-[#1d080f] mb-3" style={{ WebkitTextStroke: "0.3px #1d080f" }}>
+                    Order Payments{" "}
+                    <span className="text-xs text-gray-500">
+                      {historyLoaded ? "(all dates)" : "(today — loading older orders...)"} · {historyTransactions.length}
+                    </span>
+                  </h2>
+                  {historyTransactions.length === 0 ? (
+                    <div className={emptyClass}>No payment history yet.</div>
+                  ) : isMobile ? (
+                    <div className="grid gap-3">
+                      {historyTransactions.map((t) => (
+                        <PaymentCard
+                          key={t.id}
+                          t={t}
+                          highlighted={false}
+                          cardRef={null}
+                          loadingId={loadingId}
+                          onView={viewReceipt}
+                          onVerify={openVerify}
+                          showStatusOnly
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
+                      <table className="w-full text-left" style={{ minWidth: 800 }}>
+                        <thead>
+                          <tr className="text-xs text-gray-600 border-b border-gray-100">
+                            {["Order #", "Customer", "Method", "Amount", "Receipt", "Status", "Date & Time"].map((h) => (
+                              <th key={h} className="px-6 py-4 font-[Prata] font-normal text-left whitespace-nowrap">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {historyTransactions.map((t) => (
+                            <tr key={t.id} className="border-b border-gray-100 last:border-0 text-sm">
+                              <td className={cellClass} style={{ WebkitTextStroke: "0.3px #1d080f" }}>{t.displayNo}</td>
+                              <td className={cellClass}>{t.customer}</td>
+                              <td className={`${cellClass} capitalize`}>
+                                {t.method || <span className="text-gray-500">—</span>}
+                              </td>
+                              <td className={`${cellClass} whitespace-nowrap`}>Php. {t.amount.toLocaleString()}</td>
+                              <td className={cellClass}>
+                                {t.hasReceipt ? (
+                                  <button
+                                    onClick={() => openVerify(t)}
+                                    disabled={loadingId === t.id}
+                                    className={viewButtonClass}
+                                  >
+                                    <Eye size={14} />
+                                    {loadingId === t.id ? "Loading..." : "View"}
+                                  </button>
+                                ) : (
+                                  <span className="text-xs text-gray-500">—</span>
+                                )}
+                              </td>
+                              <td className={cellClass}>
+                                {t.hasReceipt ? (
+                                  <button onClick={() => openVerify(t)} className="hover:opacity-80 transition">
+                                    <StatusBadge status={t.status} />
+                                  </button>
+                                ) : (
+                                  <StatusBadge status={t.status} />
+                                )}
+                              </td>
+                              <td className={`${cellClass} text-gray-600 whitespace-nowrap`}>
+                                {t.date}<br />{t.time}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </section>
+                )}
+
+                {/* ---------- Downpayments already verified or failed ---------- */}
+                {historyType === "downpayments" && (
+                <section>
+                  <h2 className="text-base text-[#1d080f] mb-3" style={{ WebkitTextStroke: "0.3px #1d080f" }}>
+                    Downpayments <span className="text-xs text-gray-500">(all dates) · {historyDownpayments.length}</span>
+                  </h2>
+                  {historyDownpayments.length === 0 ? (
+                    <div className={emptyClass}>No downpayment history yet.</div>
+                  ) : isMobile ? (
+                    <div className="grid gap-3">
+                      {historyDownpayments.map((d) => (
+                        <DownpaymentCard
+                          key={d.id}
+                          d={d}
+                          highlighted={false}
+                          cardRef={null}
+                          onOpen={setModalDp}
+                          showStatusOnly
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
+                      <table className="w-full text-left" style={{ minWidth: 900 }}>
+                        <thead>
+                          <tr className="text-xs text-gray-600 border-b border-gray-100">
+                            {["Guest", "Reservation", "Pax", "Method", "Amount", "Status", "Reservation Date", "Booked On"].map((h) => (
+                              <th key={h} className="px-6 py-4 font-[Prata] font-normal text-left whitespace-nowrap">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {historyDownpayments.map((d) => (
+                            <tr key={d.id} className="border-b border-gray-100 last:border-0 text-sm">
+                              <td className={cellClass} style={{ WebkitTextStroke: "0.3px #1d080f" }}>{d.guestName}</td>
+                              <td className={cellClass}>
+                                <span className={`text-xs font-[Prata] px-3 py-1 rounded-lg whitespace-nowrap ${
+                                  d.type === "event"
+                                    ? "bg-[#fdf3df] text-[#9c7a1f]"
+                                    : "bg-[#e5f0e6] text-[#296c39]"
+                                }`}>
+                                  {d.type === "event" ? "Event" : "Table"}
+                                </span>
+                              </td>
+                              <td className={cellClass}>{d.pax}</td>
+                              <td className={`${cellClass} capitalize`}>
+                                {d.method || <span className="text-gray-500">—</span>}
+                              </td>
+                              <td className={`${cellClass} whitespace-nowrap`}>Php. {d.amount.toLocaleString()}</td>
+                              <td className={cellClass}>
+                                <StatusBadge status={d.status} />
+                              </td>
+                              <td className={`${cellClass} text-gray-600 whitespace-nowrap`}>
+                                {d.date}<br />{d.time}
+                              </td>
+                              <td className={`${cellClass} text-gray-600 whitespace-nowrap`}>{d.booked}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </section>
+                )}
+              </div>
               )
             )}
           </>

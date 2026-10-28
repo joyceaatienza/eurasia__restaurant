@@ -103,26 +103,26 @@ function ReviewsSection({ reviews }) {
 
 function Homepage() {
   const bestSellers = [
-    { name: 'Baked Salmon', price: 'Php. 755', desc: 'Herb-roasted salmon served with fresh mixed greens', img: bakedSalmon, position: 'object-bottom' },
-    { name: 'Texas BBQ Ribs', price: 'Php. 876', desc: 'Slow cooked marinated 300 grams Baby back ribs served with potato wedges, pesto tossed veggies and coleslaw', img: bbqRibs, position: 'object-bottom' },
-    { name: 'Norwegian Salmon', price: 'Php. 1490', desc: 'Baked 200 grams salmon filet served with steamed vegetables, lemon butter capers sauce', img: norwegianSalmon, position: 'object-bottom' },
-    { name: 'Texas Chicken BBQ', price: 'Php. 599', desc: 'Strip of chicken breast with olives and bell peppers drizzled with barbeque sauce', img: chickenBbq, position: 'object-bottom' },
-    { name: 'Al Tonno', price: 'Php. 578', desc: 'Tuna chunks, bell pepper, olives, onion served with lemon wedges on the side', img: alTonno, position: 'object-bottom' },
-    { name: 'Mexicana', price: 'Php. 704', desc: 'Chili con carne, bell peppers, and choppped fesh jalapenos', img: mexicana, position: 'object-bottom' },
-    { name: 'Tutto Mare', price: 'Php. 578', desc: 'Calamari, shrimp, tuna, bell peppers, and onion', img: tuttoMare, position: 'object-bottom' },
-    { name: 'Pepperoni', price: 'Php. 578', desc: 'Pomodoro sauce, cheddar, and mozzarella cheese', img: pepperoni, position: 'object-bottom' },
-    { name: 'Margherita', price: 'Php. 578', desc: 'Fresh slice tomato, basil leaves, mozzarella cheese drizzled with pesto sauce', img: margherita, position: 'object-bottom' },
-    { name: 'Quatro Formaggi', price: 'Php. 693', desc: 'Béchamel, mozzarella, cheddar, Swiss cheese and parmesan', img: quatroFormaggi, position: 'object-bottom' },
-    { name: 'Carne Supreme', price: 'Php. 711', desc: 'Chili con carne, bacon, Italian sausage, bell peppers, onions, and olives', img: carneSupreme, position: 'object-bottom' },
+    { name: 'Baked Salmon', price: 'Php. 755', img: bakedSalmon, position: 'object-bottom' },
+    { name: 'Texas BBQ Ribs', price: 'Php. 876', img: bbqRibs, position: 'object-bottom' },
+    { name: 'Norwegian Salmon', price: 'Php. 1490', img: norwegianSalmon, position: 'object-bottom' },
+    { name: 'Texas Chicken BBQ', price: 'Php. 599', img: chickenBbq, position: 'object-bottom' },
+    { name: 'Al Tonno', price: 'Php. 578', img: alTonno, position: 'object-bottom' },
+    { name: 'Mexicana', price: 'Php. 704', img: mexicana, position: 'object-bottom' },
+    { name: 'Tutto Mare', price: 'Php. 578', img: tuttoMare, position: 'object-bottom' },
+    { name: 'Pepperoni', price: 'Php. 578', img: pepperoni, position: 'object-bottom' },
+    { name: 'Margherita', price: 'Php. 578', img: margherita, position: 'object-bottom' },
+    { name: 'Quatro Formaggi', price: 'Php. 693', img: quatroFormaggi, position: 'object-bottom' },
+    { name: 'Carne Supreme', price: 'Php. 711', img: carneSupreme, position: 'object-bottom' },
   ]
 
-  // Triple the list para sa infinite loop effect (kopya - original - kopya)
   const loopedItems = [...bestSellers, ...bestSellers, ...bestSellers];
 
   const scrollRef = useRef(null);
   const isJumping = useRef(false);
   const videoRef = useRef(null);
   const [reviews, setReviews] = useState([]);
+  const [showPlayBtn, setShowPlayBtn] = useState(false);
 
   useEffect(() => {
     getReviews()
@@ -134,44 +134,41 @@ function Homepage() {
     const video = videoRef.current;
     if (!video) return;
 
-    // Try autoplay first
     video.play().catch(() => {
-      // iOS Safari blocks autoplay — play on first touch instead
-      const playOnTouch = () => {
-        video.play().catch(() => {});
-        document.removeEventListener('touchstart', playOnTouch);
-        document.removeEventListener('click', playOnTouch);
-      };
-      document.addEventListener('touchstart', playOnTouch, { once: true });
-      document.addEventListener('click', playOnTouch, { once: true });
+      // iOS Safari blocked autoplay — show a styled play button instead
+      setShowPlayBtn(true);
     });
   }, []);
 
-  // I-set ang scroll sa gitnang set sa unang render
+  const handlePlayBtn = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.play().catch(() => {});
+    setShowPlayBtn(false);
+  };
+
   useEffect(() => {
     const el = scrollRef.current;
     if (el) {
-      // Hintayin munang ma-render ang cards bago mag-set ng scroll position
       requestAnimationFrame(() => {
         el.scrollLeft = el.scrollWidth / 3;
       });
     }
   }, []);
 
-  const CARD_WIDTH = 320 + 24; // card width + gap-6 (24px)
+  const CARD_WIDTH = 320 + 24;
 
-    const handleScrollEnd = () => {
+  const handleScrollEnd = () => {
     const el = scrollRef.current;
     if (!el || isJumping.current) return;
 
     const oneSet = el.scrollWidth / 3;
 
-    // Kapag masyadong malapit na sa dulo, instant (walang animation) na ibalik sa gitna
     if (el.scrollLeft >= oneSet * 2) {
       isJumping.current = true;
-      el.style.scrollBehavior = "auto";   // patayin muna ang smooth
+      el.style.scrollBehavior = "auto";
       el.scrollLeft -= oneSet;
-      el.style.scrollBehavior = "";       // ibalik ang smooth
+      el.style.scrollBehavior = "";
       isJumping.current = false;
     } else if (el.scrollLeft <= oneSet * 0.5) {
       isJumping.current = true;
@@ -191,7 +188,6 @@ function Homepage() {
       behavior: "smooth",
     });
 
-    // Pagkatapos ng smooth scroll, i-check kung kailangan mag-reset
     setTimeout(handleScrollEnd, 400);
   };
 
@@ -210,6 +206,64 @@ function Homepage() {
           className="absolute inset-0 w-full h-full object-cover"
         />
         <div className="absolute inset-0" />
+
+        {/* Play button overlay — only shown when iOS Safari blocks autoplay */}
+        {showPlayBtn && (
+          <button
+            onClick={handlePlayBtn}
+            aria-label="Play video"
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 16,
+              background: "rgba(29, 8, 15, 0.45)",
+              border: "none",
+              cursor: "pointer",
+              zIndex: 10,
+            }}
+          >
+            {/* Circle with triangle */}
+            <div
+              style={{
+                width: 72,
+                height: 72,
+                borderRadius: "50%",
+                background: "rgba(245, 233, 216, 0.15)",
+                border: "2px solid rgba(245, 233, 216, 0.7)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                backdropFilter: "blur(4px)",
+              }}
+            >
+              {/* Triangle play icon */}
+              <div
+                style={{
+                  width: 0,
+                  height: 0,
+                  borderTop: "14px solid transparent",
+                  borderBottom: "14px solid transparent",
+                  borderLeft: "24px solid rgba(245, 233, 216, 0.9)",
+                  marginLeft: 6,
+                }}
+              />
+            </div>
+            <span
+              style={{
+                fontFamily: "'Prata', serif",
+                fontSize: 13,
+                color: "rgba(245, 233, 216, 0.85)",
+                letterSpacing: "0.1em",
+              }}
+            >
+              Tap to play
+            </span>
+          </button>
+        )}
       </div>
 
       <div className="max-w-6xl mx-auto px-6 py-11">
@@ -232,7 +286,6 @@ function Homepage() {
           <div
             ref={scrollRef}
             onScroll={() => {
-              // debounce-lite: i-check lang kapag tumigil sa pag-scroll
               clearTimeout(scrollRef.current._t);
               scrollRef.current._t = setTimeout(handleScrollEnd, 100);
             }}

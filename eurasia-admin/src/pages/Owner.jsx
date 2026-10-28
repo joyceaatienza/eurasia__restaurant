@@ -377,6 +377,9 @@ const NOTIF_STYLES = {
 function buildNotifications(orders, reservations) {
   const list = [];
 
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
   reservations.forEach((r) => {
     if (r.status === "pending") {
       list.push({
@@ -389,7 +392,18 @@ function buildNotifications(orders, reservations) {
       });
     }
 
-    if (Number(r.downpayment_amount) > 0 && (r.payment_status || "pending") === "pending") {
+    // Same rule as the Cashier: finished or past-date reservations no longer need verifying
+    const resDay = new Date(r.reservation_date);
+    const isOver =
+      ["completed", "cancelled", "no_show"].includes(String(r.status || "").toLowerCase()) ||
+      (!isNaN(resDay.getTime()) &&
+        new Date(resDay.getFullYear(), resDay.getMonth(), resDay.getDate()) < today);
+
+    if (
+      !isOver &&
+      Number(r.downpayment_amount) > 0 &&
+      String(r.payment_status || "pending").toLowerCase() === "pending"
+    ) {
       list.push({
         id: `downpayment-${r.id}`,
         kind: "downpayment",
@@ -1286,107 +1300,324 @@ function DashboardPage({ isMobile, isTablet }) {
 
   const estimatedProfit = totalRevenue * 0.3;
 
-  const handleExport = async () => {
-    // Wrap each cell so commas inside names don't break the columns
-    const cell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    const row = (cells) => cells.map(cell).join(",");
+  const handleExport = () => {
+    const formatCurrency = (n) =>
+      `₱ ${Number(n).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
 
-    const lines = [
-      row(["Eurasia Restaurant — Sales Report"]),
-      row(["Period", period]),
-      row(["Covering", periodLabel]),
-      row(["Generated", new Date().toLocaleString("en-US")]),
-      "",
-      row(["SUMMARY"]),
-      row(["Total Revenue", totalRevenue.toFixed(2)]),
-      row(["Total Orders", totalOrders]),
-      row(["Total Guests", totalGuests]),
-      row(["  Reserved", guestCounts.reserved]),
-      row(["  Walk-in", guestCounts.walk_in]),
-      row(["Estimated Profit (30%)", estimatedProfit.toFixed(2)]),
-      "",
-      row(["RESERVATION STATUS"]),
-      ...computedOrderStats.map((s) => row([s.label, s.value])),
-      "",
-      row(["TOP SELLING ITEMS"]),
-      ...(computedTopSelling.length === 0
-        ? [row(["No orders in this period"])]
-        : computedTopSelling.map((it) => row([it.name, it.amount]))),
-      "",
-      row(["ORDERS"]),
-      row(["Order #", "Customer", "Payment Method", "Subtotal", "Discount", "Service Fee", "Total", "Payment Status", "Date & Time"]),
-      ...(filteredOrders.length === 0
-        ? [row(["No orders in this period"])]
-        : filteredOrders.map((o) =>
-            row([
-              o.daily_number ?? o.id,
-              o.customer_name || "—",
-              o.payment_method || "—",
-              Number(o.subtotal || 0).toFixed(2),
-              Number(o.discount_amount || 0).toFixed(2),
-              Number(o.service_fee || 0).toFixed(2),
-              Number(o.total || 0).toFixed(2),
-              o.payment_status || "pending",
-              formatDBDateTime(o.created_at),
-            ])
-          )),
-      "",
-      row(["RESERVATIONS"]),
-      row(["Date", "Time", "Guest Name", "Pax", "Type", "Downpayment", "Status"]),
-      ...(filteredReservations.length === 0
-        ? [row(["No reservations in this period"])]
-        : filteredReservations.map((r) =>
-            row([
-              formatDBDate(r.reservation_date),
-              to12hFromDBTime(r.reservation_time),
-              r.guest_name,
-              r.party_size,
-              r.reservation_type === "event" ? "Event" : "Table",
-              Number(r.downpayment_amount || 0).toFixed(2),
-              r.status,
-            ])
-          )),
-    ];
+    // Becomes the default file name when saving as PDF
+    const reportFileName =
+      period === "Today"
+        ? `Eurasia-Sales-Report-${toISODate(rangeStart)}`
+        : `Eurasia-Sales-Report-${period}-${toISODate(rangeStart)}-to-${toISODate(rangeEnd)}`;
 
-    // The BOM keeps Excel from mangling the peso sign and accented names
-    const csv = "\uFEFF" + lines.join("\n");
-    const fileName = `eurasia-sales-${toISODate(rangeStart)}-to-${toISODate(rangeEnd)}.csv`;
+    // Same data the dashboard charts use, drawn as simple bars for print
+    const barRows = (rows, format) => {
+      const max = Math.max(...rows.map((r) => r.value), 1);
+      return rows
+        .map(
+          (r) => `
+            <div class="bar-row">
+              <span>${r.name ?? r.label}</span>
+              <div class="bar-track"><div class="bar-fill" style="width:${(r.value / max) * 100}%"></div></div>
+              <span class="bar-value">${format(r.value)}</span>
+            </div>`
+        )
+        .join("");
+    };
+    const categoryBarsHtml = barRows(categoryBreakdown, (v) => Number(v).toLocaleString());
+    const trendBarsHtml = barRows(trendData, (v) => `${v}K`);
 
-    // Chrome and Edge can open a real folder picker; other browsers fall back to a plain download
-    if (window.showSaveFilePicker) {
-      try {
-        const handle = await window.showSaveFilePicker({
-          suggestedName: fileName,
-          types: [
-            {
-              description: "CSV file (opens in Excel)",
-              accept: { "text/csv": [".csv"] },
-            },
-          ],
-        });
-        const writable = await handle.createWritable();
-        await writable.write(csv);
-        await writable.close();
-
-        setShowExportToast(true);
-        setTimeout(() => setShowExportToast(false), 3000);
-        return;
-      } catch (err) {
-        // The person closed the picker — nothing to report
-        if (err.name === "AbortError") return;
-        console.error("Save picker failed, falling back to download:", err);
-      }
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      alert("Please allow pop-ups for this site to export the sales report.");
+      return;
     }
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8" />
+        <title>${reportFileName}</title>
+        <style>
+          @import url('https://fonts.googleapis.com/css2?family=Prata&display=swap');
+          * { box-sizing: border-box; margin: 0; padding: 0; }
+          body {
+            font-family: 'Prata', Georgia, serif;
+            color: #1d080f;
+            background: #fff;
+            padding: 40px;
+            font-size: 13px;
+          }
+          .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 2px solid #1d080f;
+            padding-bottom: 20px;
+            margin-bottom: 28px;
+          }
+          .restaurant-name {
+            font-size: 26px;
+            letter-spacing: 0.12em;
+            font-weight: bold;
+          }
+          .report-meta {
+            text-align: right;
+            font-size: 12px;
+            color: #6b5b60;
+            line-height: 1.7;
+          }
+          .report-title {
+            font-size: 14px;
+            font-weight: bold;
+            color: #1d080f;
+            margin-bottom: 4px;
+          }
+          .section {
+            margin-bottom: 28px;
+          }
+          .section-title {
+            font-size: 13px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #6b5b60;
+            border-bottom: 1px solid #e7e3e6;
+            padding-bottom: 6px;
+            margin-bottom: 14px;
+          }
+          .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 28px;
+          }
+          .stat-card {
+            border: 1px solid #e7e3e6;
+            border-radius: 10px;
+            padding: 16px 18px;
+          }
+          .stat-label {
+            font-size: 11px;
+            color: #6b5b60;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+          }
+          .stat-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #1d080f;
+          }
+          .stat-value.green { color: #296c39; }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+          }
+          th {
+            background: #f0eff3;
+            padding: 10px 12px;
+            text-align: left;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: #6b5b60;
+            border-bottom: 1px solid #e7e3e6;
+          }
+          td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #f0eff3;
+            vertical-align: top;
+          }
+          tr:last-child td { border-bottom: none; }
+          .two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 28px;
+          }
+          /* visible, not hidden — hidden was clipping the last column */
+          .inner-table { border: 1px solid #e7e3e6; border-radius: 10px; overflow: visible; }
+          .footer {
+            margin-top: 40px;
+            padding-top: 14px;
+            border-top: 1px solid #e7e3e6;
+            font-size: 11px;
+            color: #6b5b60;
+            display: flex;
+            justify-content: space-between;
+          }
 
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+          /* margin: 0 removes the browser's about:blank / date / page
+             headers and footers; the body padding becomes the page margin. */
+          @page { size: A4 portrait; margin: 0; }
+
+          /* Simple bar charts for Category Breakdown and Sales Trends */
+          .note { font-size: 10.5px; color: #6b5b60; margin: -8px 0 12px 0; }
+          .bars { border: 1px solid #e7e3e6; border-radius: 10px; padding: 12px 14px; }
+          .bar-row {
+            display: grid;
+            grid-template-columns: 105px 1fr 58px;
+            align-items: center;
+            gap: 10px;
+            padding: 4px 0;
+            font-size: 11.5px;
+          }
+          .bar-track { background: #f0eff3; height: 9px; border-radius: 999px; overflow: hidden; }
+          .bar-fill { background: #4b7ff7; height: 100%; border-radius: 999px; }
+          .bar-value { text-align: right; color: #6b5b60; }
+
+          /* Amounts and column titles stay on one line */
+          th, td { white-space: nowrap; }
+          td.wrap { white-space: normal; }
+
+          /* Sections never split across pages */
+          tr { break-inside: avoid; page-break-inside: avoid; }
+          .stats-grid, .two-col { break-inside: avoid; page-break-inside: avoid; }
+
+          /* Keep the colours when printing */
+          * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+          @media print {
+            body { padding: 14mm 16mm; }
+          }
+        </style>
+      </head>
+      <body>
+
+        <div class="header">
+          <div>
+            <div class="restaurant-name">EURASIA RESTAURANT</div>
+            <div style="font-size:12px;color:#6b5b60;margin-top:4px;">Sales Report</div>
+          </div>
+          <div class="report-meta">
+            <div class="report-title">${period} — ${periodLabel}</div>
+            <div>Generated: ${new Date().toLocaleString("en-US", { month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}</div>
+          </div>
+        </div>
+
+        <!-- Summary Stats -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Total Revenue</div>
+            <div class="stat-value green">${formatCurrency(totalRevenue)}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Total Orders</div>
+            <div class="stat-value">${totalOrders}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Total Guests</div>
+            <div class="stat-value">${totalGuests}</div>
+          </div>
+        </div>
+
+        <!-- Category Breakdown + Top Selling -->
+        <div class="two-col">
+          <div>
+            <div class="section-title">Category Breakdown</div>
+            <p class="note">(Estimate — menu categories aren't tracked in orders yet)</p>
+            <div class="bars">${categoryBarsHtml}</div>
+          </div>
+
+          <div>
+            <div class="section-title">Top Selling Items</div>
+            <div class="inner-table">
+              <table>
+                <thead>
+                  <tr><th>Item</th><th>Revenue</th></tr>
+                </thead>
+                <tbody>
+                  ${computedTopSelling.length === 0
+                    ? `<tr><td colspan="2" style="text-align:center;color:#6b5b60;">No orders in this period</td></tr>`
+                    : computedTopSelling.map((it) => `
+                      <tr>
+                        <td class="wrap">${it.name}</td>
+                        <td>${it.amount}</td>
+                      </tr>`).join("")}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sales Trends + Order & Cancellation Stats -->
+        <div class="two-col">
+          <div>
+            <div class="section-title">Sales Trends</div>
+            <p class="note">(Estimate — will reflect real trends as more orders come in)</p>
+            <div class="bars">${trendBarsHtml}</div>
+          </div>
+
+          <div>
+            <div class="section-title">Order &amp; Cancellation Stats</div>
+            <p class="note">(Based on reservations)</p>
+            <div class="inner-table">
+              <table>
+                <thead>
+                  <tr><th>Status</th><th>Count</th></tr>
+                </thead>
+                <tbody>
+                  ${computedOrderStats.map((s) => `
+                    <tr>
+                      <td>${s.label}</td>
+                      <td><strong>${s.value}</strong></td>
+                    </tr>`).join("")}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Revenue Summary -->
+        <div class="section">
+          <div class="section-title">Revenue & Profit Summary</div>
+          <div class="inner-table">
+            <table>
+              <tbody>
+                <tr>
+                  <td style="font-weight:bold;">Total Revenue</td>
+                  <td style="color:#296c39;font-weight:bold;">${formatCurrency(totalRevenue)}</td>
+                  <td style="color:#6b5b60;font-size:11px;">All verified payments</td>
+                </tr>
+                <tr>
+                  <td style="font-weight:bold;">Estimated Profit (30%)</td>
+                  <td style="color:#296c39;font-weight:bold;">${formatCurrency(estimatedProfit)}</td>
+                  <td style="color:#6b5b60;font-size:11px;">Estimated margin</td>
+                </tr>
+                <tr>
+                  <td style="font-weight:bold;">Reserved Guests</td>
+                  <td>${guestCounts.reserved}</td>
+                  <td style="color:#6b5b60;font-size:11px;"></td>
+                </tr>
+                <tr>
+                  <td style="font-weight:bold;">Walk-in Guests</td>
+                  <td>${guestCounts.walk_in}</td>
+                  <td style="color:#6b5b60;font-size:11px;"></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="footer">
+          <span>Eurasia Restaurant — Confidential Sales Report</span>
+          <span>Period: ${periodLabel}</span>
+        </div>
+
+        <script>
+          // Print only after the Prata font has loaded, so the first
+          // export doesn't come out in a fallback font
+          window.onload = function () {
+            var ready = document.fonts ? document.fonts.ready : Promise.resolve();
+            ready.then(function () { window.print(); });
+          };
+        </script>
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
 
     setShowExportToast(true);
     setTimeout(() => setShowExportToast(false), 3000);
@@ -1478,7 +1709,7 @@ function DashboardPage({ isMobile, isTablet }) {
             <div style={{ display: "flex", gap: 10 }}>
               <PeriodDropdown value={period} onChange={changePeriod} />
               <Btn variant="dark" small onClick={handleExport}>
-                <Download size={14} /> Export
+                <Download size={14} /> Export PDF
               </Btn>
             </div>
           </div>

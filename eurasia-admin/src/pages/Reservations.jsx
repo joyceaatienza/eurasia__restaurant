@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useLocation } from "react-router-dom";
-import { ChevronLeft, ChevronRight, ChevronDown, X, Lock } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, X, Lock, ArrowUpDown, Search } from "lucide-react";
 import { reservationsApi } from "../services/reservationsApi";
 import { guestsApi } from "../services/guestsApi";
 import StaffHeader from "../components/StaffHeader";
@@ -39,7 +39,12 @@ const DAY_LABELS = ["SUN", "MON", "TUES", "WED", "THU", "FRI", "SAT"];
 const DAY_LABELS_SHORT = ["S", "M", "T", "W", "T", "F", "S"];
 const HOURS = [11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]; // 11am–10pm
 
-const STATUS_OPTIONS = ["Pending", "Confirmed", "Arrived", "Completed", "Cancelled"];
+// The front desk only confirms bookings now — guests cancel on their own side,
+// and past reservations move to History by date instead of being marked Completed
+const STATUS_OPTIONS = ["Pending", "Confirmed"];
+
+// Reservations in these states need nothing more from the front desk
+const DONE_STATUSES = ["Confirmed", "Completed", "Cancelled"];
 
 // Lets the standalone page size itself; inside the Owner shell the prop wins
 function useMediaQuery(query) {
@@ -169,11 +174,21 @@ function Badge({ children, tone = "green" }) {
 }
 
 function statusColors(status) {
-  if (status === "Completed") return { bg: "#eeecec", fg: C.grayText, border: C.gray };
-  if (status === "Arrived") return { bg: "#fbeee2", fg: C.orange, border: C.orange };
   if (status === "Confirmed") return { bg: "#e5f0e6", fg: C.green, border: C.green };
   if (status === "Cancelled") return { bg: "#fbe7e7", fg: C.red, border: C.red };
+  if (status === "Completed") return { bg: "#eeecec", fg: C.grayText, border: C.gray };
+  if (status === "Arrived") return { bg: "#fbeee2", fg: C.orange, border: C.orange };
   return { bg: "#fdf3df", fg: "#9c7a1f", border: "#d9bf72" }; // Pending
+}
+
+// Read-only status label, used in History
+function StatusPill({ status }) {
+  const c = statusColors(status);
+  return (
+    <span style={{ background: c.bg, color: c.fg, fontSize: 12, fontWeight: 700, padding: "5px 12px", borderRadius: 8, whiteSpace: "nowrap", fontFamily: FONT }}>
+      {status}
+    </span>
+  );
 }
 
 function Card({ children, style }) {
@@ -251,8 +266,14 @@ function StatusSelect({ status, onChange, locked, fullWidth }) {
           width: fullWidth ? "100%" : "auto",
         }}
       >
-        {STATUS_OPTIONS.map((s) => (
-          <option key={s} value={s} style={{ background: "#fff", color: C.ink }}>
+        {/* An older status (Arrived, Completed, Cancelled) still shows, but can't be picked again */}
+        {(STATUS_OPTIONS.includes(status) ? STATUS_OPTIONS : [status, ...STATUS_OPTIONS]).map((s) => (
+          <option
+            key={s}
+            value={s}
+            disabled={!STATUS_OPTIONS.includes(s)}
+            style={{ background: "#fff", color: C.ink }}
+          >
             {s}
           </option>
         ))}
@@ -731,7 +752,7 @@ function MonthView({ selectedDate, reservations, onOpenDay, isMobile }) {
 /* ---------------------------------------------------------------- */
 /* Phone card — a six-column table is unreadable at 375px            */
 /* ---------------------------------------------------------------- */
-function ReservationCard({ r, highlighted, cardRef, markStatus, onViewProof, showStatus = true }) {
+function ReservationCard({ r, highlighted, cardRef, markStatus, onViewProof, showStatus = true, showDates = false }) {
   const locked = r.paymentStatus !== "verified" && r.status !== "Cancelled";
 
   return (
@@ -753,54 +774,131 @@ function ReservationCard({ r, highlighted, cardRef, markStatus, onViewProof, sho
             {r.type === "event" ? r.eventTitle : r.name}
           </div>
           <div style={{ fontSize: 12.5, color: C.inkSoft, marginTop: 2 }}>
+            {showDates ? `${displayDateFromISO(r.date)} · ` : ""}
             {to12h(r.time)} · {r.pax} pax
           </div>
+          {showDates && (
+            <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 2 }}>Booked {r.booked}</div>
+          )}
         </div>
         <Badge tone={r.type === "event" ? "amber" : "green"}>
           {r.type === "event" ? "Event" : "Table"}
         </Badge>
       </div>
 
-      <div style={{ paddingTop: 10, borderTop: `1px dashed ${C.hair}`, marginBottom: showStatus ? 12 : 0 }}>
+      <div style={{ paddingTop: 10, borderTop: `1px dashed ${C.hair}`, marginBottom: 12 }}>
         <DownpaymentCell reservation={r} onViewProof={onViewProof} />
       </div>
 
-      {showStatus && (
+      {showStatus ? (
         <StatusSelect
           status={r.status}
           locked={locked}
           fullWidth
           onChange={(status) => markStatus(r.id, status)}
         />
+      ) : (
+        <StatusPill status={r.status} />
       )}
     </div>
   );
 }
 
 /* ---------------------------------------------------------------- */
-/* History view — completed reservations                              */
+/* History view — confirmed, closed, and past reservations           */
 /* ---------------------------------------------------------------- */
 function HistoryView({ reservations, onViewProof, isMobile }) {
-  const completed = [...reservations]
-    .filter((r) => r.status === "Completed")
-    .sort((a, b) => (a.date + a.time < b.date + b.time ? 1 : -1));
+  // Sort by the day it was booked or the reservation day, newest or oldest first
+  const [sortBy, setSortBy] = useState("created");
+  const [newestFirst, setNewestFirst] = useState(true);
+
+  // Everything the front desk is done with: confirmed, cancelled, completed,
+  // or any reservation whose date has already passed
+  const todayISO = toISO(new Date());
+  const sortValue = (r) =>
+    sortBy === "reservation"
+      ? `${r.date} ${r.time}`
+      : r.createdAt
+      ? r.createdAt.toISOString()
+      : "";
+
+  const history = [...reservations]
+    .filter((r) => DONE_STATUSES.includes(r.status) || (r.date && r.date < todayISO))
+    .sort((a, b) => {
+      const av = sortValue(a);
+      const bv = sortValue(b);
+      if (av === bv) return 0;
+      const diff = av < bv ? 1 : -1;
+      return newestFirst ? diff : -diff;
+    });
+
+  const cell = { padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, textAlign: "left", verticalAlign: "top" };
 
   return (
     <Card style={{ padding: 0, overflow: "hidden" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: isMobile ? "16px 16px 0" : "20px 22px 0" }}>
-        <SectionTitle>Completed Reservations</SectionTitle>
+        <SectionTitle>Reservation History</SectionTitle>
         <span style={{ background: C.void, color: "#f5e9d8", fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, marginTop: -14, fontFamily: FONT }}>
-          {completed.length}
+          {history.length}
         </span>
       </div>
 
-      {completed.length === 0 ? (
+      {/* Sorting: which date to go by, and which way */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: isMobile ? "0 16px 14px" : "0 22px 16px", fontFamily: FONT }}>
+        <span style={{ fontSize: 12, color: C.inkSoft }}>Sort by</span>
+        <div style={{ display: "flex", gap: 4, background: C.canvas, padding: 4, borderRadius: 8 }}>
+          {[
+            { key: "created", label: "Date Booked" },
+            { key: "reservation", label: "Reservation Date" },
+          ].map((opt) => (
+            <button
+              key={opt.key}
+              onClick={() => setSortBy(opt.key)}
+              style={{
+                border: "none",
+                borderRadius: 6,
+                padding: "6px 12px",
+                fontSize: 12,
+                fontFamily: FONT,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                background: sortBy === opt.key ? C.void : "transparent",
+                color: sortBy === opt.key ? "#f5e9d8" : C.ink,
+              }}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={() => setNewestFirst((prev) => !prev)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            border: `1px solid ${C.hair}`,
+            borderRadius: 8,
+            padding: "7px 12px",
+            fontSize: 12,
+            fontFamily: FONT,
+            background: "#fff",
+            color: C.ink,
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {newestFirst ? "Newest first" : "Oldest first"}
+          <ArrowUpDown size={13} />
+        </button>
+      </div>
+
+      {history.length === 0 ? (
         <div style={{ color: C.inkSoft, fontSize: 13.5, textAlign: "center", padding: "30px 16px", fontFamily: FONT }}>
-          No completed reservations yet.
+          No reservation history yet.
         </div>
       ) : isMobile ? (
         <div style={{ display: "grid", gap: 12, padding: "0 16px 16px" }}>
-          {completed.map((r) => (
+          {history.map((r) => (
             <ReservationCard
               key={r.id}
               r={r}
@@ -809,36 +907,39 @@ function HistoryView({ reservations, onViewProof, isMobile }) {
               markStatus={() => {}}
               onViewProof={onViewProof}
               showStatus={false}
+              showDates
             />
           ))}
         </div>
       ) : (
         <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: FONT, minWidth: 800 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: FONT, minWidth: 900 }}>
             <thead>
               <tr style={{ textAlign: "left", fontSize: 12, color: C.inkSoft }}>
-                {["Date", "Time", "Name", "Pax", "Downpayment", "Type"].map((h) => (
+                {["Reservation Date", "Time", "Name", "Pax", "Downpayment", "Type", "Status", "Reserved On"].map((h) => (
                   <th key={h} style={{ padding: "10px 22px", borderBottom: `1px solid ${C.hair}`, fontWeight: 700, textAlign: "left", whiteSpace: "nowrap" }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {completed.map((r) => (
-                <tr key={r.id} style={{ fontSize: 13.5 }}>
-                  <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, textAlign: "left", whiteSpace: "nowrap" }}>{displayDateFromISO(r.date)}</td>
-                  <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, fontWeight: 700, textAlign: "left", whiteSpace: "nowrap" }}>{to12h(r.time)}</td>
-                  <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, textAlign: "left" }}>
-                    {r.type === "event" ? r.eventTitle : r.name}
-                  </td>
-                  <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, color: C.inkSoft, textAlign: "left" }}>{r.pax}</td>
-                  <td style={{ padding: "16px 22px", borderBottom: `1px solid ${C.hair}`, verticalAlign: "top", textAlign: "left" }}>
+              {history.map((r) => (
+                <tr key={r.id} style={{ fontSize: 13.5, opacity: r.status === "Cancelled" ? 0.6 : 1 }}>
+                  <td style={{ ...cell, whiteSpace: "nowrap" }}>{displayDateFromISO(r.date)}</td>
+                  <td style={{ ...cell, fontWeight: 700, whiteSpace: "nowrap" }}>{to12h(r.time)}</td>
+                  <td style={cell}>{r.type === "event" ? r.eventTitle : r.name}</td>
+                  <td style={{ ...cell, color: C.inkSoft }}>{r.pax}</td>
+                  <td style={cell}>
                     <DownpaymentCell reservation={r} onViewProof={onViewProof} />
                   </td>
-                  <td style={{ padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, textAlign: "left" }}>
+                  <td style={cell}>
                     <Badge tone={r.type === "event" ? "amber" : "green"}>
                       {r.type === "event" ? "Event" : "Table"}
                     </Badge>
                   </td>
+                  <td style={cell}>
+                    <StatusPill status={r.status} />
+                  </td>
+                  <td style={{ ...cell, color: C.inkSoft, whiteSpace: "nowrap" }}>{r.booked}</td>
                 </tr>
               ))}
             </tbody>
@@ -943,20 +1044,34 @@ function GuestCard({ counts, onAddWalkIn, busy, isToday, isMobile }) {
 /* Day view                                                           */
 /* ---------------------------------------------------------------- */
 function DayView({ selectedISO, reservations, markStatus, highlightId, highlightRef, onViewProof, isMobile }) {
-  const dayReservations = reservations.filter((r) => r.date === selectedISO && r.status !== "Completed");
+  // Only reservations still waiting on the front desk stay in this list —
+  // once confirmed (or already closed) they move to History
+  const dayReservations = reservations.filter(
+    (r) => r.date === selectedISO && !DONE_STATUSES.includes(r.status)
+  );
   const sortedAll = [...dayReservations].sort((a, b) => (a.time > b.time ? 1 : -1));
+  const confirmedCount = reservations.filter(
+    (r) => r.date === selectedISO && r.status === "Confirmed"
+  ).length;
 
   return (
     <Card style={{ padding: 0, overflow: "hidden" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: isMobile ? "16px 16px 0" : "20px 22px 0" }}>
-        <SectionTitle>Today's Reservations</SectionTitle>
+        <SectionTitle>Reservations to Confirm</SectionTitle>
         <span style={{ background: C.void, color: "#f5e9d8", fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, marginTop: -14, fontFamily: FONT }}>
           {sortedAll.length}
         </span>
       </div>
 
       {sortedAll.length === 0 ? (
-        <div style={{ color: C.inkSoft, fontSize: 13.5, textAlign: "center", padding: "30px 16px", fontFamily: FONT }}>No reservations today.</div>
+        <div style={{ color: C.inkSoft, fontSize: 13.5, textAlign: "center", padding: "30px 16px", fontFamily: FONT }}>
+          Nothing left to confirm for this day.
+          {confirmedCount > 0 && (
+            <div style={{ fontSize: 12, marginTop: 6 }}>
+              {confirmedCount} confirmed reservation{confirmedCount !== 1 ? "s" : ""} — see History, or the Week and Month views.
+            </div>
+          )}
+        </div>
       ) : isMobile ? (
         <div style={{ display: "grid", gap: 12, padding: "0 16px 16px" }}>
           {sortedAll.map((r) => (
@@ -993,7 +1108,6 @@ function DayView({ selectedISO, reservations, markStatus, highlightId, highlight
                       fontSize: 13.5,
                       background: isHighlighted ? C.highlight : "transparent",
                       transition: "background 0.4s ease",
-                      opacity: r.status === "Cancelled" ? 0.55 : 1,
                     }}
                   >
                     <td style={{ padding: "16px 22px", borderBottom: `1px solid ${C.hair}`, fontWeight: 700, verticalAlign: "top", whiteSpace: "nowrap" }}>
@@ -1030,6 +1144,142 @@ function DayView({ selectedISO, reservations, markStatus, highlightId, highlight
 }
 
 /* ---------------------------------------------------------------- */
+/* Search results — every date, so a guest can be found right away   */
+/* ---------------------------------------------------------------- */
+function matchesSearch(r, query) {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const digits = q.replace(/\D/g, "");
+  return (
+    (r.name || "").toLowerCase().includes(q) ||
+    (r.email || "").toLowerCase().includes(q) ||
+    // Phone numbers match on digits alone, so "0917 123" finds "09171234567"
+    (digits.length >= 3 && (r.contact || "").replace(/\D/g, "").includes(digits))
+  );
+}
+
+function SearchView({ query, reservations, markStatus, onViewProof, onOpenDay, isMobile }) {
+  const todayISO = toISO(new Date());
+
+  // Upcoming first (soonest at the top), then past ones (most recent first)
+  const results = reservations
+    .filter((r) => matchesSearch(r, query))
+    .sort((a, b) => {
+      const aPast = a.date < todayISO;
+      const bPast = b.date < todayISO;
+      if (aPast !== bPast) return aPast ? 1 : -1;
+      const av = `${a.date} ${a.time}`;
+      const bv = `${b.date} ${b.time}`;
+      return aPast ? (av < bv ? 1 : -1) : (av > bv ? 1 : -1);
+    });
+
+  // Only reservations still waiting on the front desk can be changed from here
+  const canEdit = (r) => !DONE_STATUSES.includes(r.status) && r.date >= todayISO;
+  const isLocked = (r) => r.paymentStatus !== "verified" && r.status !== "Cancelled";
+
+  const cell = { padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, textAlign: "left", verticalAlign: "top" };
+
+  const goButton = (r) => (
+    <button
+      onClick={() => onOpenDay(r.date)}
+      style={{
+        border: `1px solid ${C.hair}`,
+        background: "#fff",
+        borderRadius: 8,
+        padding: "6px 10px",
+        fontSize: 11.5,
+        fontFamily: FONT,
+        color: C.ink,
+        cursor: "pointer",
+        whiteSpace: "nowrap",
+      }}
+    >
+      Go to day
+    </button>
+  );
+
+  return (
+    <Card style={{ padding: 0, overflow: "hidden" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: isMobile ? "16px 16px 0" : "20px 22px 0" }}>
+        <SectionTitle>Search Results</SectionTitle>
+        <span style={{ background: C.void, color: "#f5e9d8", fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, marginTop: -14, fontFamily: FONT }}>
+          {results.length}
+        </span>
+      </div>
+
+      {results.length === 0 ? (
+        <div style={{ color: C.inkSoft, fontSize: 13.5, textAlign: "center", padding: "30px 16px", fontFamily: FONT }}>
+          No reservations found for "{query.trim()}".
+        </div>
+      ) : isMobile ? (
+        <div style={{ display: "grid", gap: 12, padding: "0 16px 16px" }}>
+          {results.map((r) => (
+            <div key={r.id}>
+              <ReservationCard
+                r={r}
+                highlighted={false}
+                cardRef={null}
+                markStatus={markStatus}
+                onViewProof={onViewProof}
+                showStatus={canEdit(r)}
+                showDates
+              />
+              <div style={{ marginTop: 6, textAlign: "right" }}>{goButton(r)}</div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: FONT, minWidth: 1000 }}>
+            <thead>
+              <tr style={{ textAlign: "left", fontSize: 12, color: C.inkSoft }}>
+                {["Reservation Date", "Time", "Name", "Contact", "Pax", "Downpayment", "Type", "Status", ""].map((h, i) => (
+                  <th key={i} style={{ padding: "10px 22px", borderBottom: `1px solid ${C.hair}`, fontWeight: 700, textAlign: "left", whiteSpace: "nowrap" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {results.map((r) => (
+                <tr key={r.id} style={{ fontSize: 13.5, opacity: r.status === "Cancelled" ? 0.6 : 1 }}>
+                  <td style={{ ...cell, whiteSpace: "nowrap" }}>{displayDateFromISO(r.date)}</td>
+                  <td style={{ ...cell, fontWeight: 700, whiteSpace: "nowrap" }}>{to12h(r.time)}</td>
+                  <td style={cell}>{r.type === "event" ? r.eventTitle : r.name}</td>
+                  <td style={{ ...cell, color: C.inkSoft }}>
+                    <div style={{ whiteSpace: "nowrap" }}>{r.contact || "—"}</div>
+                    {r.email && <div style={{ fontSize: 11.5 }}>{r.email}</div>}
+                  </td>
+                  <td style={{ ...cell, color: C.inkSoft }}>{r.pax}</td>
+                  <td style={cell}>
+                    <DownpaymentCell reservation={r} onViewProof={onViewProof} />
+                  </td>
+                  <td style={cell}>
+                    <Badge tone={r.type === "event" ? "amber" : "green"}>
+                      {r.type === "event" ? "Event" : "Table"}
+                    </Badge>
+                  </td>
+                  <td style={cell}>
+                    {canEdit(r) ? (
+                      <StatusSelect
+                        status={r.status}
+                        locked={isLocked(r)}
+                        onChange={(status) => markStatus(r.id, status)}
+                      />
+                    ) : (
+                      <StatusPill status={r.status} />
+                    )}
+                  </td>
+                  <td style={cell}>{goButton(r)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/* ---------------------------------------------------------------- */
 /* Root                                                               */
 /* ---------------------------------------------------------------- */
 
@@ -1052,6 +1302,9 @@ const BACKEND_TO_STATUS = {
 
 // Converts a raw MySQL reservation row into the shape the views above expect
 function normalizeReservation(r) {
+  const createdAt = r.created_at ? new Date(r.created_at) : null;
+  const validCreated = createdAt && !isNaN(createdAt.getTime());
+
   return {
     id: r.id,
     date: toISOString(r.reservation_date),
@@ -1063,15 +1316,22 @@ function normalizeReservation(r) {
     type: r.reservation_type,
     name: r.guest_name,
     eventTitle: r.guest_name,
+    contact: r.contact_number || "",
+    email: r.email || "",
     pax: r.party_size,
     location: r.special_requests || r.occasion || "—",
     downpayment: r.downpayment_amount,
     paymentMethod: r.payment_method,
-    paymentStatus: r.payment_status || "pending",
+    paymentStatus: String(r.payment_status || "pending").toLowerCase(),
     // The list endpoint only reports whether a proof exists — the image
     // itself is fetched when the modal opens
     hasPaymentProof: Boolean(r.has_payment_proof ?? r.payment_proof),
-    status: BACKEND_TO_STATUS[r.status] || "Pending",
+    status: BACKEND_TO_STATUS[String(r.status || "").toLowerCase()] || "Pending",
+    // When the booking was made — used by the History sort
+    createdAt: validCreated ? createdAt : null,
+    booked: validCreated
+      ? createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+      : "—",
   };
 }
 
@@ -1090,6 +1350,9 @@ export default function Reservations({ embedded = false, highlightTarget = null,
   const [addingWalkIn, setAddingWalkIn] = useState(false);
   const [toast, setToast] = useState({ message: "", tone: "error" });
   const [pendingCancel, setPendingCancel] = useState(null);
+  // Searching looks across every date, not just the day on screen
+  const [search, setSearch] = useState("");
+  const isSearching = search.trim().length > 0;
   const highlightRef = useRef(null);
 
   const showError = (message) => setToast({ message, tone: "error" });
@@ -1177,6 +1440,7 @@ export default function Reservations({ embedded = false, highlightTarget = null,
       setReservations((prev) => prev.map((r) => (r.id === id ? { ...r, status } : r)));
       loadGuestCounts();
       if (status === "Cancelled") showSuccess("Reservation cancelled.");
+      if (status === "Confirmed") showSuccess("Reservation confirmed and moved to History.");
     } catch (err) {
       console.error("Failed to update status:", err);
       showError("Failed to update reservation status. Please try again.");
@@ -1192,9 +1456,16 @@ export default function Reservations({ embedded = false, highlightTarget = null,
     applyStatus(id, status);
   };
 
+  // Accepts a Date (from the calendars) or an ISO date string (from search results)
   const openDay = (date) => {
+    if (typeof date === "string") {
+      const [y, m, d] = date.split("-").map(Number);
+      if (!y || !m || !d) return;
+      date = new Date(y, m - 1, d);
+    }
     setSelectedDate(date);
     setRange("Day");
+    setSearch("");
   };
 
   const selectedISO = toISO(selectedDate);
@@ -1271,10 +1542,12 @@ export default function Reservations({ embedded = false, highlightTarget = null,
             <div />
           )}
 
-          {/* The range switcher scrolls sideways rather than wrapping */}
+          {/* The range switcher scrolls sideways rather than wrapping.
+              History is available in the Owner view too, since confirmed
+              reservations now move there */}
           <div style={{ overflowX: "auto", maxWidth: "100%" }}>
             <div style={{ display: "flex", gap: 6, background: "#fff", padding: 4, borderRadius: 10, boxShadow: "0 1px 2px rgba(0,0,0,0.06)", width: "fit-content" }}>
-              {(embedded ? ["Day", "Week", "Month"] : ["Day", "Week", "Month", "History"]).map((r) => (
+              {["Day", "Week", "Month", "History"].map((r) => (
                 <button
                   key={r}
                   onClick={() => setRange(r)}
@@ -1298,7 +1571,43 @@ export default function Reservations({ embedded = false, highlightTarget = null,
           </div>
         </div>
 
-        {!isHistory && (
+        {/* Search by guest name, contact number, or email */}
+        <div style={{ position: "relative", width: "100%", maxWidth: isMobile ? "none" : 420 }}>
+          <Search
+            size={16}
+            style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: C.inkSoft, pointerEvents: "none" }}
+          />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => e.key === "Escape" && setSearch("")}
+            placeholder="Search guest name, contact no., or email"
+            style={{
+              width: "100%",
+              padding: "11px 40px 11px 40px",
+              borderRadius: 10,
+              border: `1px solid ${C.hair}`,
+              background: "#fff",
+              fontSize: 13,
+              fontFamily: FONT,
+              color: C.ink,
+              outline: "none",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
+            }}
+          />
+          {isSearching && (
+            <button
+              onClick={() => setSearch("")}
+              aria-label="Clear search"
+              style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", border: "none", background: "transparent", cursor: "pointer", color: C.inkSoft, display: "flex", padding: 4 }}
+            >
+              <X size={16} />
+            </button>
+          )}
+        </div>
+
+        {!isHistory && !isSearching && (
           <GuestCard
             counts={guestCounts}
             onAddWalkIn={handleAddWalkIn}
@@ -1310,6 +1619,15 @@ export default function Reservations({ embedded = false, highlightTarget = null,
 
         {loading ? (
           <Card style={{ textAlign: "center", padding: 40, color: C.inkSoft, fontFamily: FONT }}>Loading reservations...</Card>
+        ) : isSearching ? (
+          <SearchView
+            query={search}
+            reservations={reservations}
+            markStatus={markStatus}
+            onViewProof={setProofTarget}
+            onOpenDay={openDay}
+            isMobile={isMobile}
+          />
         ) : (
           <>
             {range === "Day" && (

@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   UploadCloud,
   CheckCircle2,
@@ -16,6 +16,7 @@ import heroImage from '../assets/bgHero.jpg';
 import { ordersApi } from '../services/ordersApi';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
+import { readCachedOrders } from '../hooks/CustomerNotif';
 
 const PAYMENT_METHODS = [
   { id: 'cash', label: 'Cash' },
@@ -23,6 +24,12 @@ const PAYMENT_METHODS = [
   { id: 'paymaya', label: 'PayMaya' },
   { id: 'bank', label: 'Bank Transfer' },
 ];
+
+// The online half of a split payment
+const ONLINE_METHODS = PAYMENT_METHODS.filter((m) => m.id !== 'cash');
+
+const peso = (n) =>
+  `₱ ${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 // Senior Citizens and PWDs get the same statutory discount, so they share one option
 const SENIOR_PWD = 'senior_pwd';
@@ -33,11 +40,33 @@ const FINALIZED_KEY = 'eurasia_finalized';
 
 const HISTORY_POLL_MS = 5000;
 
+// The "Ready to Serve" pop-up stays on screen for 8 seconds
+const READY_DISPLAY_MS = 8000;
+// Orders that already popped up, so a refresh doesn't show them again
+const READY_POPPED_KEY = 'eurasia_ready_popup_shown';
+
+function getPoppedOrders() {
+  try {
+    return JSON.parse(localStorage.getItem(READY_POPPED_KEY)) || [];
+  } catch {
+    return [];
+  }
+}
+
+function markOrderPopped(id) {
+  const list = Array.from(new Set([...getPoppedOrders(), id]));
+  try {
+    localStorage.setItem(READY_POPPED_KEY, JSON.stringify(list));
+  } catch (e) {
+    console.error('Failed to save popped orders:', e);
+  }
+}
+
 const FOOD_STEPS = ['pending', 'preparing', 'ready'];
 const FOOD_STEP_LABELS = {
   pending: 'Received',
   preparing: 'Preparing',
-  ready: 'Ready',
+  ready: 'Ready to Serve',
 };
 
 function fileToBase64(file) {
@@ -47,6 +76,59 @@ function fileToBase64(file) {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+}
+
+function loadImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = (e) => {
+      URL.revokeObjectURL(url);
+      reject(e);
+    };
+    img.src = url;
+  });
+}
+
+// A split payment has two proofs, but an order stores one receipt image —
+// so both photos are stacked into one picture, each with a label showing
+// what it is and how much. The cashier sees both without any backend change.
+async function combineProofs(parts) {
+  const images = await Promise.all(parts.map((p) => loadImageFile(p.file)));
+  const width = Math.min(800, Math.max(...images.map((img) => img.naturalWidth)));
+  const LABEL_H = 52;
+
+  const scaled = images.map((img) => ({
+    img,
+    h: Math.round(img.naturalHeight * (width / img.naturalWidth)),
+  }));
+  const height = scaled.reduce((sum, s) => sum + LABEL_H + s.h, 0);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, height);
+
+  let y = 0;
+  scaled.forEach(({ img, h }, i) => {
+    ctx.fillStyle = '#1d080f';
+    ctx.fillRect(0, y, width, LABEL_H);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 24px Arial, sans-serif';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(parts[i].label, 16, y + LABEL_H / 2);
+    y += LABEL_H;
+    ctx.drawImage(img, 0, y, width, h);
+    y += h;
+  });
+
+  return canvas.toDataURL('image/jpeg', 0.85);
 }
 
 function formatDateTime(value) {
@@ -62,17 +144,45 @@ function formatDateTime(value) {
 }
 
 /* Shows the picked photo so the customer can catch a wrong file before submitting */
+/* Shows the picked photo — tap it to view it full size and make sure it's the right one */
 function ImagePreview({ file, previewUrl, onRemove, label }) {
+  const [zoomed, setZoomed] = useState(false);
+
+  // While the full-size view is open: lock the page behind it and let Esc close it
+  useEffect(() => {
+    if (!zoomed) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setZoomed(false);
+    };
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = previous;
+    };
+  }, [zoomed]);
+
   if (!previewUrl) return null;
 
   return (
     <div className="mt-3">
       <div className="relative rounded-xl overflow-hidden border border-neutral-200 bg-neutral-50">
-        <img
-          src={previewUrl}
-          alt={label}
-          className="w-full max-h-56 object-contain"
-        />
+        <button
+          type="button"
+          onClick={() => setZoomed(true)}
+          title="Tap to view full size"
+          className="block w-full cursor-zoom-in"
+        >
+          <img
+            src={previewUrl}
+            alt={label}
+            className="w-full max-h-56 object-contain"
+          />
+          <span className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/60 text-white text-xs font-semibold px-3 py-1 rounded-full pointer-events-none">
+            Tap to view full size
+          </span>
+        </button>
         <button
           type="button"
           onClick={onRemove}
@@ -83,8 +193,34 @@ function ImagePreview({ file, previewUrl, onRemove, label }) {
         </button>
       </div>
       <p className="mt-2 text-xs text-neutral-700 text-center">
-        {file?.name} — tap the photo area above to choose a different one.
+        {file?.name} — tap the upload box above to choose a different one.
       </p>
+
+      {/* Full-size view */}
+      {zoomed && (
+        <div
+          onClick={() => setZoomed(false)}
+          className="fixed inset-0 z-[160] bg-black/85 flex flex-col items-center justify-center p-4 cursor-zoom-out"
+        >
+          <button
+            type="button"
+            onClick={() => setZoomed(false)}
+            aria-label="Close"
+            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/15 text-white flex items-center justify-center hover:bg-white/25 transition cursor-pointer"
+          >
+            <X size={22} />
+          </button>
+          <img
+            src={previewUrl}
+            alt={label}
+            onClick={(e) => e.stopPropagation()}
+            className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl cursor-default"
+          />
+          <p className="mt-3 text-sm text-white/80 text-center">
+            {file?.name} · Tap anywhere outside the photo to close
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -161,7 +297,7 @@ function OrderHistoryCard({ order }) {
                   }`}
                 />
                 <span
-                  className={`mt-1.5 text-xs transition-colors duration-500 ${
+                  className={`mt-1.5 text-xs text-center transition-colors duration-500 ${
                     done ? 'text-[#2e5a2e] font-bold' : 'text-neutral-600 font-medium'
                   }`}
                 >
@@ -241,7 +377,7 @@ function ActiveOrderCard({ order }) {
                 }`}
               />
               <span
-                className={`mt-1.5 text-xs transition-colors duration-500 ${
+                className={`mt-1.5 text-xs text-center transition-colors duration-500 ${
                   done ? 'text-[#2e5a2e] font-bold' : 'text-neutral-600 font-medium'
                 }`}
               >
@@ -289,6 +425,12 @@ function Payment() {
   const [unpaidOrders, setUnpaidOrders] = useState([]);
   const [settleLoading, setSettleLoading] = useState(false);
   const [method, setMethod] = useState('');
+  // 'single' = one method for the whole bill; 'split' = part cash, part online
+  const [payMode, setPayMode] = useState('single');
+  const [onlineMethod, setOnlineMethod] = useState('');
+  const [onlineAmount, setOnlineAmount] = useState('');
+  const [cashReceiptFile, setCashReceiptFile] = useState(null);
+  const [cashReceiptPreview, setCashReceiptPreview] = useState('');
   const [hasDiscount, setHasDiscount] = useState(false);
   const [discountIdFile, setDiscountIdFile] = useState(null);
   const [discountIdPreview, setDiscountIdPreview] = useState('');
@@ -311,6 +453,69 @@ function Payment() {
   const [historyLoading, setHistoryLoading] = useState(false);
   // --- Active orders (still in the kitchen) ---
   const [activeOrders, setActiveOrders] = useState([]);
+  // --- "Ready to Serve" pop-up ---
+  const [readyPopup, setReadyPopup] = useState(null);
+
+  // --- Jumping to an order from a notification ---
+  const location = useLocation();
+  const [highlightId, setHighlightId] = useState(null);
+  const highlightRef = useRef(null);
+  // The customer's orders from the last fetch, reused so a tap doesn't wait on a second request
+  const [myOrders, setMyOrders] = useState(() => readCachedOrders());
+  const [pendingOrderId, setPendingOrderId] = useState(null);
+
+  // A notification tap lands here with the order it's about
+  useEffect(() => {
+    const target = location.state?.highlight;
+    if (!target || target.type !== 'order') return;
+    setPendingOrderId(target.id);
+    // Clear it so a refresh doesn't jump again
+    navigate(location.pathname, { replace: true, state: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state]);
+
+  // As soon as the orders are on hand, jump to the one that was tapped
+  useEffect(() => {
+    if (pendingOrderId == null || !myOrders) return;
+    const order = myOrders.find((o) => String(o.id) === String(pendingOrderId));
+    setPendingOrderId(null);
+
+    if (!order) {
+      showError('That order could no longer be found.');
+      return;
+    }
+
+    const stillCooking = ['pending', 'preparing'].includes((order.status || '').toLowerCase());
+    if (stillCooking) {
+      // It's in the tracker on the landing screen
+      setActiveOrders(
+        myOrders.filter((o) => ['pending', 'preparing'].includes((o.status || '').toLowerCase()))
+      );
+      setScreen('empty');
+    } else {
+      // Finished orders live in Order History
+      setHistoryOrders(
+        myOrders.filter((o) => !['pending', 'preparing'].includes((o.status || '').toLowerCase()))
+      );
+      setHistoryLoading(false);
+      setHistoryOpen(true);
+    }
+    setHighlightId(order.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingOrderId, myOrders]);
+
+  // Scroll to the highlighted order right away, then fade the highlight after 4 seconds
+  useEffect(() => {
+    if (!highlightId) return;
+    const frame = requestAnimationFrame(() => {
+      highlightRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    const clear = setTimeout(() => setHighlightId(null), 4000);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(clear);
+    };
+  }, [highlightId]);
 
   // Load cart or buy-now item on mount
   useEffect(() => {
@@ -353,13 +558,37 @@ function Payment() {
     }
     try {
       const mine = await ordersApi.getMine();
+      setMyOrders(mine);
       setActiveOrders(
         mine.filter((o) => ['pending', 'preparing'].includes((o.status || '').toLowerCase()))
       );
+
+      // Once the kitchen marks an order as ready, pop up "Ready to Serve" (once per order)
+      const popped = getPoppedOrders();
+      const newlyReady = mine.find(
+        (o) =>
+          (o.status || '').toLowerCase() === 'ready' &&
+          !o.receipt_image &&
+          !popped.includes(o.id)
+      );
+      if (newlyReady) {
+        setReadyPopup((current) => {
+          if (current) return current; // let the one on screen finish first
+          markOrderPopped(newlyReady.id);
+          return newlyReady;
+        });
+      }
     } catch (err) {
       console.error('Failed to load active orders:', err);
     }
   }, [isAuthenticated]);
+
+  // Hide the pop-up after 8 seconds
+  useEffect(() => {
+    if (!readyPopup) return;
+    const timer = setTimeout(() => setReadyPopup(null), READY_DISPLAY_MS);
+    return () => clearTimeout(timer);
+  }, [readyPopup]);
 
   useEffect(() => {
     fetchActiveOrders();
@@ -386,6 +615,12 @@ function Payment() {
     };
   }, [discountIdPreview]);
 
+  useEffect(() => {
+    return () => {
+      if (cashReceiptPreview) URL.revokeObjectURL(cashReceiptPreview);
+    };
+  }, [cashReceiptPreview]);
+
   // Lock page scroll while a modal is open
   useEffect(() => {
     if (historyOpen || showCancelConfirm) {
@@ -409,8 +644,15 @@ function Payment() {
   const settleDiscountAmount = hasDiscount ? Math.round(settleSubtotal * 0.20) : 0;
   const settleServiceFee = Math.round((settleSubtotal - settleDiscountAmount) * 0.05 * 100) / 100;
   const settleFinalTotal = settleSubtotal - settleDiscountAmount + settleServiceFee;
-  const isCash = method === 'cash';
+  const isSplit = payMode === 'split';
+  const isCash = !isSplit && method === 'cash';
   const settleMethodLabel = PAYMENT_METHODS.find((m) => m.id === method)?.label || '';
+
+  // Split payment: the customer types the online part, cash covers the rest
+  const onlineLabel = ONLINE_METHODS.find((m) => m.id === onlineMethod)?.label || 'Online';
+  const splitOnline = Math.round(Number(onlineAmount || 0) * 100) / 100;
+  const splitCash = Math.round((settleFinalTotal - splitOnline) * 100) / 100;
+  const splitAmountValid = splitOnline > 0 && splitOnline < settleFinalTotal;
 
   const updateItemNote = (index, note) => {
     setOrderItems((prev) => {
@@ -504,13 +746,32 @@ function Payment() {
     } catch (err) {
       console.error('Failed to load unpaid orders:', err);
       setUnpaidOrders([]);
+      
+  // "Settle Bill Now" from the unpaid-balance notice lands here
+  useEffect(() => {
+    const wantsSettle =
+      location.state?.openSettle || location.state?.highlight?.type === 'settle';
+    if (!wantsSettle || !isAuthenticated) return;
+    navigate(location.pathname, { replace: true, state: null });
+    openSettle();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state, isAuthenticated]);
     } finally {
       setSettleLoading(false);
     }
   };
 
   const handleSubmitPayment = async () => {
-    if (!method) {
+    if (isSplit) {
+      if (!onlineMethod) {
+        showError('Please choose how you paid the online part.');
+        return;
+      }
+      if (!splitAmountValid) {
+        showError(`Enter an online amount between ₱ 1 and ${peso(settleFinalTotal - 1)}. The rest is paid in cash.`);
+        return;
+      }
+    } else if (!method) {
       showError('Please select how you paid.');
       return;
     }
@@ -520,7 +781,16 @@ function Payment() {
       return;
     }
 
-    if (!receiptFile) {
+    if (isSplit) {
+      if (!receiptFile) {
+        showError(`Please upload a screenshot of your ${onlineLabel} payment.`);
+        return;
+      }
+      if (!cashReceiptFile) {
+        showError('Please upload a photo of the cash receipt given by your server.');
+        return;
+      }
+    } else if (!receiptFile) {
       showError(isCash
         ? 'Please upload a photo of the receipt given by your server.'
         : 'Please upload a screenshot of your payment.');
@@ -530,13 +800,20 @@ function Payment() {
     try {
       setSettling(true);
 
-      const receiptBase64 = await fileToBase64(receiptFile);
+      // Split payments send both photos as one labelled picture
+      const receiptBase64 = isSplit
+        ? await combineProofs([
+            { file: receiptFile, label: `${onlineLabel} payment: ${peso(splitOnline)}` },
+            { file: cashReceiptFile, label: `Cash payment: ${peso(splitCash)}` },
+          ])
+        : await fileToBase64(receiptFile);
       const discountIdBase64 = hasDiscount && discountIdFile ? await fileToBase64(discountIdFile) : null;
       const orderIds = unpaidOrders.map((o) => o.id);
 
       await ordersApi.payMultiple(orderIds, {
         receipt_image: receiptBase64,
-        payment_method: method,
+        // e.g. "cash+gcash" so the cashier can tell it was split
+        payment_method: isSplit ? `cash+${onlineMethod}` : method,
         discount_type: hasDiscount ? SENIOR_PWD : null,
         discount_id_image: discountIdBase64,
         discount_amount: settleDiscountAmount,
@@ -544,7 +821,11 @@ function Payment() {
 
       setUnpaidOrders([]);
       clearReceipt();
+      clearCashReceipt();
       setMethod('');
+      setPayMode('single');
+      setOnlineMethod('');
+      setOnlineAmount('');
       setHasDiscount(false);
       clearDiscountId();
       setJustSettled(true);
@@ -606,6 +887,20 @@ function Payment() {
     if (receiptPreview) URL.revokeObjectURL(receiptPreview);
     setReceiptFile(null);
     setReceiptPreview('');
+  };
+
+  const handleCashReceiptChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (cashReceiptPreview) URL.revokeObjectURL(cashReceiptPreview);
+    setCashReceiptFile(file);
+    setCashReceiptPreview(URL.createObjectURL(file));
+  };
+
+  const clearCashReceipt = () => {
+    if (cashReceiptPreview) URL.revokeObjectURL(cashReceiptPreview);
+    setCashReceiptFile(null);
+    setCashReceiptPreview('');
   };
 
   const handleDiscountIdChange = (e) => {
@@ -677,7 +972,15 @@ function Payment() {
             <div className="grid gap-4">
               <h3 className="font-[Prata] text-base text-[#1d080f]">In the Kitchen</h3>
               {activeOrders.map((o) => (
-                <ActiveOrderCard key={o.id} order={o} />
+                <div
+                  key={o.id}
+                  ref={o.id === highlightId ? highlightRef : null}
+                  className={`rounded-2xl transition-shadow duration-500 ${
+                    o.id === highlightId ? 'ring-4 ring-[#f2c14e]/70' : ''
+                  }`}
+                >
+                  <ActiveOrderCard order={o} />
+                </div>
               ))}
             </div>
           )}
@@ -724,7 +1027,7 @@ function Payment() {
 
             <div className="bg-white rounded-2xl shadow-sm p-8 border border-neutral-200/80">
               <h2 className="text-center font-[Prata] text-amber-800 tracking-wide text-sm mb-4">
-                ORDERING AS
+                NAME
               </h2>
               <div className="max-w-xs mx-auto">
                 <div className="w-full text-center bg-neutral-100 rounded-md px-4 py-3.5 font-[Prata] text-[#1d080f]">
@@ -733,8 +1036,16 @@ function Payment() {
               </div>
             </div>
 
-            <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 text-sm text-amber-900 text-center leading-relaxed">
-              Payment comes later — after your meal, call your server to settle the bill, then upload your proof of payment here.
+            <div className="bg-amber-50 border border-amber-300 rounded-xl p-5 text-sm text-amber-900 leading-relaxed text-left">
+              <p className="font-[Prata] font-bold text-amber-900 mb-2">How payment works</p>
+              <ul className="list-disc pl-5 space-y-1.5">
+                <li>Tap <strong>Order Now</strong> to send your order to the kitchen.</li>
+                <li>No need to pay yet. Payment comes after your meal.</li>
+                <li>When you're done eating, call your server to settle the bill.</li>
+                <li>
+                  Come back to this page, tap <strong>Settle Bill</strong>, and upload your proof of payment.
+                </li>
+              </ul>
             </div>
 
             <div className="bg-white rounded-2xl border border-neutral-200/80 p-6 shadow-xs font-mono">
@@ -885,21 +1196,103 @@ function Payment() {
                   <h4 className="text-[16px] font-bold text-[#8a6228] uppercase tracking-wider mb-4">
                     1. Mode of Payment
                   </h4>
-                  <div className="relative">
-                    <select
-                      value={method}
-                      onChange={(e) => setMethod(e.target.value)}
-                      className={`w-full bg-white border border-neutral-300 rounded-xl px-4 py-3.5 text-sm appearance-none focus:outline-none focus:ring-1 focus:ring-[#1d080f] ${method ? 'text-[#1d080f]' : 'text-neutral-600'}`}
-                    >
-                      <option value="" disabled className="text-neutral-600">Mode of Payment *</option>
-                      {PAYMENT_METHODS.map(({ id, label }) => (
-                        <option key={id} value={id} className="text-[#1d080f]">{label}</option>
-                      ))}
-                    </select>
-                    <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-600" />
+
+                  {/* One method, or split between cash and an online method */}
+                  <div className="grid grid-cols-2 gap-2 mb-4 bg-neutral-100 p-1 rounded-xl">
+                    {[
+                      { id: 'single', label: 'One payment' },
+                      { id: 'split', label: 'Split (Cash + Online)' },
+                    ].map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setPayMode(opt.id)}
+                        className={`py-2.5 rounded-lg text-sm font-semibold transition cursor-pointer ${
+                          payMode === opt.id
+                            ? 'bg-[#1d080f] text-white shadow-sm'
+                            : 'text-neutral-700 hover:bg-white'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
                   </div>
-                  {!method && (
-                    <p className="text-sm text-red-700 mt-2 font-medium">Please select how you paid.</p>
+
+                  {!isSplit ? (
+                    <>
+                      <div className="relative">
+                        <select
+                          value={method}
+                          onChange={(e) => setMethod(e.target.value)}
+                          className={`w-full bg-white border border-neutral-300 rounded-xl px-4 py-3.5 text-sm appearance-none focus:outline-none focus:ring-1 focus:ring-[#1d080f] ${method ? 'text-[#1d080f]' : 'text-neutral-600'}`}
+                        >
+                          <option value="" disabled className="text-neutral-600">Mode of Payment *</option>
+                          {PAYMENT_METHODS.map(({ id, label }) => (
+                            <option key={id} value={id} className="text-[#1d080f]">{label}</option>
+                          ))}
+                        </select>
+                        <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-600" />
+                      </div>
+                      {!method && (
+                        <p className="text-sm text-red-700 mt-2 font-medium">Please select how you paid.</p>
+                      )}
+                    </>
+                  ) : (
+                    <div className="space-y-4 text-left">
+                      <div>
+                        <label className="block text-xs font-semibold text-neutral-700 mb-1.5">Online part paid through *</label>
+                        <div className="relative">
+                          <select
+                            value={onlineMethod}
+                            onChange={(e) => setOnlineMethod(e.target.value)}
+                            className={`w-full bg-white border border-neutral-300 rounded-xl px-4 py-3.5 text-sm appearance-none focus:outline-none focus:ring-1 focus:ring-[#1d080f] ${onlineMethod ? 'text-[#1d080f]' : 'text-neutral-600'}`}
+                          >
+                            <option value="" disabled className="text-neutral-600">Choose GCash, PayMaya or Bank Transfer</option>
+                            {ONLINE_METHODS.map(({ id, label }) => (
+                              <option key={id} value={id} className="text-[#1d080f]">{label}</option>
+                            ))}
+                          </select>
+                          <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-600" />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-neutral-700 mb-1.5">
+                            {onlineLabel} amount *
+                          </label>
+                          <div className="relative">
+                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-neutral-600">₱</span>
+                            <input
+                              type="number"
+                              inputMode="decimal"
+                              min="1"
+                              step="0.01"
+                              value={onlineAmount}
+                              onChange={(e) => setOnlineAmount(e.target.value)}
+                              placeholder="0.00"
+                              className="w-full bg-white border border-neutral-300 rounded-xl pl-8 pr-3 py-3.5 text-sm text-[#1d080f] focus:outline-none focus:ring-1 focus:ring-[#1d080f]"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-neutral-700 mb-1.5">Cash amount</label>
+                          <div className="w-full bg-neutral-100 rounded-xl px-4 py-3.5 text-sm text-[#1d080f] font-semibold">
+                            {splitAmountValid ? peso(splitCash) : '—'}
+                          </div>
+                        </div>
+                      </div>
+
+                      {onlineAmount !== '' && !splitAmountValid ? (
+                        <p className="text-sm text-red-700 font-medium">
+                          The online amount must be more than ₱ 0 and less than the total of {peso(settleFinalTotal)}.
+                        </p>
+                      ) : (
+                        <p className="text-xs text-neutral-600">
+                          Enter what you paid online. The rest of the {peso(settleFinalTotal)} total is paid in cash.
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
 
@@ -957,42 +1350,113 @@ function Payment() {
                   )}
                 </div>
 
-                <div className="bg-white rounded-2xl border border-neutral-200/80 p-6 shadow-xs">
-                  <h4 className="text-[16px] font-bold text-[#8a6228] uppercase tracking-wider mb-2">
-                    3. {isCash ? 'Upload Receipt from Cashier' : 'Upload Proof of Payment'}
-                  </h4>
-                  <p className="text-sm text-neutral-700 mb-4 leading-relaxed">
-                    {!method
-                      ? 'Select how you paid above, then attach your proof of payment.'
-                      : isCash
-                      ? 'Take a photo of the receipt handed to you by your server and attach it here.'
-                      : `Attach a screenshot of your successful ${settleMethodLabel} transaction.`}
-                  </p>
+                {!isSplit ? (
+                  <div className="bg-white rounded-2xl border border-neutral-200/80 p-6 shadow-xs">
+                    <h4 className="text-[16px] font-bold text-[#8a6228] uppercase tracking-wider mb-2">
+                      3. {isCash ? 'Upload Receipt from Cashier' : 'Upload Proof of Payment'}
+                    </h4>
+                    <p className="text-sm text-neutral-700 mb-4 leading-relaxed">
+                      {!method
+                        ? 'Select how you paid above, then attach your proof of payment.'
+                        : isCash
+                        ? 'Take a photo of the receipt handed to you by your server and attach it here.'
+                        : `Attach a screenshot of your successful ${settleMethodLabel} transaction.`}
+                    </p>
 
-                  <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-neutral-400 rounded-xl py-6 px-4 text-center cursor-pointer hover:bg-neutral-50 transition">
-                    <UploadCloud size={28} className="text-neutral-600" />
-                    <div className="text-sm font-medium text-neutral-800">
-                      {receiptFile ? (
-                        <span className="text-emerald-800 flex items-center gap-1.5 font-semibold">
-                          <CheckCircle2 size={16} /> Photo attached — check it below
-                        </span>
-                      ) : (
-                        <span>
-                          {isCash ? 'Drop receipt photo here or ' : 'Drop payment screenshot here or '}
-                          <span className="text-[#1d080f] underline font-semibold">browse</span>
-                        </span>
-                      )}
+                    <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-neutral-400 rounded-xl py-6 px-4 text-center cursor-pointer hover:bg-neutral-50 transition">
+                      <UploadCloud size={28} className="text-neutral-600" />
+                      <div className="text-sm font-medium text-neutral-800">
+                        {receiptFile ? (
+                          <span className="text-emerald-800 flex items-center gap-1.5 font-semibold">
+                            <CheckCircle2 size={16} /> Photo attached — check it below
+                          </span>
+                        ) : (
+                          <span>
+                            {isCash ? 'Drop receipt photo here or ' : 'Drop payment screenshot here or '}
+                            <span className="text-[#1d080f] underline font-semibold">browse</span>
+                          </span>
+                        )}
+                      </div>
+                      <input type="file" accept="image/*" hidden onChange={handleReceiptChange} />
+                    </label>
+
+                    <ImagePreview
+                      file={receiptFile}
+                      previewUrl={receiptPreview}
+                      onRemove={clearReceipt}
+                      label="Proof of payment preview"
+                    />
+                  </div>
+                ) : (
+                  <div className="bg-white rounded-2xl border border-neutral-200/80 p-6 shadow-xs">
+                    <h4 className="text-[16px] font-bold text-[#8a6228] uppercase tracking-wider mb-2">
+                      3. Upload Both Proofs of Payment
+                    </h4>
+                    <p className="text-sm text-neutral-700 mb-4 leading-relaxed">
+                      Attach a screenshot of your {onlineLabel} payment and a photo of the cash receipt from your server.
+                    </p>
+
+                    <div className="grid gap-5">
+                      {/* Online proof */}
+                      <div>
+                        <p className="text-sm font-semibold text-[#1d080f] mb-2 text-left">
+                          a. {onlineLabel} screenshot{splitAmountValid ? ` (${peso(splitOnline)})` : ''}
+                        </p>
+                        <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-neutral-400 rounded-xl py-6 px-4 text-center cursor-pointer hover:bg-neutral-50 transition">
+                          <UploadCloud size={28} className="text-neutral-600" />
+                          <div className="text-sm font-medium text-neutral-800">
+                            {receiptFile ? (
+                              <span className="text-emerald-800 flex items-center gap-1.5 font-semibold">
+                                <CheckCircle2 size={16} /> Screenshot attached — check it below
+                              </span>
+                            ) : (
+                              <span>
+                                Drop payment screenshot here or{' '}
+                                <span className="text-[#1d080f] underline font-semibold">browse</span>
+                              </span>
+                            )}
+                          </div>
+                          <input type="file" accept="image/*" hidden onChange={handleReceiptChange} />
+                        </label>
+                        <ImagePreview
+                          file={receiptFile}
+                          previewUrl={receiptPreview}
+                          onRemove={clearReceipt}
+                          label="Online payment screenshot preview"
+                        />
+                      </div>
+
+                      {/* Cash proof */}
+                      <div>
+                        <p className="text-sm font-semibold text-[#1d080f] mb-2 text-left">
+                          b. Cash receipt from your server{splitAmountValid ? ` (${peso(splitCash)})` : ''}
+                        </p>
+                        <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-neutral-400 rounded-xl py-6 px-4 text-center cursor-pointer hover:bg-neutral-50 transition">
+                          <UploadCloud size={28} className="text-neutral-600" />
+                          <div className="text-sm font-medium text-neutral-800">
+                            {cashReceiptFile ? (
+                              <span className="text-emerald-800 flex items-center gap-1.5 font-semibold">
+                                <CheckCircle2 size={16} /> Receipt attached — check it below
+                              </span>
+                            ) : (
+                              <span>
+                                Drop receipt photo here or{' '}
+                                <span className="text-[#1d080f] underline font-semibold">browse</span>
+                              </span>
+                            )}
+                          </div>
+                          <input type="file" accept="image/*" hidden onChange={handleCashReceiptChange} />
+                        </label>
+                        <ImagePreview
+                          file={cashReceiptFile}
+                          previewUrl={cashReceiptPreview}
+                          onRemove={clearCashReceipt}
+                          label="Cash receipt preview"
+                        />
+                      </div>
                     </div>
-                    <input type="file" accept="image/*" hidden onChange={handleReceiptChange} />
-                  </label>
-
-                  <ImagePreview
-                    file={receiptFile}
-                    previewUrl={receiptPreview}
-                    onRemove={clearReceipt}
-                    label="Proof of payment preview"
-                  />
-                </div>
+                  </div>
+                )}
 
                 <div className="bg-white rounded-2xl border border-neutral-200/80 p-6 shadow-xs font-mono">
                   <div className="border-b border-dashed border-neutral-300 pb-3 mb-4 text-base">
@@ -1034,6 +1498,18 @@ function Payment() {
                       <span>TOTAL</span>
                       <span>₱ {settleFinalTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                     </div>
+                    {isSplit && splitAmountValid && (
+                      <div className="pt-2 space-y-1 text-neutral-800">
+                        <div className="flex justify-between">
+                          <span>PAID VIA {onlineLabel.toUpperCase()}</span>
+                          <span>{peso(splitOnline)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>PAID IN CASH</span>
+                          <span>{peso(splitCash)}</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex gap-3 mt-8 font-sans">
@@ -1137,8 +1613,64 @@ function Payment() {
                   </p>
                 </div>
               ) : (
-                historyOrders.map((o) => <OrderHistoryCard key={o.id} order={o} />)
+                historyOrders.map((o) => (
+                  <div
+                    key={o.id}
+                    ref={o.id === highlightId ? highlightRef : null}
+                    className={`rounded-2xl transition-shadow duration-500 ${
+                      o.id === highlightId ? 'ring-4 ring-[#f2c14e]/70' : ''
+                    }`}
+                  >
+                    <OrderHistoryCard order={o} />
+                  </div>
+                ))
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------- READY TO SERVE POP-UP ---------------- */}
+      {readyPopup && (
+        <div
+          key={readyPopup.id}
+          className="fixed top-[96px] left-4 right-4 md:left-auto md:right-6 md:w-[360px] z-[150] ready-popup-in"
+        >
+          <style>{`
+            @keyframes readyPopupIn { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: translateY(0); } }
+            @keyframes readyPopupBar { from { width: 100%; } to { width: 0%; } }
+            .ready-popup-in { animation: readyPopupIn 0.3s ease-out; }
+          `}</style>
+
+          <div className="bg-white rounded-2xl shadow-2xl border-2 border-[#2e5a2e] overflow-hidden text-left">
+            <div className="flex items-start gap-3 p-4">
+              <span className="shrink-0 w-11 h-11 rounded-full bg-[#2e5a2e] text-white flex items-center justify-center">
+                <CheckCircle2 size={22} />
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="font-[Prata] text-lg text-[#2e5a2e] leading-tight">Ready to Serve!</p>
+                <p className="text-sm text-neutral-800 mt-0.5">
+                  Order #{readyPopup.daily_number ?? readyPopup.id}
+                </p>
+                <p className="text-xs text-neutral-600 mt-1">
+                  Your food will be brought to your table shortly.
+                </p>
+              </div>
+              <button
+                onClick={() => setReadyPopup(null)}
+                aria-label="Close"
+                className="shrink-0 text-neutral-500 hover:text-[#1d080f] cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Shrinks over the 8 seconds so the customer sees it's about to go */}
+            <div className="h-1 bg-emerald-100">
+              <div
+                className="h-full bg-[#2e5a2e]"
+                style={{ animation: `readyPopupBar ${READY_DISPLAY_MS}ms linear forwards` }}
+              />
             </div>
           </div>
         </div>

@@ -6,12 +6,11 @@ import logo from '../assets/logopic2.png';
 import heroImage from '../assets/bg2.jpg';
 
 function Login() {
-   const navigate = useNavigate();
+  const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAuth();
 
-  const [fullName, setFullName] = useState(location.state?.fullName || '');
-  const [identifier, setIdentifier] = useState(location.state?.identifier || '');  
+  const [identifier, setIdentifier] = useState(location.state?.identifier || '');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -24,7 +23,7 @@ function Login() {
     e.preventDefault();
     setError('');
 
-    if (!fullName.trim() || !identifier.trim() || !password) {
+    if (!identifier.trim() || !password) {
       setError('Please fill in all fields.');
       return;
     }
@@ -32,7 +31,6 @@ function Login() {
     try {
       setSubmitting(true);
       await login({
-        full_name: fullName.trim(),
         identifier: identifier.trim(),
         password,
       });
@@ -45,21 +43,21 @@ function Login() {
   };
 
   return (
-   <div className="relative min-h-screen overflow-hidden">
-                   <div
-           className="absolute inset-0 bg-no-repeat"
-                   style={{
-             backgroundImage: `url(${heroImage})`,
-             backgroundSize: 'cover',
-             backgroundPosition: 'center 30%',
-           }}
-         />
-         <div className="absolute inset-0 bg-white/30" />
-   
-         <div className="relative z-10 flex flex-col items-center px-4 pt-16 pb-16">
-           <img src={logo} alt="Eurasia Restaurant" className="w-66 md:w-84 h-auto mb-6" />
-   
-           <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl px-8 md:px-8 py-6">   
+    <div className="relative min-h-screen overflow-hidden">
+      <div
+        className="absolute inset-0 bg-no-repeat"
+        style={{
+          backgroundImage: `url(${heroImage})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center 30%',
+        }}
+      />
+      <div className="absolute inset-0 bg-white/30" />
+
+      <div className="relative z-10 flex flex-col items-center px-4 pt-16 pb-16">
+        <img src={logo} alt="Eurasia Restaurant" className="w-66 md:w-84 h-auto mb-6" />
+
+        <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl px-8 md:px-8 py-6">
           <h1
             className="text-center text-[#1d080f] mb-8"
             style={{ fontFamily: 'Prata, serif', fontSize: '30px', WebkitTextStroke: '0.7px #1d080f' }}
@@ -70,21 +68,12 @@ function Login() {
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <input
               type="text"
-              value={fullName}
-              onChange={(e) =>
-                setFullName(e.target.value.replace(/\b[a-z]/g, (c) => c.toUpperCase()))
-              }
-              placeholder="Full Name"
-              className={inputClass}
-            />
-            <input
-              type="text"
               value={identifier}
               onChange={(e) => setIdentifier(e.target.value)}
               placeholder="Email Address or Contact Number"
               className={inputClass}
             />
-                        <div className="relative">
+            <div className="relative">
               <input
                 type={showPassword ? 'text' : 'password'}
                 value={password}
@@ -98,9 +87,10 @@ function Login() {
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
                 className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-[#1d080f] transition"
               >
-                {showPassword ? <Eye size={18} /> : <EyeOff size={18} />}              
-                </button>
+                {showPassword ? <Eye size={18} /> : <EyeOff size={18} />}
+              </button>
             </div>
+
             {error && (
               <p className="text-center text-sm text-red-500 font-[Prata]">{error}</p>
             )}
@@ -121,7 +111,7 @@ function Login() {
 
               <Link
                 to="/forgot-password"
-                state={{ fullName, identifier }}
+                state={{ identifier }}
                 className="font-[Prata] text-sm text-[#1d080f] underline hover:opacity-70 transition"
               >
                 Forgot Password?

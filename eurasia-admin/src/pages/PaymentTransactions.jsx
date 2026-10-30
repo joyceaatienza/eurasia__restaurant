@@ -552,6 +552,9 @@ export default function PaymentTransactions({
   embedded = false,
   highlightTarget = null,
   isMobile: isMobileProp,
+  // The Owner's History page shows just the History view from here,
+  // so it matches what the cashier sees
+  historyOnly = false,
 }) {
   const location = useLocation();
   const detectedMobile = useMediaQuery(MOBILE_QUERY);
@@ -564,7 +567,7 @@ export default function PaymentTransactions({
   const [modalDp, setModalDp] = useState(null);
   const [viewerImage, setViewerImage] = useState(null);
   const [toast, setToast] = useState({ message: "", tone: "success" });
-  const [view, setView] = useState("pending");
+  const [view, setView] = useState(historyOnly ? "history" : "pending");
   // Which row is loading its photo, and whether a Confirm/Fail is being saved
   const [loadingId, setLoadingId] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -637,6 +640,7 @@ export default function PaymentTransactions({
   // target arrives as a prop inside the Owner shell, or through router state
   // on the standalone page.
   useEffect(() => {
+    if (historyOnly) return;
     const target = highlightTarget || location.state?.highlight;
     if (!target) return;
     if (target.type === "payment") {
@@ -833,18 +837,25 @@ export default function PaymentTransactions({
   const emptyClass =
     "bg-white rounded-xl p-8 sm:p-12 text-center text-gray-500 font-[Prata] text-sm shadow-sm border border-gray-100";
 
-  // History shows in the Owner view too, so the owner can look back at every payment
-  const tabs = [
-    { key: "pending", label: "Orders" },
-    { key: "downpayments", label: "Downpayments" },
-    { key: "history", label: "History" },
-  ];
+  // Inside the Owner shell, History lives on the Owner's own History page
+  const tabs = embedded
+    ? [
+        { key: "pending", label: "Orders" },
+        { key: "downpayments", label: "Downpayments" },
+      ]
+    : [
+        { key: "pending", label: "Orders" },
+        { key: "downpayments", label: "Downpayments" },
+        { key: "history", label: "History" },
+      ];
 
   return (
-    <div className="min-h-screen bg-[#f0eff3] font-[Prata] text-[#1d080f] text-left">
+    <div className={`${historyOnly ? "" : "min-h-screen bg-[#f0eff3]"} font-[Prata] text-[#1d080f] text-left`}>
       {!embedded && <StaffHeader role="Cashier" />}
 
-      <main className="max-w-[1400px] mx-auto" style={{ padding: isMobile ? 16 : 28 }}>
+      <main className="max-w-[1400px] mx-auto" style={{ padding: historyOnly ? 0 : isMobile ? 16 : 28 }}>
+        {!historyOnly && (
+        <>
         <h1
           className="text-[#1d080f] text-left"
           style={{
@@ -863,6 +874,8 @@ export default function PaymentTransactions({
           <StatCard label="Today's Orders" value={transactions.length} />
           <StatCard label="Completed Payments" value={completedCount} />
         </div>
+        </>
+        )}
 
         {/* Search by customer, order number, or the guest behind a downpayment */}
         <div className="relative w-full sm:max-w-md mb-4">
@@ -887,7 +900,7 @@ export default function PaymentTransactions({
         </div>
 
         {/* The tab strip scrolls sideways rather than wrapping on a phone */}
-        {!isSearching && (
+        {!isSearching && !historyOnly && (
         <div className="overflow-x-auto mb-5 sm:mb-6 -mx-4 px-4 sm:mx-0 sm:px-0">
           <div className="flex gap-1.5 bg-white p-1 rounded-lg w-fit shadow-sm border border-gray-100">
             {tabs.map((t) => (

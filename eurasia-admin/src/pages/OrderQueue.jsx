@@ -239,7 +239,9 @@ function OrderDetailsModal({ order, onClose }) {
   );
 }
 
-export default function OrderQueue({ embedded = false, highlightTarget = null, isMobile: isMobileProp }) {
+// historyOnly: the Owner's History page shows just the History view from here,
+// so it matches what the kitchen sees
+export default function OrderQueue({ embedded = false, highlightTarget = null, isMobile: isMobileProp, historyOnly = false }) {
   const location = useLocation();
   const detectedMobile = useMediaQuery(MOBILE_QUERY);
   const isMobile = isMobileProp ?? detectedMobile;
@@ -247,7 +249,7 @@ export default function OrderQueue({ embedded = false, highlightTarget = null, i
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState({ message: "", tone: "success" });
-  const [view, setView] = useState("active");
+  const [view, setView] = useState(historyOnly ? "history" : "active");
   const [highlightId, setHighlightId] = useState(null);
   const highlightRef = useRef(null);
   // The History order whose dishes are being looked at
@@ -302,6 +304,7 @@ export default function OrderQueue({ embedded = false, highlightTarget = null, i
   // A notification click asks this page to surface one order. It arrives as a
   // prop inside the Owner shell, or through router state on the standalone page.
   useEffect(() => {
+    if (historyOnly) return;
     const target = highlightTarget || location.state?.highlight;
     if (!target || target.type !== "order") return;
     setView("active");
@@ -381,10 +384,11 @@ export default function OrderQueue({ embedded = false, highlightTarget = null, i
     "bg-white rounded-xl p-8 sm:p-12 text-center text-gray-500 font-[Prata] text-sm shadow-sm border border-gray-100";
 
   return (
-    <div className="min-h-screen bg-[#f0eff3] font-[Prata] text-[#1d080f] text-left">
+    <div className={`${historyOnly ? "" : "min-h-screen bg-[#f0eff3]"} font-[Prata] text-[#1d080f] text-left`}>
       {!embedded && <StaffHeader role="Kitchen" />}
 
-      <main className="max-w-[1400px] mx-auto" style={{ padding: isMobile ? 16 : 28 }}>
+      <main className="max-w-[1400px] mx-auto" style={{ padding: historyOnly ? 0 : isMobile ? 16 : 28 }}>
+        {!historyOnly && (
         <h1
           className="font-[Prata] text-[#1d080f] text-left"
           style={{
@@ -397,6 +401,7 @@ export default function OrderQueue({ embedded = false, highlightTarget = null, i
         >
           Order Queue
         </h1>
+        )}
 
         {/* Search by customer, order number, or dish */}
         <div className="relative w-full sm:max-w-md mb-4">
@@ -420,13 +425,17 @@ export default function OrderQueue({ embedded = false, highlightTarget = null, i
           )}
         </div>
 
-        {/* History is available in the Owner view too, so the owner can look back at what was served */}
+        {/* Inside the Owner shell, History lives on the Owner's own History page */}
+        {!historyOnly && (
         <div className="overflow-x-auto mb-5 sm:mb-6 -mx-4 px-4 sm:mx-0 sm:px-0">
           <div className="flex gap-1.5 bg-white p-1 rounded-lg w-fit shadow-sm border border-gray-100">
-            {[
-              { key: "active", label: "Active Orders" },
-              { key: "history", label: "History" },
-            ].map((t) => (
+            {(embedded
+              ? [{ key: "active", label: "Active Orders" }]
+              : [
+                  { key: "active", label: "Active Orders" },
+                  { key: "history", label: "History" },
+                ]
+            ).map((t) => (
               <button
                 key={t.key}
                 onClick={() => setView(t.key)}
@@ -445,6 +454,7 @@ export default function OrderQueue({ embedded = false, highlightTarget = null, i
             ))}
           </div>
         </div>
+        )}
 
         {view === "active" && !loading && !isSearching && (
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 sm:p-5 mb-5 sm:mb-6">

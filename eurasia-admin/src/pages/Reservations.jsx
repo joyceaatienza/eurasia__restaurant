@@ -1335,12 +1335,14 @@ function normalizeReservation(r) {
   };
 }
 
-export default function Reservations({ embedded = false, highlightTarget = null, isMobile: isMobileProp }) {
+// historyOnly: the Owner's History page shows just the History view from here,
+// so it matches what the front desk sees
+export default function Reservations({ embedded = false, highlightTarget = null, isMobile: isMobileProp, historyOnly = false }) {
   const location = useLocation();
   const detectedMobile = useMediaQuery(MOBILE_QUERY);
   const isMobile = isMobileProp ?? detectedMobile;
 
-  const [range, setRange] = useState("Day");
+  const [range, setRange] = useState(historyOnly ? "History" : "Day");
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [reservations, setReservations] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1499,13 +1501,14 @@ export default function Reservations({ embedded = false, highlightTarget = null,
   };
 
   return (
-    <div style={{ fontFamily: FONT, minHeight: "100vh", background: C.canvas }}>
+    <div style={{ fontFamily: FONT, minHeight: historyOnly ? 0 : "100vh", background: historyOnly ? "transparent" : C.canvas }}>
       <style>{`${FONT_IMPORT}
         * { box-sizing: border-box; }
       `}</style>
 
       {!embedded && <StaffHeader />}
-      <div style={{ padding: isMobile ? 16 : 28, display: "flex", flexDirection: "column", gap: 14, width: "100%" }}>
+      <div style={{ padding: historyOnly ? 0 : isMobile ? 16 : 28, display: "flex", flexDirection: "column", gap: 14, width: "100%" }}>
+        {!historyOnly && (
         <div
           style={{
             fontFamily: FONT,
@@ -1519,7 +1522,9 @@ export default function Reservations({ embedded = false, highlightTarget = null,
         >
           Reservations
         </div>
+        )}
 
+        {!historyOnly && (
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
           {!isHistory ? (
             <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 12, flexWrap: "wrap" }}>
@@ -1543,11 +1548,10 @@ export default function Reservations({ embedded = false, highlightTarget = null,
           )}
 
           {/* The range switcher scrolls sideways rather than wrapping.
-              History is available in the Owner view too, since confirmed
-              reservations now move there */}
+              Inside the Owner shell, History lives on the Owner's own History page */}
           <div style={{ overflowX: "auto", maxWidth: "100%" }}>
             <div style={{ display: "flex", gap: 6, background: "#fff", padding: 4, borderRadius: 10, boxShadow: "0 1px 2px rgba(0,0,0,0.06)", width: "fit-content" }}>
-              {["Day", "Week", "Month", "History"].map((r) => (
+              {(embedded ? ["Day", "Week", "Month"] : ["Day", "Week", "Month", "History"]).map((r) => (
                 <button
                   key={r}
                   onClick={() => setRange(r)}
@@ -1570,6 +1574,7 @@ export default function Reservations({ embedded = false, highlightTarget = null,
             </div>
           </div>
         </div>
+        )}
 
         {/* Search by guest name, contact number, or email */}
         <div style={{ position: "relative", width: "100%", maxWidth: isMobile ? "none" : 420 }}>

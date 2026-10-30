@@ -1962,60 +1962,17 @@ function DashboardPage({ isMobile, isTablet }) {
   );
 }
 
+/* ---------------------------------------------------------------- */
+/* History — the same History views each role sees, with search      */
+/* ---------------------------------------------------------------- */
 function HistoryPage({ isMobile }) {
   const [tab, setTab] = useState("reservations");
-  const [pastReservations, setPastReservations] = useState([]);
-  const [completedOrders, setCompletedOrders] = useState([]);
-  const [payments, setPayments] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [sortNewest, setSortNewest] = useState(true);
-
-  useEffect(() => {
-    Promise.all([reservationsApi.getAll(), ordersApi.getAll()])
-      .then(([reservationsData, ordersData]) => {
-        setPastReservations(
-          reservationsData.filter((r) => ["completed", "cancelled", "no_show"].includes(r.status))
-        );
-        setCompletedOrders(ordersData.filter((o) => ["ready", "served", "completed"].includes(o.status)));
-        setPayments(
-          ordersData.filter((o) => o.payment_status === "verified" || o.payment_status === "failed")
-        );
-      })
-      .catch((err) => console.error("Failed to load history:", err))
-      .finally(() => setLoading(false));
-  }, []);
 
   const tabs = [
     { key: "reservations", label: "Reservations" },
     { key: "orders", label: "Orders" },
     { key: "payments", label: "Payments" },
   ];
-
-  // Newest first by default; the toggle flips it
-  const sortByDate = (list, dateKey) =>
-    [...list].sort((a, b) => {
-      const diff = new Date(b[dateKey]) - new Date(a[dateKey]);
-      return sortNewest ? diff : -diff;
-    });
-
-  const sortedReservations = sortByDate(pastReservations, "reservation_date");
-  const sortedOrders = sortByDate(completedOrders, "created_at");
-  const sortedPayments = sortByDate(payments, "created_at");
-
-  const cellStyle = {
-    padding: isMobile ? "10px 14px" : "12px 20px",
-    borderBottom: `1px solid ${C.hair}`,
-    whiteSpace: "nowrap",
-  };
-
-  // Tables keep their columns and scroll sideways instead of squashing
-  const tableWrap = { overflowX: "auto", WebkitOverflowScrolling: "touch" };
-  const tableStyle = {
-    width: "100%",
-    minWidth: 560,
-    borderCollapse: "collapse",
-    textAlign: "left",
-  };
 
   return (
     <div style={{ padding: isMobile ? 16 : 28 }}>
@@ -2034,184 +1991,42 @@ function HistoryPage({ isMobile }) {
       <div
         style={{
           display: "flex",
-          alignItems: "center",
-          gap: 12,
+          gap: 6,
+          background: "#fff",
+          padding: 4,
+          borderRadius: 10,
+          width: "fit-content",
+          maxWidth: "100%",
+          overflowX: "auto",
+          boxShadow: "0 1px 3px rgba(23,3,16,0.06)",
           marginBottom: 20,
-          flexWrap: "wrap",
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            gap: 6,
-            background: "#fff",
-            padding: 4,
-            borderRadius: 10,
-            width: "fit-content",
-            boxShadow: "0 1px 3px rgba(23,3,16,0.06)",
-          }}
-        >
-          {tabs.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              style={{
-                border: "none",
-                borderRadius: 8,
-                padding: isMobile ? "8px 12px" : "9px 18px",
-                fontSize: isMobile ? 12 : 13,
-                fontFamily: "'Prata', serif",
-                cursor: "pointer",
-                background: tab === t.key ? C.void : "transparent",
-                color: tab === t.key ? "#f5e9d8" : C.ink,
-                whiteSpace: "nowrap",
-              }}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-
-        <button
-          onClick={() => setSortNewest((prev) => !prev)}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            border: `1px solid ${C.hair}`,
-            borderRadius: 10,
-            padding: isMobile ? "8px 12px" : "9px 16px",
-            fontSize: isMobile ? 12 : 13,
-            fontFamily: "'Prata', serif",
-            background: "#fff",
-            color: C.ink,
-            cursor: "pointer",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {sortNewest ? "Newest first" : "Oldest first"}
-          <ArrowUpDown size={14} />
-        </button>
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            style={{
+              border: "none",
+              borderRadius: 8,
+              padding: isMobile ? "8px 12px" : "9px 18px",
+              fontSize: isMobile ? 12 : 13,
+              fontFamily: "'Prata', serif",
+              cursor: "pointer",
+              background: tab === t.key ? C.void : "transparent",
+              color: tab === t.key ? "#f5e9d8" : C.ink,
+              whiteSpace: "nowrap",
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      {loading ? (
-        <div style={{ padding: 32, textAlign: "center", color: C.inkSoft, fontSize: 13 }}>Loading...</div>
-      ) : (
-        <>
-          {tab === "reservations" && (
-            <Card style={{ padding: 0, overflow: "hidden" }}>
-              {sortedReservations.length === 0 ? (
-                <div style={{ padding: 32, textAlign: "center", color: C.inkSoft, fontSize: 13 }}>
-                  No reservation history yet.
-                </div>
-              ) : (
-                <div style={tableWrap}>
-                  <table style={tableStyle}>
-                    <thead>
-                      <tr style={{ textAlign: "left", fontSize: 12, color: C.inkSoft }}>
-                        {["Date", "Time", "Name", "Pax", "Status"].map((h) => (
-                          <th key={h} style={cellStyle}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sortedReservations.map((r) => (
-                        <tr key={r.id} style={{ fontSize: 13.5 }}>
-                          <td style={cellStyle}>{formatDBDate(r.reservation_date)}</td>
-                          <td style={cellStyle}>{to12hFromDBTime(r.reservation_time)}</td>
-                          <td style={cellStyle}>{r.guest_name}</td>
-                          <td style={cellStyle}>{r.party_size}</td>
-                          <td style={cellStyle}>
-                            <Badge tone={r.status === "completed" ? "green" : "red"}>
-                              {r.status === "completed"
-                                ? "Completed"
-                                : r.status === "no_show"
-                                ? "No Show"
-                                : "Cancelled"}
-                            </Badge>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </Card>
-          )}
-
-          {tab === "orders" && (
-            <Card style={{ padding: 0, overflow: "hidden" }}>
-              {sortedOrders.length === 0 ? (
-                <div style={{ padding: 32, textAlign: "center", color: C.inkSoft, fontSize: 13 }}>
-                  No completed orders yet.
-                </div>
-              ) : (
-                <div style={tableWrap}>
-                  <table style={tableStyle}>
-                    <thead>
-                      <tr style={{ textAlign: "left", fontSize: 12, color: C.inkSoft }}>
-                        {["Order #", "Customer", "Total", "Date & Time"].map((h) => (
-                          <th key={h} style={cellStyle}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sortedOrders.map((o) => (
-                        <tr key={o.id} style={{ fontSize: 13.5 }}>
-                          <td style={cellStyle}>{o.daily_number ?? o.id}</td>
-                          <td style={cellStyle}>{o.customer_name || "—"}</td>
-                          <td style={cellStyle}>Php. {Number(o.total).toLocaleString()}</td>
-                          <td style={{ ...cellStyle, color: C.inkSoft }}>{formatDBDateTime(o.created_at)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </Card>
-          )}
-
-          {tab === "payments" && (
-            <Card style={{ padding: 0, overflow: "hidden" }}>
-              {sortedPayments.length === 0 ? (
-                <div style={{ padding: 32, textAlign: "center", color: C.inkSoft, fontSize: 13 }}>
-                  No payment history yet.
-                </div>
-              ) : (
-                <div style={tableWrap}>
-                  <table style={{ ...tableStyle, minWidth: 700 }}>
-                    <thead>
-                      <tr style={{ textAlign: "left", fontSize: 12, color: C.inkSoft }}>
-                        {["Order #", "Customer", "Method", "Amount", "Status", "Date & Time"].map((h) => (
-                          <th key={h} style={cellStyle}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sortedPayments.map((p) => (
-                        <tr key={p.id} style={{ fontSize: 13.5 }}>
-                          <td style={cellStyle}>{p.daily_number ?? p.id}</td>
-                          <td style={cellStyle}>{p.customer_name || "—"}</td>
-                          <td style={{ ...cellStyle, textTransform: "capitalize" }}>
-                            {p.payment_method || "—"}
-                          </td>
-                          <td style={cellStyle}>Php. {Number(p.total).toLocaleString()}</td>
-                          <td style={cellStyle}>
-                            <Badge tone={p.payment_status === "verified" ? "green" : "red"}>
-                              {p.payment_status === "verified" ? "Completed" : "Failed"}
-                            </Badge>
-                          </td>
-                          <td style={{ ...cellStyle, color: C.inkSoft }}>{formatDBDateTime(p.created_at)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </Card>
-          )}
-        </>
-      )}
+      {/* Each one is the exact History view from that role's page, search included */}
+      {tab === "reservations" && <Reservations embedded historyOnly isMobile={isMobile} />}
+      {tab === "orders" && <OrderQueue embedded historyOnly isMobile={isMobile} />}
+      {tab === "payments" && <PaymentTransactions embedded historyOnly isMobile={isMobile} />}
     </div>
   );
 }

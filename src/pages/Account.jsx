@@ -358,7 +358,7 @@ function Account() {
                       <p className="text-center text-sm text-red-500 font-[Prata]">{passwordError}</p>
                     )}
 
-                    <div className="flex justify-end mt-2">
+                      <div className="flex justify-center mt-2">
                       <button
                         type="submit"
                         disabled={savingPassword}

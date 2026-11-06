@@ -1041,105 +1041,184 @@ function GuestCard({ counts, onAddWalkIn, busy, isToday, isMobile }) {
 }
 
 /* ---------------------------------------------------------------- */
-/* Day view                                                           */
+/* Day view — two lists for the day on screen:                        */
+/*   1. Reservations to Confirm: bookings submitted that day, pending  */
+/*   2. Reservations for the day: everything scheduled on that date    */
 /* ---------------------------------------------------------------- */
+function bookedISO(r) {
+  return r.createdAt ? toISO(r.createdAt) : "";
+}
+
+function bookedTime(r) {
+  return r.createdAt
+    ? r.createdAt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+    : "—";
+}
+
 function DayView({ selectedISO, reservations, markStatus, highlightId, highlightRef, onViewProof, isMobile }) {
-  // Only reservations still waiting on the front desk stay in this list —
-  // once confirmed (or already closed) they move to History
-  const dayReservations = reservations.filter(
-    (r) => r.date === selectedISO && !DONE_STATUSES.includes(r.status)
+  // 1. Submitted on this day and still waiting for the front desk — newest booking first
+  const toConfirm = reservations
+    .filter((r) => r.status === "Pending" && bookedISO(r) === selectedISO)
+    .sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0));
+  const toConfirmIds = new Set(toConfirm.map((r) => r.id));
+
+  // 2. Everything scheduled on this date (confirmed and the rest), earliest time first.
+  //    A booking already listed above isn't repeated here.
+  const forTheDay = reservations
+    .filter((r) => r.date === selectedISO && !toConfirmIds.has(r.id))
+    .sort((a, b) => (a.time > b.time ? 1 : -1));
+
+  const cell = { padding: "16px 22px", borderBottom: `1px solid ${C.hair}`, verticalAlign: "top", textAlign: "left" };
+  const isLocked = (r) => r.paymentStatus !== "verified" && r.status !== "Cancelled";
+
+  const countPill = (n) => (
+    <span style={{ background: C.void, color: "#f5e9d8", fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, marginTop: -14, fontFamily: FONT }}>
+      {n}
+    </span>
   );
-  const sortedAll = [...dayReservations].sort((a, b) => (a.time > b.time ? 1 : -1));
-  const confirmedCount = reservations.filter(
-    (r) => r.date === selectedISO && r.status === "Confirmed"
-  ).length;
 
-  return (
-    <Card style={{ padding: 0, overflow: "hidden" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: isMobile ? "16px 16px 0" : "20px 22px 0" }}>
-        <SectionTitle>Reservations to Confirm</SectionTitle>
-        <span style={{ background: C.void, color: "#f5e9d8", fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, marginTop: -14, fontFamily: FONT }}>
-          {sortedAll.length}
-        </span>
+  const sectionHeader = (title, n, note) => (
+    <div style={{ padding: isMobile ? "16px 16px 0" : "20px 22px 0" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <SectionTitle>{title}</SectionTitle>
+        {countPill(n)}
       </div>
+      {note && (
+        <p style={{ fontSize: 12, color: C.inkSoft, fontFamily: FONT, margin: "-8px 0 14px", textAlign: "left" }}>{note}</p>
+      )}
+    </div>
+  );
 
-      {sortedAll.length === 0 ? (
-        <div style={{ color: C.inkSoft, fontSize: 13.5, textAlign: "center", padding: "30px 16px", fontFamily: FONT }}>
-          Nothing left to confirm for this day.
-          {confirmedCount > 0 && (
-            <div style={{ fontSize: 12, marginTop: 6 }}>
-              {confirmedCount} confirmed reservation{confirmedCount !== 1 ? "s" : ""} — see History, or the Week and Month views.
+  const emptyNote = (text) => (
+    <div style={{ color: C.inkSoft, fontSize: 13.5, textAlign: "center", padding: "26px 16px 30px", fontFamily: FONT }}>
+      {text}
+    </div>
+  );
+
+  // The status column: still-pending bookings can be confirmed right here
+  const statusCell = (r) =>
+    r.status === "Pending" ? (
+      <StatusSelect status={r.status} locked={isLocked(r)} onChange={(status) => markStatus(r.id, status)} />
+    ) : (
+      <StatusPill status={r.status} />
+    );
+
+  const rowStyle = (r) => ({
+    fontSize: 13.5,
+    background: r.id === highlightId ? C.highlight : "transparent",
+    transition: "background 0.4s ease",
+    opacity: r.status === "Cancelled" ? 0.6 : 1,
+  });
+
+  const mobileList = (list, showDates) => (
+    <div style={{ display: "grid", gap: 12, padding: "0 16px 16px" }}>
+      {list.map((r) => (
+        <div key={r.id}>
+          {showDates && (
+            <div style={{ fontSize: 11, color: C.inkSoft, fontFamily: FONT, margin: "0 0 4px 2px", textAlign: "left" }}>
+              Submitted {bookedTime(r)}
             </div>
           )}
+          <ReservationCard
+            r={r}
+            highlighted={r.id === highlightId}
+            cardRef={r.id === highlightId ? highlightRef : null}
+            markStatus={markStatus}
+            onViewProof={onViewProof}
+            showStatus={r.status === "Pending"}
+            showDates={showDates}
+          />
         </div>
-      ) : isMobile ? (
-        <div style={{ display: "grid", gap: 12, padding: "0 16px 16px" }}>
-          {sortedAll.map((r) => (
-            <ReservationCard
-              key={r.id}
-              r={r}
-              highlighted={r.id === highlightId}
-              cardRef={r.id === highlightId ? highlightRef : null}
-              markStatus={markStatus}
-              onViewProof={onViewProof}
-            />
-          ))}
-        </div>
-      ) : (
-        <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: FONT, minWidth: 800, textAlign: "left" }}>
-            <thead>
-              <tr style={{ textAlign: "left", fontSize: 12, color: C.inkSoft }}>
-                {["Time", "Name", "Type", "Pax", "Downpayment", "Status"].map((h) => (
-                  <th key={h} style={{ padding: "10px 22px", borderBottom: `1px solid ${C.hair}`, fontWeight: 700, whiteSpace: "nowrap" }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {sortedAll.map((r) => {
-                const isHighlighted = r.id === highlightId;
-                // Nothing moves until the cashier has cleared the downpayment
-                const locked = r.paymentStatus !== "verified" && r.status !== "Cancelled";
-                return (
-                  <tr
-                    key={r.id}
-                    ref={isHighlighted ? highlightRef : null}
-                    style={{
-                      fontSize: 13.5,
-                      background: isHighlighted ? C.highlight : "transparent",
-                      transition: "background 0.4s ease",
-                    }}
-                  >
-                    <td style={{ padding: "16px 22px", borderBottom: `1px solid ${C.hair}`, fontWeight: 700, verticalAlign: "top", whiteSpace: "nowrap" }}>
-                      {to12h(r.time)}
+      ))}
+    </div>
+  );
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {/* ---------- 1. Reservations to Confirm ---------- */}
+      <Card style={{ padding: 0, overflow: "hidden" }}>
+        {sectionHeader(
+          "Reservations to Confirm",
+          toConfirm.length,
+          "Bookings submitted on this day. Once confirmed, they appear on their reservation date."
+        )}
+
+        {toConfirm.length === 0 ? (
+          emptyNote("No new bookings waiting to be confirmed for this day.")
+        ) : isMobile ? (
+          mobileList(toConfirm, true)
+        ) : (
+          <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: FONT, minWidth: 980, textAlign: "left" }}>
+              <thead>
+                <tr style={{ fontSize: 12, color: C.inkSoft }}>
+                  {["Submitted", "Reservation Date", "Time", "Name", "Type", "Pax", "Downpayment", "Status"].map((h) => (
+                    <th key={h} style={{ padding: "10px 22px", borderBottom: `1px solid ${C.hair}`, fontWeight: 700, whiteSpace: "nowrap", textAlign: "left" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {toConfirm.map((r) => (
+                  <tr key={r.id} ref={r.id === highlightId ? highlightRef : null} style={rowStyle(r)}>
+                    <td style={{ ...cell, color: C.inkSoft, whiteSpace: "nowrap" }}>{bookedTime(r)}</td>
+                    <td style={{ ...cell, whiteSpace: "nowrap" }}>{displayDateFromISO(r.date)}</td>
+                    <td style={{ ...cell, fontWeight: 700, whiteSpace: "nowrap" }}>{to12h(r.time)}</td>
+                    <td style={cell}>{r.type === "event" ? r.eventTitle : r.name}</td>
+                    <td style={cell}>
+                      <Badge tone={r.type === "event" ? "amber" : "green"}>{r.type === "event" ? "Event" : "Table"}</Badge>
                     </td>
-                    <td style={{ padding: "16px 22px", borderBottom: `1px solid ${C.hair}`, verticalAlign: "top" }}>
-                      {r.type === "event" ? r.eventTitle : r.name}
-                    </td>
-                    <td style={{ padding: "16px 22px", borderBottom: `1px solid ${C.hair}`, verticalAlign: "top" }}>
-                      <Badge tone={r.type === "event" ? "amber" : "green"}>
-                        {r.type === "event" ? "Event" : "Table"}
-                      </Badge>
-                    </td>
-                    <td style={{ padding: "16px 22px", borderBottom: `1px solid ${C.hair}`, color: C.inkSoft, verticalAlign: "top" }}>{r.pax}</td>
-                    <td style={{ padding: "16px 22px", borderBottom: `1px solid ${C.hair}`, verticalAlign: "top" }}>
-                      <DownpaymentCell reservation={r} onViewProof={onViewProof} />
-                    </td>
-                    <td style={{ padding: "16px 22px", borderBottom: `1px solid ${C.hair}`, verticalAlign: "top" }}>
-                      <StatusSelect
-                        status={r.status}
-                        locked={locked}
-                        onChange={(status) => markStatus(r.id, status)}
-                      />
-                    </td>
+                    <td style={{ ...cell, color: C.inkSoft }}>{r.pax}</td>
+                    <td style={cell}><DownpaymentCell reservation={r} onViewProof={onViewProof} /></td>
+                    <td style={cell}>{statusCell(r)}</td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </Card>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {/* ---------- 2. Reservations for this day ---------- */}
+      <Card style={{ padding: 0, overflow: "hidden" }}>
+        {sectionHeader(
+          `Reservations for ${displayDateFromISO(selectedISO)}`,
+          forTheDay.length,
+          "Everything scheduled on this date, earliest first."
+        )}
+
+        {forTheDay.length === 0 ? (
+          emptyNote("No reservations scheduled on this day.")
+        ) : isMobile ? (
+          mobileList(forTheDay, false)
+        ) : (
+          <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: FONT, minWidth: 800, textAlign: "left" }}>
+              <thead>
+                <tr style={{ fontSize: 12, color: C.inkSoft }}>
+                  {["Time", "Name", "Type", "Pax", "Downpayment", "Status"].map((h) => (
+                    <th key={h} style={{ padding: "10px 22px", borderBottom: `1px solid ${C.hair}`, fontWeight: 700, whiteSpace: "nowrap", textAlign: "left" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {forTheDay.map((r) => (
+                  <tr key={r.id} ref={r.id === highlightId ? highlightRef : null} style={rowStyle(r)}>
+                    <td style={{ ...cell, fontWeight: 700, whiteSpace: "nowrap" }}>{to12h(r.time)}</td>
+                    <td style={cell}>{r.type === "event" ? r.eventTitle : r.name}</td>
+                    <td style={cell}>
+                      <Badge tone={r.type === "event" ? "amber" : "green"}>{r.type === "event" ? "Event" : "Table"}</Badge>
+                    </td>
+                    <td style={{ ...cell, color: C.inkSoft }}>{r.pax}</td>
+                    <td style={cell}><DownpaymentCell reservation={r} onViewProof={onViewProof} /></td>
+                    <td style={cell}>{statusCell(r)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+    </div>
   );
 }
 
@@ -1327,7 +1406,7 @@ function normalizeReservation(r) {
     // itself is fetched when the modal opens
     hasPaymentProof: Boolean(r.has_payment_proof ?? r.payment_proof),
     status: BACKEND_TO_STATUS[String(r.status || "").toLowerCase()] || "Pending",
-    // When the booking was made — used by the History sort
+    // When the booking was made — used by the History sort and "Reservations to Confirm"
     createdAt: validCreated ? createdAt : null,
     booked: validCreated
       ? createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
@@ -1442,7 +1521,7 @@ export default function Reservations({ embedded = false, highlightTarget = null,
       setReservations((prev) => prev.map((r) => (r.id === id ? { ...r, status } : r)));
       loadGuestCounts();
       if (status === "Cancelled") showSuccess("Reservation cancelled.");
-      if (status === "Confirmed") showSuccess("Reservation confirmed and moved to History.");
+      if (status === "Confirmed") showSuccess("Reservation confirmed. It now shows on its reservation date.");
     } catch (err) {
       console.error("Failed to update status:", err);
       showError("Failed to update reservation status. Please try again.");

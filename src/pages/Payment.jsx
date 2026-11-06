@@ -192,7 +192,7 @@ function ImagePreview({ file, previewUrl, onRemove, label }) {
           <X size={16} />
         </button>
       </div>
-      <p className="mt-2 text-xs text-neutral-700 text-center">
+      <p className="mt-2 text-xs text-neutral-700 text-center break-all">
         {file?.name} — tap the upload box above to choose a different one.
       </p>
 
@@ -216,7 +216,7 @@ function ImagePreview({ file, previewUrl, onRemove, label }) {
             onClick={(e) => e.stopPropagation()}
             className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl cursor-default"
           />
-          <p className="mt-3 text-sm text-white/80 text-center">
+          <p className="mt-3 text-sm text-white/80 text-center break-all">
             {file?.name} · Tap anywhere outside the photo to close
           </p>
         </div>
@@ -746,8 +746,12 @@ function Payment() {
     } catch (err) {
       console.error('Failed to load unpaid orders:', err);
       setUnpaidOrders([]);
-      
-  // "Settle Bill Now" from the unpaid-balance notice lands here
+    } finally {
+      setSettleLoading(false);
+    }
+  };
+
+  // "Settle Bill Now" from the unpaid-balance notice (or the bell) lands here
   useEffect(() => {
     const wantsSettle =
       location.state?.openSettle || location.state?.highlight?.type === 'settle';
@@ -756,11 +760,6 @@ function Payment() {
     openSettle();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state, isAuthenticated]);
-    } finally {
-      setSettleLoading(false);
-    }
-  };
-
   const handleSubmitPayment = async () => {
     if (isSplit) {
       if (!onlineMethod) {
@@ -921,13 +920,20 @@ function Payment() {
 
   return (
     <div className="min-h-screen bg-[#faf8f5] text-[#1d080f] font-sans">
-      <div className="relative h-64 overflow-hidden shrink-0 md:h-60">
+      <div className="relative h-44 sm:h-52 md:h-60 overflow-hidden shrink-0">
         <img src={heroImage} alt="" className="absolute inset-0 h-full w-full object-cover" />
         <div className="absolute inset-0 bg-white/40" />
-        <div className="relative flex h-full items-start justify-center px-4 pt-10 md:pt-14">
+        <div className="relative flex h-full items-center justify-center px-4">
           <h1
             className="font-[Prata] font-bold text-xs md:text-xs text-[#1d080f]"
-            style={{ WebkitTextStroke: '0.7px #1d080f', letterSpacing: '1.5px' }}
+                        style={{
+              WebkitTextStroke: '0.7px #1d080f',
+              letterSpacing: '1.5px',
+              // Small enough to fit the shorter phone hero, full size on desktop
+              fontSize: 'clamp(34px, 9.5vw, 50px)',
+              lineHeight: 1.15,
+              margin: 0,
+            }}
           >
             {heroTitle}
           </h1>
@@ -966,10 +972,10 @@ function Payment() {
 
         {/* ---------------- EMPTY / LANDING ---------------- */}
         {screen === 'empty' && (
-          <div className="grid gap-6">
+          <div className="grid grid-cols-1 gap-6">
 
           {activeOrders.length > 0 && (
-            <div className="grid gap-4">
+            <div className="grid grid-cols-1 gap-4">
               <h3 className="font-[Prata] text-base text-[#1d080f]">In the Kitchen</h3>
               {activeOrders.map((o) => (
                 <div
@@ -1023,7 +1029,7 @@ function Payment() {
 
         {/* ---------------- ORDER SCREEN ---------------- */}
         {screen === 'order' && orderItems.length > 0 && (
-          <div className="grid gap-6">
+          <div className="grid grid-cols-1 gap-6">
 
             <div className="bg-white rounded-2xl shadow-sm p-8 border border-neutral-200/80">
               <h2 className="text-center font-[Prata] text-amber-800 tracking-wide text-sm mb-4">
@@ -1141,7 +1147,7 @@ function Payment() {
 
         {/* ---------------- SETTLE BILL SCREEN ---------------- */}
         {screen === 'settle' && (
-          <div className="grid gap-6">
+          <div className="grid grid-cols-1 gap-6">
 
             <button
               onClick={() => { setScreen('empty'); setJustOrdered(false); }}
@@ -1396,7 +1402,7 @@ function Payment() {
                       Attach a screenshot of your {onlineLabel} payment and a photo of the cash receipt from your server.
                     </p>
 
-                    <div className="grid gap-5">
+                    <div className="grid grid-cols-1 gap-5">
                       {/* Online proof */}
                       <div>
                         <p className="text-sm font-semibold text-[#1d080f] mb-2 text-left">
@@ -1526,7 +1532,7 @@ function Payment() {
                       disabled={settling}
                       className="flex-1 bg-[#2e5a2e] hover:bg-[#244724] text-white text-sm font-bold py-3 rounded-xl shadow-sm transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {settling ? 'Submitting...' : `Submit Payment Proof • ₱ ${settleFinalTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}`}
+                      {settling ? 'Submitting...' : `Submit Payment Proof`}
                     </button>
                   </div>
                 </div>

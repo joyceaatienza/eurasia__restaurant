@@ -30,17 +30,25 @@ export default function AboutUs() {
     <div className="bg-[#faf8f5] text-[#1d080f] font-sans min-h-screen">
       
       {/* Hero Header */}
-      <div className="relative h-64 overflow-hidden shrink-0 md:h-60">
+      <div className="relative h-48 sm:h-52 md:h-60 overflow-hidden shrink-0">
         <img
           src={heroImage}
           alt=""
           className="absolute inset-0 h-full w-full object-cover"
         />
         <div className="absolute inset-0 bg-white/40" />
-        <div className="relative flex h-full items-start justify-center px-4 pt-10 md:pt-14">
+        {/* Phones: title centered in the hero. Desktop: same as before */}
+        <div className="relative flex h-full items-center justify-center px-4">
           <h1
             className="font-[Prata] font-bold text-xs md:text-xs text-[#1d080f]"
-            style={{ WebkitTextStroke: '0.7px #1d080f', letterSpacing: '1.5px' }}
+                        style={{
+              WebkitTextStroke: '0.7px #1d080f',
+              letterSpacing: '1.5px',
+              // Small enough to fit the shorter phone hero, full size on desktop
+              fontSize: 'clamp(34px, 9.5vw, 50px)',
+              lineHeight: 1.15,
+              margin: 0,
+            }}
           >
             Where flavors come together!
           </h1>

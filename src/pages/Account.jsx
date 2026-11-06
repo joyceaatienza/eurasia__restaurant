@@ -144,13 +144,21 @@ function Account() {
 
   return (
     <div className="bg-white text-[#1d080f]">
-      <div className="relative h-64 overflow-hidden shrink-0 md:h-60">
+      <div className="relative h-44 sm:h-52 md:h-60 overflow-hidden shrink-0">
         <img src={heroImage} alt="" className="absolute inset-0 h-full w-full object-cover" />
         <div className="absolute inset-0 bg-white/40" />
-        <div className="relative flex h-full items-start justify-center px-4 pt-10 md:pt-14">
+                {/* Phones: centered in the part of the hero the card doesn't cover. Desktop: same as before */}
+        <div className="relative flex h-full items-center justify-center px-4 pb-8 md:pb-16">
           <h1
             className="font-[Prata] font-bold text-xs md:text-xs text-[#1d080f]"
-            style={{ WebkitTextStroke: '0.7px #1d080f', letterSpacing: '1.5px' }}
+                        style={{
+              WebkitTextStroke: '0.7px #1d080f',
+              letterSpacing: '1.5px',
+              // Small enough to fit the shorter phone hero, full size on desktop
+              fontSize: 'clamp(34px, 9.5vw, 50px)',
+              lineHeight: 1.15,
+              margin: 0,
+            }}
           >
             My Account
           </h1>

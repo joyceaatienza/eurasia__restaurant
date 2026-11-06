@@ -128,14 +128,14 @@ export default function Feedback() {
 
   return (
     <div style={{ fontFamily: FONT, color: C.ink, background: C.bg }}>
-      <div className="relative h-64 overflow-hidden shrink-0 md:h-60">
+      <div className="relative h-44 sm:h-52 md:h-60 overflow-hidden shrink-0">
         <img
           src={heroImage}
           alt=""
           className="absolute inset-0 h-full w-full object-cover"
         />
         <div className="absolute inset-0 bg-white/40" />
-        <div className="relative flex h-full items-start justify-center px-4 pt-16 md:pt-16">
+        <div className="relative flex h-full items-start justify-center px-4 pt-6 sm:pt-8 md:pt-14">
           <img
             src={logo}
             alt="Eurasia Restaurant"

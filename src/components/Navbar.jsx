@@ -123,13 +123,19 @@ function Navbar() {
 
   return (
     <nav className="fixed top-0 left-0 w-full z-50 bg-white shadow-xl">
-      <div className="flex items-center justify-between px-6 md:px-10 py-4">
+      {/* gap keeps the logo and the icons from ever touching on a phone */}
+      <div className="flex items-center justify-between gap-3 pl-2 pr-4 sm:px-6 md:px-10 h-[84px] md:h-auto md:py-4">
         {isAuthPage ? (
-          <span className="h-12" />
+          <span className="h-10 md:h-12" />
         ) : (
-          <NavLink to="/" className="flex items-center">
-            <img src={logoPic} alt="" className="h-13 w-auto" />
-            <img src={logo} alt="Eurasia Restaurant" className="h-11 w-auto" />
+          /* Same layout on every screen — the logo only gets smaller on a phone */
+          <NavLink to="/" className="flex items-center min-w-0">
+            <img src={logoPic} alt="" className="h-11 sm:h-11 md:h-13 w-auto shrink-0" />
+            <img
+              src={logo}
+              alt="Eurasia Restaurant"
+              className="h-9 sm:h-9 md:h-11 w-auto min-w-0 object-contain object-left"
+            />
           </NavLink>
         )}
 
@@ -158,21 +164,21 @@ function Navbar() {
           {isAuthenticated && <NotificationBell {...notif} />}
         </div>
 
-        {/* Mobile */}
-        <div className="flex items-center gap-4 md:hidden">
+        {/* Mobile — smaller icons, and they never shrink or get pushed */}
+        <div className="flex items-center gap-3 sm:gap-4 md:hidden shrink-0">
           <button onClick={openTray} className="hover:opacity-70 relative">
-            <img src={trayIcon} alt="Tray" className="h-11 w-auto" />
+            <img src={trayIcon} alt="Tray" className="h-8 sm:h-9 w-auto" />
             {itemCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+              <span className="absolute -top-1.5 -right-1.5 bg-red-600 text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center">
                 {itemCount}
               </span>
             )}
           </button>
 
-          {isAuthenticated && <NotificationBell {...notif} iconClass="h-6 w-6" />}
+          {isAuthenticated && <NotificationBell {...notif} iconClass="h-5 w-5 sm:h-6 sm:w-6" />}
 
-          <button onClick={() => setMobileOpen(!mobileOpen)} className="text-neutral-900">
-            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <button onClick={() => setMobileOpen(!mobileOpen)} className="text-neutral-900" aria-label="Menu">
+            <svg className="w-6 h-6 sm:w-7 sm:h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               {mobileOpen ? (
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               ) : (

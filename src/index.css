@@ -126,3 +126,11 @@ code {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* No page should ever scroll sideways on a phone — a long file name or
+   anything else too wide gets cut off at the edge instead of shifting the page */
+html,
+body {
+  max-width: 100%;
+  overflow-x: clip;
+}

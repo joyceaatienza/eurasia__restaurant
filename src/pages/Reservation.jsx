@@ -454,8 +454,9 @@ function ConfirmDialog({ open, title, message, confirmLabel, onConfirm, onCancel
     </div>
   )
 }
+
 /* A photo the customer can tap to see full size and make sure it's the right one */
-function ZoomableImage({ src, alt, className }) {
+function ZoomableImage({ src, alt, className, onRemove }) {
   const [zoomed, setZoomed] = useState(false)
 
   // While the full-size view is open: lock the page behind it and let Esc close it
@@ -477,17 +478,32 @@ function ZoomableImage({ src, alt, className }) {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setZoomed(true)}
-        title="Tap to view full size"
-        className="relative block w-full cursor-zoom-in"
-      >
-        <img src={src} alt={alt} className={className} />
-        <span className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/60 text-white text-xs font-[Prata] px-3 py-1 rounded-full pointer-events-none whitespace-nowrap">
-          Tap to view full size
-        </span>
-      </button>
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setZoomed(true)}
+          title="Tap to view full size"
+          className="relative block w-full cursor-zoom-in"
+        >
+          <img src={src} alt={alt} className={className} />
+          <span className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/60 text-white text-xs font-[Prata] px-3 py-1 rounded-full pointer-events-none whitespace-nowrap">
+            Tap to view full size
+          </span>
+        </button>
+
+        {/* Only the upload previews get a remove button — saved reservations don't */}
+        {onRemove && (
+          <button
+            type="button"
+            onClick={onRemove}
+            title="Remove this photo"
+            aria-label="Remove this photo"
+            className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 transition"
+          >
+            <X size={16} />
+          </button>
+        )}
+      </div>
 
       {zoomed && (
         <div
@@ -533,6 +549,9 @@ function Reservation() {
   const [paymentMethod, setPaymentMethod] = useState("")
   const [paymentProofPreview, setPaymentProofPreview] = useState("")
   const [themeImagePreview, setThemeImagePreview] = useState("")
+  // File names, shown under each preview so the customer knows which photo they picked
+  const [paymentProofName, setPaymentProofName] = useState("")
+  const [themeImageName, setThemeImageName] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
   const [reservations, setReservations] = useState(() => readCachedReservations() || [])
@@ -644,17 +663,32 @@ function Reservation() {
   const handleThemeImageChange = (e) => {
     const file = e.target.files?.[0]
     if (!file) return
+    setThemeImageName(file.name)
     const reader = new FileReader()
     reader.onload = () => setThemeImagePreview(reader.result)
     reader.readAsDataURL(file)
+    // Lets the same photo be picked again after removing it
+    e.target.value = ''
   }
 
   const handlePaymentProofChange = (e) => {
     const file = e.target.files?.[0]
     if (!file) return
+    setPaymentProofName(file.name)
     const reader = new FileReader()
     reader.onload = () => setPaymentProofPreview(reader.result)
     reader.readAsDataURL(file)
+    e.target.value = ''
+  }
+
+  const clearThemeImage = () => {
+    setThemeImagePreview("")
+    setThemeImageName("")
+  }
+
+  const clearPaymentProof = () => {
+    setPaymentProofPreview("")
+    setPaymentProofName("")
   }
 
   const handleConfirm = async (e) => {
@@ -696,7 +730,6 @@ function Reservation() {
       occasion: occasion || null,
       reservation_date: isoDate,
       reservation_time: `${time}:00`,
-      table_number: null,
       special_requests: tab === 'event' ? (formData.get('note') || null) : null,
       theme_image: tab === 'event' ? (themeImagePreview || null) : null,
       downpayment_amount: downpaymentAmount,
@@ -713,8 +746,8 @@ function Reservation() {
       setSelectedTime(getDefaultTime())
       setOccasion("")
       setPaymentMethod("")
-      setPaymentProofPreview("")
-      setThemeImagePreview("")
+      clearPaymentProof()
+      clearThemeImage()
       setShowConfirm(true)
     } catch (err) {
       console.error(err)
@@ -775,7 +808,7 @@ function Reservation() {
             </div>
             <div>
               <span className="block text-xs text-neutral-400">Email Address</span>
-              <span>{r.email}</span>
+              <span className="break-all">{r.email}</span>
             </div>
             <div>
               <span className="block text-xs text-neutral-400">Occasion</span>
@@ -838,11 +871,13 @@ function Reservation() {
         )}
 
         {r.theme_image && (
-          <ZoomableImage
-            src={r.theme_image}
-            alt="Theme inspiration"
-            className="mt-4 w-full max-h-48 object-cover rounded-md"
-          />
+          <div className="mt-4">
+            <ZoomableImage
+              src={r.theme_image}
+              alt="Theme inspiration"
+              className="w-full max-h-48 object-cover rounded-md"
+            />
+          </div>
         )}
       </div>
     )
@@ -856,16 +891,23 @@ function Reservation() {
 
   return (
     <div className="bg-white text-[#1d080f]">
-      <div className="relative h-64 overflow-hidden shrink-0 md:h-60">
-        <img src={heroImage}
+<div className="relative h-44 sm:h-52 md:h-60 overflow-hidden shrink-0">
+  <img src={heroImage}
           alt=""
           className="absolute inset-0 h-full w-full object-cover"
         />
         <div className="absolute inset-0 bg-white/40" />
-        <div className="relative flex h-full items-start justify-center px-4 pt-10 md:pt-14">
-          <h1
+          <div className="relative flex h-full items-center justify-center px-4 pb-8 md:pb-16">
+            <h1
             className="font-[Prata] font-bold text-xs md:text-xs text-[#1d080f]"
-            style={{ WebkitTextStroke: '0.7px #1d080f', letterSpacing: '1.5px' }}
+                        style={{
+              WebkitTextStroke: '0.7px #1d080f',
+              letterSpacing: '1.5px',
+              // Small enough to fit the shorter phone hero, full size on desktop
+              fontSize: 'clamp(34px, 9.5vw, 50px)',
+              lineHeight: 1.15,
+              margin: 0,
+            }}
           >
             Have a Reservation Now!
           </h1>
@@ -874,7 +916,7 @@ function Reservation() {
 
       <div style={{ marginTop: '4rem' }}> </div>
       <div className="max-w-5xl mx-auto px-4 md:px-3 -mt-24 md:-mt-32 relative z-10 pb-16">
-        <div className="bg-[#e6e1d8] rounded-xl shadow-xl p-6 md:p-10">
+        <div className="bg-[#e6e1d8] rounded-xl shadow-xl p-4 sm:p-6 md:p-10">
 
           {authLoading ? (
             <p className="text-center py-16 text-sm text-neutral-500 font-[Prata]">Loading...</p>
@@ -901,41 +943,29 @@ function Reservation() {
             </div>
           ) : (
             <>
-              <div className="flex gap-3 mb-8">
-                <button
-                  onClick={() => setTab("table")}
-                  className={`flex-1 py-4 rounded-xl text-base md:text-lg font-[Prata] font-bold transition-colors ${
-                    tab === "table"
-                      ? 'bg-[#1d080f] text-white'
-                      : 'bg-neutral-200/70 text-[#1d080f] hover:bg-neutral-300/70'
-                  }`}
-                >
-                  Table Reservation
-                </button>
-                <button
-                  onClick={() => setTab("event")}
-                  className={`flex-1 py-4 rounded-xl text-base md:text-lg font-[Prata] font-bold transition-colors ${
-                    tab === "event"
-                      ? 'bg-[#1d080f] text-white'
-                      : 'bg-neutral-200/70 text-[#1d080f] hover:bg-neutral-300/70'
-                  }`}
-                >
-                  Event Reservation
-                </button>
-                <button
-                  onClick={() => setTab("history")}
-                  className={`flex-1 py-4 rounded-xl text-base md:text-lg font-[Prata] font-bold transition-colors ${
-                    tab === "history"
-                      ? 'bg-[#1d080f] text-white'
-                      : 'bg-neutral-200/70 text-[#1d080f] hover:bg-neutral-300/70'
-                  }`}
-                >
-                  My Reservation
-                </button>
+              {/* Three equal columns that always fit; smaller text on a phone */}
+              <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-8">
+                {[
+                  { key: "table", label: "Table Reservation" },
+                  { key: "event", label: "Event Reservation" },
+                  { key: "history", label: "My Reservation" },
+                ].map((t) => (
+                  <button
+                    key={t.key}
+                    onClick={() => setTab(t.key)}
+                    className={`min-w-0 px-1.5 sm:px-3 py-2.5 sm:py-4 rounded-xl text-xs sm:text-base md:text-lg leading-tight font-[Prata] font-bold transition-colors ${
+                      tab === t.key
+                        ? 'bg-[#1d080f] text-white'
+                        : 'bg-neutral-200/70 text-[#1d080f] hover:bg-neutral-300/70'
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
               </div>
 
               {tab !== "history" && (
-                <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-[280px_minmax(0,1fr)] gap-6">
                   <div>
                     <div className="font-[Prata] text-lg mb-4">Select a date</div>
                     <div className="bg-white rounded-xl shadow-sm p-4">
@@ -976,7 +1006,7 @@ function Reservation() {
                     </div>
                   </div>
 
-                  <form id="reservation-form" onSubmit={handleConfirm} className="flex flex-col gap-4">
+                  <form id="reservation-form" onSubmit={handleConfirm} className="flex flex-col gap-4 min-w-0">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <input value={user?.full_name || ''} readOnly className={lockedInputClass} />
                       <input value={user?.contact_number || ''} readOnly className={lockedInputClass} />
@@ -1006,18 +1036,24 @@ function Reservation() {
                       <>
                         <input name="preference" placeholder="Theme Preference *" required className={inputClass} />
 
-                        <div className="bg-white rounded-md p-4">
+                        <div className="bg-white rounded-md p-4 text-left">
                           <label className="font-[Prata] text-sm text-neutral-600 block mb-2">
                             Theme Inspiration Photo (optional)
                           </label>
                           <label
                             htmlFor="theme-image-upload"
-                            className="flex items-center justify-center gap-2 border-2 border-dashed border-neutral-300 rounded-md py-6 cursor-pointer hover:bg-neutral-50 transition"
+                            className="flex items-center justify-center gap-2 border-2 border-dashed border-neutral-300 rounded-md py-6 px-3 cursor-pointer hover:bg-neutral-50 transition"
                           >
-                            <Upload size={16} className="text-neutral-400" />
-                            <span className="font-[Prata] text-xs text-neutral-500">
-                              {themeImagePreview ? "Change photo" : "Click to upload a photo"}
-                            </span>
+                            {themeImagePreview ? (
+                              <span className="font-[Prata] text-xs text-emerald-800 font-semibold flex items-center gap-1.5">
+                                <Check size={16} /> Photo attached — check it below
+                              </span>
+                            ) : (
+                              <>
+                                <Upload size={16} className="text-neutral-400" />
+                                <span className="font-[Prata] text-xs text-neutral-500">Click to upload a photo</span>
+                              </>
+                            )}
                           </label>
                           <input
                             id="theme-image-upload"
@@ -1027,11 +1063,17 @@ function Reservation() {
                             className="hidden"
                           />
                           {themeImagePreview && (
-                            <ZoomableImage
-                              src={themeImagePreview}
-                              alt="Theme preview"
-                              className="mt-3 w-full max-h-40 object-cover rounded-md"
-                            />
+                            <div className="mt-3">
+                              <ZoomableImage
+                                src={themeImagePreview}
+                                alt="Theme preview"
+                                onRemove={clearThemeImage}
+                                className="w-full max-h-40 object-cover rounded-md"
+                              />
+                              <p className="mt-2 text-xs text-neutral-600 font-[Prata] text-center break-all">
+                                {themeImageName} — tap the upload box above to choose a different one.
+                              </p>
+                            </div>
                           )}
                         </div>
 
@@ -1039,10 +1081,10 @@ function Reservation() {
                       </>
                     )}
 
-                    <div className="bg-white rounded-xl p-5">
-                      <div className="flex items-center justify-between mb-3">
+                    <div className="bg-white rounded-xl p-5 text-left">
+                      <div className="flex items-center justify-between gap-3 mb-3">
                         <span className="font-[Prata] text-sm text-neutral-600">Required Downpayment</span>
-                        <span className="font-[Prata] font-bold text-lg text-[#1d080f]">
+                        <span className="font-[Prata] font-bold text-lg text-[#1d080f] whitespace-nowrap">
                           Php. {(tab === "event" ? DOWNPAYMENT.event : DOWNPAYMENT.table).toLocaleString()}
                         </span>
                       </div>
@@ -1083,7 +1125,7 @@ function Reservation() {
                                 QR Code
                               </div>
                             )}
-                            <div className="text-xs font-[Prata]">
+                            <div className="text-xs font-[Prata] min-w-0">
                               <div className="text-neutral-500">Account Name</div>
                               <div className="text-[#1d080f] font-bold mb-2">{PAYMENT_ACCOUNTS[paymentMethod].accountName}</div>
                               <div className="text-neutral-500">{paymentMethod === "Bank Transfer" ? "Account Number" : "Number"}</div>
@@ -1103,12 +1145,18 @@ function Reservation() {
                           </p>
                           <label
                             htmlFor="payment-proof-upload"
-                            className="flex items-center justify-center gap-2 border-2 border-dashed border-neutral-300 rounded-md py-6 cursor-pointer hover:bg-neutral-50 transition"
+                            className="flex items-center justify-center gap-2 border-2 border-dashed border-neutral-300 rounded-md py-6 px-3 cursor-pointer hover:bg-neutral-50 transition"
                           >
-                            <Upload size={16} className="text-neutral-400" />
-                            <span className="font-[Prata] text-xs text-neutral-500">
-                              {paymentProofPreview ? "Change proof of payment" : "Click to upload proof of payment"}
-                            </span>
+                            {paymentProofPreview ? (
+                              <span className="font-[Prata] text-xs text-emerald-800 font-semibold flex items-center gap-1.5">
+                                <Check size={16} /> Photo attached — check it below
+                              </span>
+                            ) : (
+                              <>
+                                <Upload size={16} className="text-neutral-400" />
+                                <span className="font-[Prata] text-xs text-neutral-500">Click to upload proof of payment</span>
+                              </>
+                            )}
                           </label>
                           <input
                             id="payment-proof-upload"
@@ -1118,11 +1166,17 @@ function Reservation() {
                             className="hidden"
                           />
                           {paymentProofPreview ? (
-                            <ZoomableImage
-                              src={paymentProofPreview}
-                              alt="Proof of payment preview"
-                              className="mt-3 w-full max-h-48 object-contain rounded-md bg-neutral-50"
-                            />
+                            <div className="mt-3">
+                              <ZoomableImage
+                                src={paymentProofPreview}
+                                alt="Proof of payment preview"
+                                onRemove={clearPaymentProof}
+                                className="w-full max-h-48 object-contain rounded-md bg-neutral-50"
+                              />
+                              <p className="mt-2 text-xs text-neutral-600 font-[Prata] text-center break-all">
+                                {paymentProofName} — tap the upload box above to choose a different one.
+                              </p>
+                            </div>
                           ) : (
                             <p className="text-xs text-red-500 font-[Prata] mt-2">Proof of payment is required.</p>
                           )}
@@ -1130,7 +1184,7 @@ function Reservation() {
                       )}
                     </div>
 
-                    <div className="flex gap-4 mt-8 max-w-md">
+                    <div className="flex gap-3 sm:gap-4 mt-8 w-full max-w-md">
                       <button
                         type="button"
                         onClick={() => {
@@ -1138,19 +1192,19 @@ function Reservation() {
                           setSelectedTime(getDefaultTime())
                           setOccasion("")
                           setPaymentMethod("")
-                          setPaymentProofPreview("")
-                          setThemeImagePreview("")
+                          clearPaymentProof()
+                          clearThemeImage()
                         }}
-                        className="flex-1 bg-[#c0392b] text-white font-[Prata] font-bold py-3.5 rounded-full hover:opacity-90 transition"
-                      >
+                        className="flex-1 px-3 bg-[#c0392b] text-white font-[Prata] font-bold text-sm sm:text-base py-3 sm:py-3.5 rounded-full hover:opacity-90 transition"
+                                              >
                         Cancel
                       </button>
                       <button
                         type="submit"
                         form="reservation-form"
                         disabled={submitting}
-                        className="flex-1 bg-[#1d080f] text-white font-[Prata] font-bold py-3.5 rounded-full hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
+                        className="flex-[1.6] px-4 whitespace-nowrap bg-[#1d080f] text-white font-[Prata] font-bold text-sm sm:text-base py-3 sm:py-3.5 rounded-full hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                              >
                         {submitting ? "Submitting..." : "Submit Reservation"}
                       </button>
                     </div>

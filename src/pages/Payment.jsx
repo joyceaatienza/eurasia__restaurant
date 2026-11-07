@@ -225,7 +225,7 @@ function ImagePreview({ file, previewUrl, onRemove, label }) {
   );
 }
 
-function OrderHistoryCard({ order }) {
+function OrderHistoryCard({ order, onRetry }) {
   const status = (order.status || 'pending').toLowerCase();
   const cancelled = status === 'cancelled';
   const settled = Boolean(order.receipt_image);
@@ -243,26 +243,59 @@ function OrderHistoryCard({ order }) {
         Number(order.discount_amount || 0)
   );
 
+    // The cashier rejected the proof, so the customer needs to send a new one
+  const failed = (order.payment_status || '').toLowerCase() === 'failed';
+
   let payLabel = 'Unpaid';
   let payClass = 'bg-neutral-200 text-neutral-700';
   if (paid) {
     payLabel = 'Payment verified';
     payClass = 'bg-emerald-100 text-emerald-800';
+  } else if (failed) {
+    payLabel = 'Payment failed';
+    payClass = 'bg-red-100 text-red-800';
   } else if (settled) {
     payLabel = 'Awaiting verification';
     payClass = 'bg-amber-100 text-amber-900';
   }
-
+  
   return (
     <div className="bg-white rounded-2xl border border-neutral-200/80 p-5 shadow-xs">
       <div className="flex items-center justify-between mb-1">
         <span className="font-[Prata] text-base text-[#1d080f]">
           {order.customer_name || '—'}
         </span>
-        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${payClass}`}>
-          {payLabel}
-        </span>
+        {failed && onRetry ? (
+          <button
+            type="button"
+            onClick={onRetry}
+            title="Upload a new proof of payment"
+            className={`text-xs font-semibold px-2.5 py-1 rounded-full cursor-pointer hover:opacity-80 transition ${payClass}`}
+          >
+            {payLabel}
+          </button>
+        ) : (
+          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${payClass}`}>
+            {payLabel}
+          </span>
+        )}
       </div>
+
+      {/* Explains what went wrong and gives a clear way to fix it */}
+      {failed && onRetry && (
+        <div className="mb-4 mt-2 bg-red-50 border border-red-200 rounded-xl p-3 text-left">
+          <p className="text-xs text-red-800 leading-relaxed mb-2">
+            The cashier couldn't verify your proof of payment. Please upload a new one.
+          </p>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="w-full bg-[#c0392b] text-white text-xs font-bold py-2.5 rounded-lg hover:opacity-90 transition cursor-pointer"
+          >
+            Re-upload Proof of Payment
+          </button>
+        </div>
+      )}
       <p className="text-xs text-neutral-700 mb-1" style={{ textAlign: 'left' }}>
         Order #{orderNo}
         {order.table_number ? ` · Table ${order.table_number}` : ''}
@@ -739,8 +772,11 @@ function Payment() {
 
     try {
       const mine = await ordersApi.getMine();
+      // Unpaid = never settled, or settled but the cashier marked the proof as failed
       const unpaid = mine.filter(
-        (o) => !o.receipt_image && o.status !== 'cancelled'
+        (o) =>
+          o.status !== 'cancelled' &&
+          (!o.receipt_image || (o.payment_status || '').toLowerCase() === 'failed')
       );
       setUnpaidOrders(unpaid);
     } catch (err) {
@@ -1197,6 +1233,11 @@ function Payment() {
                 <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 text-sm text-amber-900 font-[Prata] text-center">
                   Found {unpaidOrders.length} unpaid order{unpaidOrders.length !== 1 ? 's' : ''} for {user?.full_name || '—'}. Review the bill below.
                 </div>
+                                {unpaidOrders.some((o) => (o.payment_status || '').toLowerCase() === 'failed') && (
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-800 font-[Prata] text-center">
+                    Your previous proof of payment was marked as failed by the cashier. Please upload a new one below.
+                  </div>
+                )}
 
                 <div className="bg-white rounded-2xl border border-neutral-200/80 p-6 shadow-xs">
                   <h4 className="text-[16px] font-bold text-[#8a6228] uppercase tracking-wider mb-4">
@@ -1627,7 +1668,13 @@ function Payment() {
                       o.id === highlightId ? 'ring-4 ring-[#f2c14e]/70' : ''
                     }`}
                   >
-                    <OrderHistoryCard order={o} />
+                    <OrderHistoryCard
+                      order={o}
+                      onRetry={() => {
+                        setHistoryOpen(false);
+                        openSettle();
+                      }}
+                    />
                   </div>
                 ))
               )}

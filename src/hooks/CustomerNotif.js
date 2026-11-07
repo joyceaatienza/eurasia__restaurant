@@ -49,10 +49,13 @@ export const cacheOrders = (orders) => writeCache(ORDERS_CACHE_KEY, lightOrders(
 export const cacheReservations = (reservations) =>
   writeCache(RESERVATIONS_CACHE_KEY, lightReservations(reservations))
 
-// Orders not yet settled (no proof of payment submitted) count as the unpaid balance
+// Orders not yet settled count as the unpaid balance — no proof submitted yet,
+// or a proof the cashier marked as failed (the customer has to send a new one)
 function summarizeUnpaid(orders) {
   const unpaid = orders.filter(
-    (o) => !o.receipt_image && String(o.status || '').toLowerCase() !== 'cancelled'
+    (o) =>
+      String(o.status || '').toLowerCase() !== 'cancelled' &&
+      (!o.receipt_image || String(o.payment_status || '').toLowerCase() === 'failed')
   )
   const latest = unpaid.reduce((max, o) => {
     const t = new Date(o.created_at).getTime()
@@ -86,17 +89,23 @@ const peso = (n) => `Php. ${Number(n || 0).toLocaleString('en-US')}`
 // The database mixes casing ('Verified', 'verified'), so compare in lowercase
 const lower = (v) => String(v || '').toLowerCase()
 
+// One notification per status change, so the bell rings again each time something moves
 const ORDER_MESSAGES = {
-  preparing: { title: 'Your order is being prepared', tone: 'info' },
-  ready: { title: 'Ready to Serve', tone: 'success' },
-  served: { title: 'Your order has been served', tone: 'success' },
-  cancelled: { title: 'Your order was cancelled', tone: 'error' },
+  pending: { title: 'Order received', detail: 'The kitchen has your order', tone: 'info' },
+  preparing: { title: 'Your order is being prepared', detail: 'The kitchen is cooking your food', tone: 'info' },
+  ready: { title: 'Ready to Serve', detail: 'Your food will be brought to your table shortly', tone: 'success' },
+  served: { title: 'Your order has been served', detail: 'Enjoy your meal!', tone: 'success' },
+  completed: { title: 'Order completed', detail: 'Thank you for dining with us', tone: 'info' },
+  cancelled: { title: 'Your order was cancelled', detail: 'Please ask our staff if you have questions', tone: 'error' },
 }
 
 const RESERVATION_MESSAGES = {
-  confirmed: { title: 'Reservation confirmed', tone: 'success' },
-  cancelled: { title: 'Reservation cancelled', tone: 'error' },
-  completed: { title: 'Reservation completed', tone: 'info' },
+  pending: { title: 'Reservation received', detail: 'Waiting for the front desk to confirm', tone: 'info' },
+  confirmed: { title: 'Reservation confirmed', detail: 'We look forward to seeing you', tone: 'success' },
+  seated: { title: 'Welcome to Eurasia!', detail: "You've been seated", tone: 'success' },
+  completed: { title: 'Thank you for dining with us', detail: 'We hope to see you again', tone: 'info' },
+  cancelled: { title: 'Reservation cancelled', detail: 'This reservation is no longer active', tone: 'error' },
+  no_show: { title: 'Reservation marked as no-show', detail: 'Please contact us if this is a mistake', tone: 'error' },
 }
 
 /* ------------------------------------------------------------------ */
@@ -111,6 +120,7 @@ function buildNotifications(orders, reservations) {
     const status = lower(o.status)
     const pay = lower(o.payment_status)
 
+    // ---------- Food status ----------
     const om = ORDER_MESSAGES[status]
     if (om) {
       list.push({
@@ -118,23 +128,45 @@ function buildNotifications(orders, reservations) {
         kind: 'order',
         tone: om.tone,
         title: om.title,
-        detail: `Order #${no} · ${peso(o.total)}`,
-        at,
+        detail: `Order #${no} · ${om.detail}`,
+        // A new order shows when it was placed; later changes show when they happened
+        at: status === 'pending' ? o.created_at : at,
         link: '/payment',
         target: { type: 'order', id: o.id },
       })
     }
 
-    if (pay === 'verified' || pay === 'failed') {
-      const ok = pay === 'verified'
+    // ---------- Payment status ----------
+    if (pay === 'verified') {
       list.push({
-        id: `orderpay-${o.id}-${pay}`,
+        id: `orderpay-${o.id}-verified`,
         kind: 'payment',
-        tone: ok ? 'success' : 'error',
-        title: ok ? 'Payment verified' : 'Payment was not verified',
-        detail: ok
-          ? `Order #${no} · ${peso(o.total)}`
-          : `Order #${no} · Please check your payment or ask the cashier`,
+        tone: 'success',
+        title: 'Payment verified',
+        detail: `Order #${no} · ${peso(o.total)} · Thank you!`,
+        at: o.verified_at ?? at,
+        link: '/payment',
+        target: { type: 'order', id: o.id },
+      })
+    } else if (pay === 'failed') {
+      // Goes straight to Settle Bill so a new proof can be uploaded
+      list.push({
+        id: `orderpay-${o.id}-failed`,
+        kind: 'payment',
+        tone: 'error',
+        title: 'Payment failed',
+        detail: `Order #${no} · The cashier couldn't verify your proof. Tap to upload a new one.`,
+        at,
+        link: '/payment',
+        target: { type: 'settle' },
+      })
+    } else if (o.receipt_image) {
+      list.push({
+        id: `orderpay-${o.id}-submitted`,
+        kind: 'payment',
+        tone: 'info',
+        title: 'Payment proof submitted',
+        detail: `Order #${no} · ${peso(o.total)} · Waiting for the cashier to verify`,
         at,
         link: '/payment',
         target: { type: 'order', id: o.id },
@@ -148,6 +180,7 @@ function buildNotifications(orders, reservations) {
     const status = lower(r.status)
     const pay = lower(r.payment_status)
 
+    // ---------- Reservation status ----------
     const rm = RESERVATION_MESSAGES[status]
     if (rm) {
       list.push({
@@ -155,27 +188,52 @@ function buildNotifications(orders, reservations) {
         kind: 'reservation',
         tone: rm.tone,
         title: rm.title,
-        detail: `${when} · ${r.party_size} pax`,
-        at,
+        detail: `${when} · ${r.party_size} pax · ${rm.detail}`,
+        at: status === 'pending' ? r.created_at : at,
         link: '/reservation',
         target: { type: 'reservation', id: r.id },
       })
     }
 
-    if (Number(r.downpayment_amount) > 0 && pay && pay !== 'pending') {
-      const ok = pay === 'verified'
-      list.push({
-        id: `downpayment-${r.id}-${pay}`,
-        kind: 'payment',
-        tone: ok ? 'success' : 'error',
-        title: ok ? 'Downpayment verified' : 'Downpayment was not verified',
-        detail: ok
-          ? `${peso(r.downpayment_amount)} · Reservation on ${when}`
-          : `Reservation on ${when} · Please check your payment or contact us`,
-        at,
-        link: '/reservation',
-        target: { type: 'reservation', id: r.id },
-      })
+    // ---------- Downpayment status ----------
+    if (Number(r.downpayment_amount) > 0) {
+      if (pay === 'verified') {
+        list.push({
+          id: `downpayment-${r.id}-verified`,
+          kind: 'payment',
+          tone: 'success',
+          title: 'Downpayment verified',
+          detail: `${peso(r.downpayment_amount)} · Reservation on ${when}`,
+          at,
+          link: '/reservation',
+          target: { type: 'reservation', id: r.id },
+        })
+      } else if (pay === 'failed') {
+        list.push({
+          id: `downpayment-${r.id}-failed`,
+          kind: 'payment',
+          tone: 'error',
+          title: 'Downpayment failed',
+          detail: `Reservation on ${when} · Please check your payment or contact us`,
+          at,
+          link: '/reservation',
+          target: { type: 'reservation', id: r.id },
+        })
+      } else {
+        const isCash = lower(r.payment_method) === 'cash'
+        list.push({
+          id: `downpayment-${r.id}-pending`,
+          kind: 'payment',
+          tone: 'info',
+          title: isCash ? 'Downpayment to pay in cash' : 'Downpayment submitted',
+          detail: isCash
+            ? `${peso(r.downpayment_amount)} · Pay at the restaurant to confirm your reservation on ${when}`
+            : `${peso(r.downpayment_amount)} · Waiting for the cashier to verify`,
+          at: r.created_at,
+          link: '/reservation',
+          target: { type: 'reservation', id: r.id },
+        })
+      }
     }
   })
 

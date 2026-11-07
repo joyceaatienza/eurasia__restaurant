@@ -3,8 +3,7 @@ import heroImage from "../assets/bgHero.jpg";
 import logo from "../assets/logoword.png";
 import { addReview } from "../utils/reviewsStore";
 import { ordersApi } from "../services/ordersApi";
-
-const MY_ORDER_HISTORY_KEY = "eurasia_my_order_history";
+import { useAuth } from "../context/AuthContext";
 
 const C = {
   bg: "#EFEAE2",
@@ -60,32 +59,36 @@ export default function Feedback() {
   const [dishes, setDishes] = useState([]);
   const [dishRatings, setDishRatings] = useState({});
 
+  // Logged-in customers get their account name filled in (and locked), like the Reservation form
+  const { user, isAuthenticated } = useAuth();
+  const accountName = isAuthenticated ? (user?.full_name || "").trim() : "";
+
   useEffect(() => {
-    const loadDishes = async () => {
-      try {
-        const ids = JSON.parse(localStorage.getItem(MY_ORDER_HISTORY_KEY) || "[]");
-        if (ids.length === 0) return;
+    if (accountName) setName(accountName);
+  }, [accountName]);
 
-        const results = await Promise.all(
-          ids.map((id) => ordersApi.getById(id).catch(() => null))
-        );
+  // The dishes this customer has ordered, so they can rate each one
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setDishes([]);
+      return;
+    }
 
+    ordersApi.getMine()
+      .then((orders) => {
         const names = [];
-        results.filter(Boolean).forEach((order) => {
-          (order.items || []).forEach((it) => {
-            const dishName = (it.item_name || it.name || "").toString().trim();
-            if (dishName && !names.includes(dishName)) names.push(dishName);
+        (orders || [])
+          .filter((o) => String(o.status || "").toLowerCase() !== "cancelled")
+          .forEach((order) => {
+            (order.items || []).forEach((it) => {
+              const dishName = (it.item_name || it.name || "").toString().trim();
+              if (dishName && !names.includes(dishName)) names.push(dishName);
+            });
           });
-        });
-
         setDishes(names);
-      } catch (e) {
-        console.error("Failed to load ordered dishes:", e);
-      }
-    };
-
-    loadDishes();
-  }, []);
+      })
+      .catch((e) => console.error("Failed to load ordered dishes:", e));
+  }, [isAuthenticated]);
 
   const isValid = rating > 0 && name.trim().length > 0;
 
@@ -95,7 +98,8 @@ export default function Feedback() {
 
   const handleCancel = () => {
     setRating(0);
-    setName("");
+    // A logged-in customer keeps their account name; a guest's typed name is cleared
+    setName(accountName);
     setMessage("");
     setDishRatings({});
     setError("");
@@ -252,6 +256,8 @@ export default function Feedback() {
                     placeholder="Name *"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
+                    readOnly={Boolean(accountName)}
+                    title={accountName ? "Taken from your account" : undefined}
                     style={{
                       width: "100%",
                       padding: "16px 18px",
@@ -259,8 +265,10 @@ export default function Feedback() {
                       borderRadius: 8,
                       fontSize: 15,
                       fontFamily: FONT,
-                      background: "#fff",
+                      // Gray and locked when it comes from the account
+                      background: accountName ? "#f0eeea" : "#fff",
                       color: C.ink,
+                      cursor: accountName ? "not-allowed" : "text",
                     }}
                   />
                 </div>

@@ -17,6 +17,9 @@ import {
   Bell,
   X,
   Menu as MenuIcon,
+  MessageSquare,
+  Star,
+  Search,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -36,6 +39,7 @@ import PaymentTransactions from "./PaymentTransactions";
 import { ordersApi } from "../services/ordersApi";
 import { guestsApi } from "../services/guestsApi";
 import { reservationsApi } from "../services/reservationsApi";
+import { reviewsApi } from "../services/reviewsApi";
 
 const C = {
   void: "#1d080f",
@@ -677,6 +681,7 @@ const NAV = [
   { key: "kitchen", label: "Kitchen", icon: ChefHat },
   { key: "cashier", label: "Cashier", icon: Wallet },
   { key: "history", label: "History", icon: HistoryIcon },
+  { key: "feedback", label: "Feedback", icon: MessageSquare },
 ];
 
 function TopHeader({ onToggleSidebar, isMobile, children }) {
@@ -1277,13 +1282,11 @@ function DashboardPage({ isMobile, isTablet }) {
     Completed: filteredReservations.filter((r) => r.status === "completed").length,
     Pending: filteredReservations.filter((r) => ["pending", "confirmed", "seated"].includes(r.status)).length,
     Cancelled: filteredReservations.filter((r) => r.status === "cancelled").length,
-    "No Shows": filteredReservations.filter((r) => r.status === "no_show").length,
   };
   const computedOrderStats = [
     { label: "Completed", value: reservationStatusCounts.Completed, color: C.green },
     { label: "Pending", value: reservationStatusCounts.Pending, color: C.amber },
     { label: "Cancelled", value: reservationStatusCounts.Cancelled, color: C.red },
-    { label: "No Shows", value: reservationStatusCounts["No Shows"], color: C.inkSoft },
   ];
 
   const itemTotals = {};
@@ -2031,6 +2034,294 @@ function HistoryPage({ isMobile }) {
   );
 }
 
+/* ---------------------------------------------------------------- */
+/* Feedback — what customers said in their reviews                   */
+/* ---------------------------------------------------------------- */
+// dish_ratings may arrive as a JSON string or an object, and as either
+// { "Sisig": 5 } or [{ name: "Sisig", rating: 5 }] — read whichever it is
+function parseDishRatings(value) {
+  let data = value;
+  if (typeof data === "string") {
+    try {
+      data = JSON.parse(data);
+    } catch {
+      return [];
+    }
+  }
+  if (!data) return [];
+  if (Array.isArray(data)) {
+    return data
+      .map((d) => ({ name: d.name || d.dish || d.item_name || "", rating: Number(d.rating ?? d.stars ?? 0) }))
+      .filter((d) => d.name);
+  }
+  if (typeof data === "object") {
+    return Object.entries(data).map(([name, rating]) => ({ name, rating: Number(rating) || 0 }));
+  }
+  return [];
+}
+
+function Stars({ value, size = 15 }) {
+  return (
+    <span style={{ display: "inline-flex", gap: 2 }}>
+      {[1, 2, 3, 4, 5].map((n) => (
+        <Star
+          key={n}
+          size={size}
+          fill={n <= Math.round(value) ? "#e0a82e" : "none"}
+          color={n <= Math.round(value) ? "#e0a82e" : "#cfc8ca"}
+          strokeWidth={1.75}
+        />
+      ))}
+    </span>
+  );
+}
+
+function FeedbackPage({ isMobile }) {
+  const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
+   const [search, setSearch] = useState("");
+  // 0 = every rating, otherwise only that many stars
+  const [starFilter, setStarFilter] = useState(0);
+
+  const load = useCallback((showSpinner = false) => {
+    if (showSpinner) setLoading(true);
+    return reviewsApi.getAll()
+      .then((data) => setReviews(Array.isArray(data) ? data : []))
+      .catch((err) => console.error("Failed to load feedback:", err))
+      .finally(() => { if (showSpinner) setLoading(false); });
+  }, []);
+
+  useEffect(() => {
+    load(true);
+    const interval = setInterval(() => load(), POLL_MS);
+    return () => clearInterval(interval);
+  }, [load]);
+
+  const total = reviews.length;
+  const average = total ? reviews.reduce((sum, r) => sum + Number(r.rating || 0), 0) / total : 0;
+  const countFor = (n) => reviews.filter((r) => Math.round(Number(r.rating)) === n).length;
+
+  const q = search.trim().toLowerCase();
+  const shown = reviews
+    .filter((r) => !starFilter || Math.round(Number(r.rating)) === starFilter)
+    .filter((r) =>
+      !q ||
+      (r.name || "").toLowerCase().includes(q) ||
+      (r.message || "").toLowerCase().includes(q) ||
+      parseDishRatings(r.dish_ratings).some((d) => d.name.toLowerCase().includes(q))
+    )
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+  const fmt = (value) => {
+    const d = new Date(value);
+    return isNaN(d.getTime())
+      ? ""
+      : d.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+  };
+
+  const pill = (active) => ({
+    border: "none",
+    borderRadius: 8,
+    padding: isMobile ? "7px 10px" : "8px 14px",
+    fontSize: 12.5,
+    fontFamily: "'Prata', serif",
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    background: active ? C.void : "transparent",
+    color: active ? "#f5e9d8" : C.ink,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+  });
+
+  return (
+    <div style={{ padding: isMobile ? 16 : 28 }}>
+      <div
+        style={{
+          fontFamily: "'Prata', serif",
+          fontSize: "clamp(26px, 6vw, 39px)",
+          color: C.ink,
+          WebkitTextStroke: "0.4px " + C.ink,
+          marginBottom: 20,
+        }}
+      >
+        Feedback
+      </div>
+
+      {/* Summary: overall rating and how the stars are spread */}
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(220px, 1fr) 2fr", gap: 16, marginBottom: 20 }}>
+        <Card style={{ textAlign: "center" }}>
+          <div style={{ color: C.inkSoft, fontSize: 12.5, fontWeight: 600, marginBottom: 8 }}>Average Rating</div>
+          <div style={{ fontFamily: "'Prata', serif", fontSize: 40, color: C.ink, lineHeight: 1.1 }}>
+            {total ? average.toFixed(1) : "—"}
+          </div>
+          <div style={{ margin: "8px 0 4px" }}><Stars value={average} size={18} /></div>
+          <div style={{ color: C.inkSoft, fontSize: 12 }}>
+            {total} review{total !== 1 ? "s" : ""}
+          </div>
+        </Card>
+
+        <Card>
+          {[5, 4, 3, 2, 1].map((n) => {
+            const count = countFor(n);
+            const pct = total ? (count / total) * 100 : 0;
+            return (
+              <button
+                key={n}
+                onClick={() => setStarFilter(starFilter === n ? 0 : n)}
+                title={`Show only ${n}-star reviews`}
+                style={{
+                  width: "100%",
+                  display: "grid",
+                  gridTemplateColumns: "34px 1fr 34px",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "5px 6px",
+                  border: "none",
+                  borderRadius: 8,
+                  background: starFilter === n ? "#fdf6df" : "transparent",
+                  cursor: "pointer",
+                  fontFamily: "'Prata', serif",
+                }}
+              >
+                <span style={{ fontSize: 13, color: C.ink, display: "inline-flex", alignItems: "center", gap: 3 }}>
+                  {n} <Star size={12} fill="#e0a82e" color="#e0a82e" />
+                </span>
+                <span style={{ height: 9, background: C.canvas, borderRadius: 999, overflow: "hidden" }}>
+                  <span style={{ display: "block", width: `${pct}%`, height: "100%", background: "#e0a82e", borderRadius: 999 }} />
+                </span>
+                <span style={{ fontSize: 12.5, color: C.inkSoft, textAlign: "right" }}>{count}</span>
+              </button>
+            );
+          })}
+        </Card>
+      </div>
+
+      {/* Search, star filter, and sort */}
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, marginBottom: 16 }}>
+        <div style={{ position: "relative", flex: isMobile ? "1 1 100%" : "0 1 380px" }}>
+          <Search size={16} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: C.inkSoft, pointerEvents: "none" }} />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => e.key === "Escape" && setSearch("")}
+            placeholder="Search name or comment"
+            style={{
+              width: "100%",
+              padding: "10px 38px 10px 40px",
+              borderRadius: 10,
+              border: `1px solid ${C.hair}`,
+              background: "#fff",
+              fontSize: 13,
+              fontFamily: "'Prata', serif",
+              color: C.ink,
+              outline: "none",
+            }}
+          />
+          {search && (
+            <button
+              onClick={() => setSearch("")}
+              aria-label="Clear search"
+              style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", border: "none", background: "transparent", cursor: "pointer", color: C.inkSoft, display: "flex", padding: 4 }}
+            >
+              <X size={15} />
+            </button>
+          )}
+        </div>
+
+        <div style={{ display: "flex", gap: 4, background: "#fff", padding: 4, borderRadius: 10, overflowX: "auto", maxWidth: "100%" }}>
+          <button onClick={() => setStarFilter(0)} style={pill(starFilter === 0)}>All</button>
+          {[5, 4, 3, 2, 1].map((n) => (
+            <button key={n} onClick={() => setStarFilter(n)} style={pill(starFilter === n)}>
+              {n} <Star size={11} fill="currentColor" />
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* The reviews */}
+      {loading ? (
+        <div style={{ padding: 40, textAlign: "center", color: C.inkSoft, fontSize: 13 }}>Loading feedback...</div>
+      ) : shown.length === 0 ? (
+        <div style={{ padding: 40, textAlign: "center", color: C.inkSoft, fontSize: 13, background: "#fff", borderRadius: 16 }}>
+          {total === 0 ? "No feedback yet." : "No reviews match your filters."}
+        </div>
+      ) : (
+        <div style={{ display: "grid", gap: 12 }}>
+          {shown.map((r) => {
+            const dishes = parseDishRatings(r.dish_ratings);
+            return (
+              <div
+                key={r.id}
+                style={{ background: "#fff", borderRadius: 16, padding: isMobile ? 16 : 20, boxShadow: "0 1px 3px rgba(23,3,16,0.05)", textAlign: "left" }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap", marginBottom: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                    <span
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: "50%",
+                        background: C.void,
+                        color: "#f5e9d8",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontFamily: "'Prata', serif",
+                        fontSize: 14,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {(r.name || "?").trim().charAt(0).toUpperCase()}
+                    </span>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontFamily: "'Prata', serif", fontSize: 14.5, color: C.ink }}>{r.name || "Guest"}</div>
+                      <div style={{ fontSize: 11.5, color: C.inkSoft }}>{fmt(r.created_at)}</div>
+                    </div>
+                  </div>
+                  <Stars value={Number(r.rating || 0)} />
+                </div>
+
+                {r.message && (
+                  <p style={{ fontSize: 13.5, color: "#3d2a30", lineHeight: 1.6, margin: "4px 0 0", wordBreak: "break-word" }}>
+                    {r.message}
+                  </p>
+                )}
+
+                {dishes.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 12 }}>
+                    {dishes.map((d) => (
+                      <span
+                        key={d.name}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 5,
+                          background: C.canvas,
+                          borderRadius: 999,
+                          padding: "4px 10px",
+                          fontSize: 11.5,
+                          color: C.ink,
+                        }}
+                      >
+                        {d.name}
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 2, color: "#a07812", fontWeight: 700 }}>
+                          {d.rating} <Star size={10} fill="#e0a82e" color="#e0a82e" />
+                        </span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function EurasiaAdmin() {
   const navigate = useNavigate();
   const isMobile = useMediaQuery(MOBILE_QUERY);
@@ -2136,6 +2427,8 @@ export default function EurasiaAdmin() {
         return <PaymentTransactions embedded highlightTarget={highlight} isMobile={isMobile} />;
       case "history":
         return <HistoryPage isMobile={isMobile} />;
+      case "feedback":
+        return <FeedbackPage isMobile={isMobile} />;
       default:
         return <DashboardPage isMobile={isMobile} isTablet={isTablet} />;
     }

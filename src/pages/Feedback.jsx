@@ -130,6 +130,31 @@ export default function Feedback() {
     }
   };
 
+  // Shared look for the two buttons at the bottom
+  const buttonBase = {
+    padding: "11px 10px",
+    border: "none",
+    borderRadius: 8,
+    fontSize: 13.5,
+    fontWeight: 700,
+    fontFamily: FONT,
+    color: "#fff",
+    // One line only, so both buttons stay short and the same height
+    whiteSpace: "nowrap",
+    lineHeight: 1.2,
+  };
+
+  // Shared look for the Name and comment fields
+  const fieldBase = {
+    width: "100%",
+    padding: "13px 16px",
+    border: "none",
+    borderRadius: 8,
+    fontSize: 14,
+    fontFamily: FONT,
+    color: C.ink,
+  };
+
   return (
     <div style={{ fontFamily: FONT, color: C.ink, background: C.bg }}>
       <div className="relative h-44 sm:h-52 md:h-60 overflow-hidden shrink-0">
@@ -148,26 +173,27 @@ export default function Feedback() {
         </div>
       </div>
 
-      <div style={{ position: "relative", marginTop: -60, padding: "0 40px 60px" }}>
+      {/* Tighter on phones so the dish list has room; desktop spacing unchanged */}
+      <div className="px-3 sm:px-10 pb-16" style={{ position: "relative", marginTop: -60 }}>
         <div
+          className="px-4 py-6 sm:px-10 sm:pt-8 sm:pb-10"
           style={{
             background: C.bg,
             borderRadius: "14px 14px 0 0",
-            padding: "32px 40px 40px",
             maxWidth: 1200,
             margin: "0 auto",
             boxShadow: "0 -4px 24px rgba(0,0,0,0.06)",
           }}
         >
-          <div style={{ display: "flex", gap: 10, marginBottom: 30 }}>
+          <div style={{ display: "flex", gap: 10, marginBottom: 24 }}>
             <div
               style={{
                 flex: 1,
                 textAlign: "center",
-                padding: 20,
+                padding: "14px 16px",
                 borderRadius: 8,
                 fontFamily: FONT,
-                fontSize: 19,
+                fontSize: "clamp(16px, 4.2vw, 19px)",
                 fontWeight: 700,
                 background: C.maroon,
                 color: "#fff",
@@ -180,11 +206,11 @@ export default function Feedback() {
           <div style={{ maxWidth: 700, margin: "0 auto" }}>
             {!submitted ? (
               <>
-                <p style={{ fontFamily: FONT, fontSize: 19, margin: "0 0 14px", textAlign: "center" }}>
+                <p style={{ fontFamily: FONT, fontSize: "clamp(15px, 4.2vw, 19px)", margin: "0 0 12px", textAlign: "center" }}>
                   How was your overall experience?
                 </p>
 
-                <div style={{ display: "flex", justifyContent: "center", gap: 10, marginBottom: 30 }}>
+                <div style={{ display: "flex", justifyContent: "center", gap: 10, marginBottom: 26 }}>
                   {[1, 2, 3, 4, 5].map((val) => (
                     <span
                       key={val}
@@ -192,7 +218,7 @@ export default function Feedback() {
                       onMouseEnter={() => setHoverRating(val)}
                       onMouseLeave={() => setHoverRating(0)}
                       style={{
-                        fontSize: 42,
+                        fontSize: "clamp(32px, 9vw, 42px)",
                         lineHeight: 1,
                         cursor: "pointer",
                         transition: "color .1s",
@@ -209,22 +235,22 @@ export default function Feedback() {
                     style={{
                       background: "#fff",
                       borderRadius: 10,
-                      padding: "20px 22px",
-                      marginBottom: 24,
+                      padding: "18px 16px",
+                      marginBottom: 20,
                     }}
                   >
                     <p
                       style={{
                         fontFamily: FONT,
-                        fontSize: 16,
-                        margin: "0 0 14px",
+                        fontSize: 15,
+                        margin: "0 0 12px",
                         textAlign: "center",
                       }}
                     >
                       Rate the dishes you ordered
                     </p>
 
-                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                       {dishes.map((dish) => (
                         <div
                           key={dish}
@@ -233,24 +259,38 @@ export default function Feedback() {
                             alignItems: "center",
                             justifyContent: "space-between",
                             gap: 12,
-                            paddingBottom: 12,
+                            paddingBottom: 10,
                             borderBottom: `1px solid ${C.line}`,
                           }}
                         >
-                          <span style={{ fontSize: 14.5, fontFamily: FONT, color: C.ink }}>
+                          {/* Left-aligned and allowed to shrink, so the stars always have room */}
+                          <span
+                            style={{
+                              flex: 1,
+                              minWidth: 0,
+                              fontSize: 13.5,
+                              fontFamily: FONT,
+                              color: C.ink,
+                              textAlign: "left",
+                              lineHeight: 1.3,
+                            }}
+                          >
                             {dish}
                           </span>
-                          <StarRow
-                            value={dishRatings[dish] || 0}
-                            onChange={(v) => setDishRating(dish, v)}
-                          />
+                          <div style={{ flexShrink: 0 }}>
+                            <StarRow
+                              size={20}
+                              value={dishRatings[dish] || 0}
+                              onChange={(v) => setDishRating(dish, v)}
+                            />
+                          </div>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
 
-                <div style={{ marginBottom: 16 }}>
+                <div style={{ marginBottom: 14 }}>
                   <input
                     type="text"
                     placeholder="Name *"
@@ -259,36 +299,24 @@ export default function Feedback() {
                     readOnly={Boolean(accountName)}
                     title={accountName ? "Taken from your account" : undefined}
                     style={{
-                      width: "100%",
-                      padding: "16px 18px",
-                      border: "none",
-                      borderRadius: 8,
-                      fontSize: 15,
-                      fontFamily: FONT,
+                      ...fieldBase,
                       // Gray and locked when it comes from the account
                       background: accountName ? "#f0eeea" : "#fff",
-                      color: C.ink,
                       cursor: accountName ? "not-allowed" : "text",
                     }}
                   />
                 </div>
 
-                <div style={{ marginBottom: 16 }}>
+                <div style={{ marginBottom: 14 }}>
                   <textarea
                     placeholder="Tell us what you enjoyed, or what we can improve"
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     style={{
-                      width: "100%",
-                      minHeight: 130,
+                      ...fieldBase,
+                      minHeight: 110,
                       resize: "vertical",
-                      padding: "16px 18px",
-                      border: "none",
-                      borderRadius: 8,
-                      fontSize: 15,
-                      fontFamily: FONT,
                       background: "#fff",
-                      color: C.ink,
                     }}
                   />
                 </div>
@@ -299,20 +327,14 @@ export default function Feedback() {
                   </p>
                 )}
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 24 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 20 }}>
                   <button
                     onClick={handleCancel}
                     disabled={submitting}
                     style={{
-                      padding: 18,
-                      border: "none",
-                      borderRadius: 8,
-                      fontSize: 16,
-                      fontWeight: 700,
+                      ...buttonBase,
                       cursor: submitting ? "not-allowed" : "pointer",
-                      fontFamily: FONT,
                       background: C.red,
-                      color: "#fff",
                       opacity: submitting ? 0.6 : 1,
                     }}
                     onMouseEnter={(e) => { if (!submitting) e.currentTarget.style.background = C.redHover; }}
@@ -324,15 +346,9 @@ export default function Feedback() {
                     onClick={handleSubmit}
                     disabled={!isValid || submitting}
                     style={{
-                      padding: 18,
-                      border: "none",
-                      borderRadius: 8,
-                      fontSize: 16,
-                      fontWeight: 700,
-                      fontFamily: FONT,
+                      ...buttonBase,
                       cursor: isValid && !submitting ? "pointer" : "default",
                       background: isValid && !submitting ? C.maroon : C.disabled,
-                      color: "#fff",
                     }}
                     onMouseEnter={(e) => { if (isValid && !submitting) e.currentTarget.style.background = C.maroonHover; }}
                     onMouseLeave={(e) => { if (isValid && !submitting) e.currentTarget.style.background = C.maroon; }}
@@ -359,8 +375,8 @@ export default function Feedback() {
                 >
                   ✓
                 </div>
-                <h2 style={{ fontFamily: FONT, fontSize: 26, margin: "0 0 8px" }}>Thank you!</h2>
-                <p style={{ fontSize: 14.5, color: C.muted, margin: 0, fontFamily: FONT }}>
+                <h2 style={{ fontFamily: FONT, fontSize: 24, margin: "0 0 8px" }}>Thank you!</h2>
+                <p style={{ fontSize: 14, color: C.muted, margin: 0, fontFamily: FONT }}>
                   Your feedback means a lot to us at Eurasia.
                 </p>
               </div>

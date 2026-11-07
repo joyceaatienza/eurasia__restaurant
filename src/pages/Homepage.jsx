@@ -52,42 +52,127 @@ function FindUs() {
   );
 }
 
+const AUTO_SLIDE_MS = 5000;
+
+/* Same look as before — slides forward forever: after the last review,
+   the first one comes in from the right again instead of rewinding */
 function ReviewsSection({ reviews }) {
-  const [current, setCurrent] = useState(0);
+  const count = reviews.length;
+  // index can reach `count`, which is a copy of the first review at the end
+  const [index, setIndex] = useState(0);
+  const [animate, setAnimate] = useState(true);
+  const [paused, setPaused] = useState(false);
+  const touchStartX = useRef(null);
+
+  // The real review being shown (the copy at the end counts as the first one)
+  const current = count ? index % count : 0;
+
+  // If the list changes, start over at the first review
+  useEffect(() => {
+    setAnimate(false);
+    setIndex(0);
+  }, [count]);
+
+  // Turn the slide animation back on right after a silent jump
+  useEffect(() => {
+    if (animate) return;
+    const frame = requestAnimationFrame(() =>
+      requestAnimationFrame(() => setAnimate(true))
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [animate]);
+
+  const next = () => setIndex((i) => (i >= count ? i : i + 1));
+
+  // Moves forward every few seconds
+  useEffect(() => {
+    if (paused || count < 2) return;
+    const timer = setInterval(next, AUTO_SLIDE_MS);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paused, count]);
+
+  // Landed on the copy of the first review: jump to the real one without animating
+  const handleTransitionEnd = () => {
+    if (index >= count) {
+      setAnimate(false);
+      setIndex(0);
+    }
+  };
+
+  // Dots go straight to a review
+  const goTo = (i) => {
+    setAnimate(true);
+    setIndex(i);
+  };
+
+  const onTouchStart = (e) => {
+    touchStartX.current = e.touches[0].clientX;
+    setPaused(true);
+  };
+
+  // Swiping left moves forward, the same direction as the auto-slide
+  const onTouchEnd = (e) => {
+    if (touchStartX.current !== null) {
+      const diff = e.changedTouches[0].clientX - touchStartX.current;
+      if (diff < -40) next();
+    }
+    touchStartX.current = null;
+    setPaused(false);
+  };
+
+  // The real reviews, plus a copy of the first one so the loop never rewinds
+  const slides = count > 1 ? [...reviews, reviews[0]] : reviews;
 
   return (
     <section className="relative bg-[#1d080f] text-[#f1ece7] py-24 px-6 flex flex-col items-center justify-center text-center">
       <div className="w-px h-10 bg-amber-500 mb-10" />
 
-      {reviews.length === 0 ? (
+      {count === 0 ? (
         <p className="font-serif italic text-lg md:text-lg max-w-lg leading-relaxed">
           No reviews yet — be the first to share your experience.
         </p>
       ) : (
         <>
-          <div className="max-w-xl mb-4">
-            <p className="font-serif italic text-lg md:text-lg leading-relaxed">
-              "{reviews[current].message}"
-            </p>
-            <div className="flex justify-center gap-1 mt-4">
-              {[1, 2, 3, 4, 5].map((star) => (
-                <span
-                  key={star}
-                  className={star <= reviews[current].rating ? "text-amber-400" : "text-neutral-600"}
-                  style={{ fontSize: 16 }}
-                >
-                  ★
-                </span>
+          <div
+            className="w-full max-w-xl overflow-hidden mb-4"
+            onMouseEnter={() => setPaused(true)}
+            onMouseLeave={() => setPaused(false)}
+            onTouchStart={onTouchStart}
+            onTouchEnd={onTouchEnd}
+          >
+            <div
+              className={`flex ${animate ? "transition-transform duration-700 ease-in-out" : ""}`}
+              style={{ transform: `translateX(-${index * 100}%)` }}
+              onTransitionEnd={handleTransitionEnd}
+            >
+              {slides.map((r, i) => (
+                <div key={i} className="w-full shrink-0 px-2">
+                  <p className="font-serif italic text-lg md:text-lg leading-relaxed break-words">
+                    "{r.message}"
+                  </p>
+                  <div className="flex justify-center gap-1 mt-4">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <span
+                        key={star}
+                        className={star <= r.rating ? "text-amber-400" : "text-neutral-600"}
+                        style={{ fontSize: 16 }}
+                      >
+                        ★
+                      </span>
+                    ))}
+                  </div>
+                  <p className="mt-3 font-[Prata] text-sm text-amber-300">— {r.name}</p>
+                </div>
               ))}
             </div>
-            <p className="mt-3 font-[Prata] text-sm text-amber-300">— {reviews[current].name}</p>
           </div>
 
           <div className="flex items-center justify-center gap-2 py-6">
             {reviews.map((_, i) => (
               <button
                 key={i}
-                onClick={() => setCurrent(i)}
+                onClick={() => goTo(i)}
                 aria-label={`Review ${i + 1}`}
                 className={`w-2 h-2 rounded-full transition ${
                   i === current ? "bg-amber-400" : "bg-neutral-500"

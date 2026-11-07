@@ -558,6 +558,8 @@ function Reservation() {
   const [loadingReservations, setLoadingReservations] = useState(false)
   const [toast, setToast] = useState({ message: '', tone: 'error' })
   const [cancelTarget, setCancelTarget] = useState(null)
+  // The reservation whose new downpayment proof is being sent
+  const [reuploadingId, setReuploadingId] = useState(null)
 
   // --- Jumping to a reservation from a notification ---
   const [highlightId, setHighlightId] = useState(null)
@@ -772,6 +774,35 @@ function Reservation() {
     }
   }
 
+  // After a failed downpayment: read the new photo and send it straight to the cashier
+  const handleReuploadProof = (reservation, e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = async () => {
+      try {
+        setReuploadingId(reservation.id)
+        await reservationsApi.reuploadProof(reservation.id, reader.result)
+        setReservations((prev) =>
+          prev.map((r) =>
+            r.id === reservation.id
+              ? { ...r, payment_status: 'pending', payment_proof: reader.result }
+              : r
+          )
+        )
+        setToast({ message: 'New proof of payment sent. The cashier will verify it shortly.', tone: 'success' })
+      } catch (err) {
+        console.error(err)
+        showError(err.message || 'Failed to upload proof of payment. Please try again.')
+      } finally {
+        setReuploadingId(null)
+      }
+    }
+    reader.readAsDataURL(file)
+  }
+
   // One reservation card — used by both the Upcoming and History sections
   const renderReservationCard = (r) => {
     const remainingDays = daysUntil(r.reservation_date)
@@ -780,6 +811,12 @@ function Reservation() {
     const pastCutoff = remainingDays !== null && remainingDays < CANCEL_CUTOFF_DAYS
     const cancelDisabled = isClosed || pastCutoff
     const isHighlighted = r.id === highlightId
+    // The cashier rejected the downpayment proof; an upcoming reservation can send a new one
+    const downpaymentFailed =
+      Number(r.downpayment_amount) > 0 &&
+      String(r.payment_status || '').toLowerCase() === 'failed'
+    const canReupload = downpaymentFailed && !isClosed && !isPastDate
+    const isCashDownpayment = String(r.payment_method || '').toLowerCase() === 'cash'
 
     return (
       <div
@@ -826,7 +863,7 @@ function Reservation() {
             </div>
             <div>
               <span className="block text-xs text-neutral-400">Downpayment</span>
-              <span>
+              <span className={downpaymentFailed ? 'text-red-700 font-semibold' : ''}>
                 {r.downpayment_amount ? `Php. ${Number(r.downpayment_amount).toLocaleString()} (${formatPaymentStatus(r.payment_status)})` : '—'}
               </span>
             </div>
@@ -858,6 +895,39 @@ function Reservation() {
             )}
           </div>
         </div>
+
+        {/* Same as a failed order payment: explain it, and let them send a new proof */}
+        {canReupload && (
+          <div className="mt-5 bg-red-50 border border-red-200 rounded-xl p-4 text-left">
+            <p className="text-sm font-[Prata] font-bold text-red-800 mb-1">Downpayment failed</p>
+            {isCashDownpayment ? (
+              <p className="text-xs font-[Prata] text-red-800 leading-relaxed">
+                The cashier couldn't confirm your cash downpayment. Please settle it at the restaurant or contact us.
+              </p>
+            ) : (
+              <>
+                <p className="text-xs font-[Prata] text-red-800 leading-relaxed mb-3">
+                  Your payment couldn't be verified, possibly due to an unclear, incorrect photo or incorrect amount, so please upload a new one.
+                </p>
+                <label
+                  className={`flex items-center justify-center gap-2 w-full bg-[#c0392b] text-white font-[Prata] text-xs sm:text-sm font-bold px-4 py-2.5 sm:py-3 rounded-full whitespace-nowrap text-center leading-tight transition ${
+                    reuploadingId === r.id ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-90 cursor-pointer'
+                  }`}
+                >
+                  <Upload size={15} className="shrink-0" />
+                  {reuploadingId === r.id ? 'Uploading...' : 'Re-upload Proof of Payment'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    disabled={reuploadingId === r.id}
+                    onChange={(e) => handleReuploadProof(r, e)}
+                  />
+                </label>
+              </>
+            )}
+          </div>
+        )}
 
         {r.payment_proof && (
           <div className="mt-4">
@@ -891,16 +961,16 @@ function Reservation() {
 
   return (
     <div className="bg-white text-[#1d080f]">
-<div className="relative h-44 sm:h-52 md:h-60 overflow-hidden shrink-0">
-  <img src={heroImage}
+      <div className="relative h-44 sm:h-52 md:h-60 overflow-hidden shrink-0">
+        <img src={heroImage}
           alt=""
           className="absolute inset-0 h-full w-full object-cover"
         />
         <div className="absolute inset-0 bg-white/40" />
-          <div className="relative flex h-full items-center justify-center px-4 pb-8 md:pb-16">
-            <h1
+        <div className="relative flex h-full items-center justify-center px-4 pb-8 md:pb-16">
+          <h1
             className="font-[Prata] font-bold text-xs md:text-xs text-[#1d080f]"
-                        style={{
+            style={{
               WebkitTextStroke: '0.7px #1d080f',
               letterSpacing: '1.5px',
               // Small enough to fit the shorter phone hero, full size on desktop
@@ -1196,7 +1266,7 @@ function Reservation() {
                           clearThemeImage()
                         }}
                         className="flex-1 px-3 bg-[#c0392b] text-white font-[Prata] font-bold text-sm sm:text-base py-3 sm:py-3.5 rounded-full hover:opacity-90 transition"
-                                              >
+                      >
                         Cancel
                       </button>
                       <button
@@ -1204,7 +1274,7 @@ function Reservation() {
                         form="reservation-form"
                         disabled={submitting}
                         className="flex-[1.6] px-4 whitespace-nowrap bg-[#1d080f] text-white font-[Prata] font-bold text-sm sm:text-base py-3 sm:py-3.5 rounded-full hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                                              >
+                      >
                         {submitting ? "Submitting..." : "Submit Reservation"}
                       </button>
                     </div>

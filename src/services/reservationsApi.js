@@ -41,4 +41,18 @@ export const reservationsApi = {
     if (!res.ok) throw new Error('Failed to update status');
     return res.json();
   },
+
+  // Sends a new proof of payment after the cashier marked the downpayment as failed
+  async reuploadProof(id, payment_proof) {
+    const res = await fetch(`${API_URL}/${id}/payment-proof`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ payment_proof }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to upload proof of payment.');
+    }
+    return res.json();
+  },
 };

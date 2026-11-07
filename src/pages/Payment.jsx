@@ -284,9 +284,9 @@ function OrderHistoryCard({ order, onRetry }) {
       {/* Explains what went wrong and gives a clear way to fix it */}
       {failed && onRetry && (
         <div className="mb-4 mt-2 bg-red-50 border border-red-200 rounded-xl p-3 text-left">
-          <p className="text-xs text-red-800 leading-relaxed mb-2">
-            The cashier couldn't verify your proof of payment. Please upload a new one.
-          </p>
+          <p className="text-xs font-[Prata] text-red-800 leading-relaxed mb-3">
+            Your payment couldn't be verified, possibly due to an unclear, incorrect photo or incorrect amount, so please upload a new one.
+            </p>
           <button
             type="button"
             onClick={onRetry}

@@ -148,9 +148,12 @@ function ReviewsSection({ reviews }) {
             >
               {slides.map((r, i) => (
                 <div key={i} className="w-full shrink-0 px-2">
-                  <p className="font-serif italic text-lg md:text-lg leading-relaxed break-words">
-                    "{r.message}"
-                  </p>
+                  {/* Stars-only reviews skip the quote */}
+                  {r.message && (
+                    <p className="font-serif italic text-lg md:text-lg leading-relaxed break-words">
+                      "{r.message}"
+                    </p>
+                  )}
                   <div className="flex justify-center gap-1 mt-4">
                     {[1, 2, 3, 4, 5].map((star) => (
                       <span

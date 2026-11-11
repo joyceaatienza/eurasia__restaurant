@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useLocation } from "react-router-dom";
-import { ChevronLeft, ChevronRight, ChevronDown, X, Lock, ArrowUpDown, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, X, Lock, ArrowUpDown, Search, Plus, Trash2 } from "lucide-react";
 import { reservationsApi } from "../services/reservationsApi";
 import { guestsApi } from "../services/guestsApi";
 import StaffHeader from "../components/StaffHeader";
@@ -208,41 +208,10 @@ function SectionTitle({ children }) {
 }
 
 /* ---------------------------------------------------------------- */
-/* Status dropdown — locked until the cashier verifies the downpayment */
+/* Status dropdown — the front desk confirms first; the guest pays after */
 /* ---------------------------------------------------------------- */
-function StatusSelect({ status, onChange, locked, fullWidth }) {
+function StatusSelect({ status, onChange, fullWidth }) {
   const c = statusColors(status);
-
-  if (locked) {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 4, width: fullWidth ? "100%" : "auto" }}>
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: fullWidth ? "center" : "flex-start",
-            gap: 6,
-            background: "#f4f2f3",
-            color: C.inkSoft,
-            border: `1px solid ${C.hair}`,
-            borderRadius: 8,
-            padding: "9px 14px",
-            fontSize: 12.5,
-            fontWeight: 700,
-            fontFamily: FONT,
-            minWidth: fullWidth ? 0 : 130,
-            width: fullWidth ? "100%" : "auto",
-            cursor: "not-allowed",
-          }}
-        >
-          <Lock size={12} /> {status}
-        </div>
-        <span style={{ fontSize: 10.5, color: C.inkSoft, fontFamily: FONT, maxWidth: fullWidth ? "none" : 150, lineHeight: 1.4 }}>
-          Waiting for the cashier to verify the downpayment
-        </span>
-      </div>
-    );
-  }
 
   return (
     <div style={{ position: "relative", display: fullWidth ? "block" : "inline-block", width: fullWidth ? "100%" : "auto" }}>
@@ -310,6 +279,18 @@ function DownpaymentCell({ reservation, onViewProof }) {
   }
 
   const tone = PAYMENT_TONES[reservation.paymentStatus] || PAYMENT_TONES.pending;
+
+  // The guest pays after the desk confirms, so a new booking has no payment yet
+  if (!reservation.paymentMethod) {
+    return (
+      <div>
+        <div style={{ fontWeight: 700, fontSize: 13, lineHeight: "18px" }}>{peso(amount)}</div>
+        <span style={{ display: "inline-block", background: "#eeecec", color: C.grayText, fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 6, marginTop: 3 }}>
+          Not paid yet
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -749,12 +730,397 @@ function MonthView({ selectedDate, reservations, onOpenDay, isMobile }) {
   );
 }
 
+/* Guest name with a VIP badge for VIP-area tables, and their note underneath */
+function GuestName({ r }) {
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+        <span>{r.type === "event" ? r.eventTitle : r.name}</span>
+        {r.type === "table" && r.vip && (
+          <span style={{ background: C.void, color: "#f5e9d8", fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 6, letterSpacing: 0.5, fontFamily: FONT }}>
+            VIP
+          </span>
+        )}
+      </div>
+      {r.note && (
+        <div style={{ fontSize: 11.5, color: C.inkSoft, marginTop: 3, maxWidth: 260, lineHeight: 1.4, fontWeight: 400 }}>
+          {r.note}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- */
+/* Remarks — a short note the guest sees while their booking is pending */
+/* ---------------------------------------------------------------- */
+const REMARK_PRESETS = [
+  "Please wait 5 mins, we're checking table availability.",
+  "We're fully booked at this time. Please choose another time.",
+  "We'll confirm once a table frees up.",
+];
+
+function RemarkEditor({ reservation, onSaved, compact }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState(reservation.remarks || "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  // Keep in step when the list refreshes, unless the desk is mid-edit
+  useEffect(() => {
+    if (!open) setText(reservation.remarks || "");
+  }, [reservation.remarks, open]);
+
+  const save = async (value) => {
+    try {
+      setSaving(true);
+      setError("");
+      await reservationsApi.updateRemarks(reservation.id, value.trim() || null);
+      onSaved(reservation.id, value.trim());
+      setOpen(false);
+    } catch (err) {
+      setError(err.message || "Couldn't save the remark.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const linkStyle = {
+    border: "none",
+    background: "transparent",
+    padding: 0,
+    color: "#8a6228",
+    fontSize: 11.5,
+    fontWeight: 700,
+    fontFamily: FONT,
+    cursor: "pointer",
+    textAlign: "left",
+  };
+
+  if (!open) {
+    return (
+      <div style={{ marginTop: compact ? 6 : 8, maxWidth: 240, textAlign: "left" }}>
+        {reservation.remarks && (
+          <div style={{ fontSize: 11.5, color: C.inkSoft, lineHeight: 1.4, marginBottom: 3 }}>
+            <b style={{ color: C.ink }}>Remark:</b> {reservation.remarks}
+          </div>
+        )}
+        <button type="button" onClick={() => setOpen(true)} style={linkStyle}>
+          {reservation.remarks ? "Edit remark" : "+ Add remark"}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginTop: 8, width: compact ? "100%" : 240, textAlign: "left", fontFamily: FONT }}>
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="e.g. Please wait 5 mins"
+        rows={2}
+        style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: `1px solid ${C.hair}`, fontSize: 12, fontFamily: FONT, color: C.ink, resize: "vertical", outline: "none" }}
+      />
+      {/* One-tap common replies */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 4, margin: "6px 0" }}>
+        {REMARK_PRESETS.map((p) => (
+          <button
+            key={p}
+            type="button"
+            onClick={() => setText(p)}
+            style={{ border: `1px solid ${C.hair}`, background: "#faf8f5", borderRadius: 6, padding: "5px 8px", fontSize: 10.5, fontFamily: FONT, color: C.ink, cursor: "pointer", textAlign: "left", lineHeight: 1.35 }}
+          >
+            {p}
+          </button>
+        ))}
+      </div>
+      {error && <div style={{ color: C.red, fontSize: 11, marginBottom: 4 }}>{error}</div>}
+      <div style={{ display: "flex", gap: 6 }}>
+        <button
+          type="button"
+          onClick={() => save(text)}
+          disabled={saving}
+          style={{ flex: 1, border: "none", borderRadius: 8, padding: "7px 10px", background: C.void, color: "#f5e9d8", fontSize: 11.5, fontWeight: 700, fontFamily: FONT, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.6 : 1 }}
+        >
+          {saving ? "Saving..." : "Send to guest"}
+        </button>
+        {reservation.remarks && (
+          <button
+            type="button"
+            onClick={() => save("")}
+            disabled={saving}
+            style={{ border: `1px solid ${C.hair}`, borderRadius: 8, padding: "7px 10px", background: "#fff", color: C.red, fontSize: 11.5, fontFamily: FONT, cursor: "pointer" }}
+          >
+            Clear
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => { setOpen(false); setText(reservation.remarks || ""); setError(""); }}
+          style={{ border: `1px solid ${C.hair}`, borderRadius: 8, padding: "7px 10px", background: "#fff", color: C.ink, fontSize: 11.5, fontFamily: FONT, cursor: "pointer" }}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- */
+/* Blocked times — the desk closes off part of a day (an event, or full) */
+/* so guests can't book a table during it                              */
+/* ---------------------------------------------------------------- */
+const BLOCK_REASONS = ["Private event", "Fully booked", "Closed"];
+
+// Every 30 minutes within opening hours (11:00 AM – 10:00 PM)
+const BLOCK_TIMES = Array.from({ length: 23 }, (_, i) => {
+  const mins = 11 * 60 + i * 30;
+  return `${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
+});
+
+// One-tap ranges for the usual cases
+const BLOCK_PRESETS = [
+  { label: "Lunch", start: "11:00", end: "14:00" },
+  { label: "Dinner", start: "17:00", end: "22:00" },
+  { label: "Whole day", start: "11:00", end: "22:00" },
+];
+
+// Rounds an odd time (e.g. an event at 7:21 PM) down to the nearest half hour on the list
+function snapToBlockTime(time) {
+  const [h, m] = String(time).split(":").map(Number);
+  const snapped = `${String(h).padStart(2, "0")}:${m >= 30 ? "30" : "00"}`;
+  if (snapped < BLOCK_TIMES[0]) return BLOCK_TIMES[0];
+  if (snapped > BLOCK_TIMES[BLOCK_TIMES.length - 1]) return BLOCK_TIMES[BLOCK_TIMES.length - 1];
+  return snapped;
+}
+
+function BlockedTimesCard({ dateISO, isMobile, prefill, onPrefillUsed }) {
+  const [slots, setSlots] = useState([]);
+  const [adding, setAdding] = useState(false);
+  const [start, setStart] = useState("17:00");
+  const [end, setEnd] = useState("21:00");
+  const [reason, setReason] = useState(BLOCK_REASONS[0]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const load = () =>
+    reservationsApi.getBlockedSlots(dateISO)
+      .then((data) => setSlots(Array.isArray(data) ? data : []))
+      .catch(() => setSlots([]));
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateISO]);
+
+  // "Block this time" from an event reservation opens the form already filled in
+  useEffect(() => {
+    if (!prefill) return;
+    const s = snapToBlockTime(prefill.start);
+    let e = snapToBlockTime(prefill.end);
+    if (e <= s) e = BLOCK_TIMES.find((t) => t > s) || BLOCK_TIMES[BLOCK_TIMES.length - 1];
+    setStart(s);
+    setEnd(e);
+    setReason(prefill.reason || BLOCK_REASONS[0]);
+    setError("");
+    setAdding(true);
+    onPrefillUsed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill]);
+
+  const add = async () => {
+    if (!start || !end || end <= start) {
+      setError("The end time must be after the start time.");
+      return;
+    }
+    try {
+      setSaving(true);
+      setError("");
+      await reservationsApi.addBlockedSlot({
+        block_date: dateISO,
+        start_time: `${start}:00`,
+        end_time: `${end}:00`,
+        reason,
+      });
+      setAdding(false);
+      load();
+    } catch (err) {
+      setError(err.message || "Couldn't block this time.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async (id) => {
+    try {
+      await reservationsApi.deleteBlockedSlot(id);
+      setSlots((prev) => prev.filter((s) => s.id !== id));
+    } catch (err) {
+      setError(err.message || "Couldn't remove it.");
+    }
+  };
+
+  const inputStyle = {
+    width: "100%",
+    padding: "10px 12px",
+    borderRadius: 8,
+    border: `1px solid ${C.hair}`,
+    fontSize: 13,
+    fontFamily: FONT,
+    color: C.ink,
+    background: "#fff",
+    outline: "none",
+    cursor: "pointer",
+  };
+  const labelStyle = { fontSize: 11.5, color: C.inkSoft, fontFamily: FONT, display: "flex", flexDirection: "column", gap: 4 };
+
+  return (
+    <Card style={{ padding: isMobile ? 16 : "18px 22px", textAlign: "left" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+        <div>
+          <div style={{ fontFamily: FONT, fontWeight: 700, fontSize: 15, color: C.ink }}>Blocked Times</div>
+          <div style={{ fontSize: 11.5, color: C.inkSoft, fontFamily: FONT, marginTop: 2 }}>
+            Guests can't book a table during these hours on this date.
+          </div>
+        </div>
+        {!adding && (
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            style={{ display: "flex", alignItems: "center", gap: 6, border: "none", borderRadius: 8, padding: "8px 14px", background: C.void, color: "#f5e9d8", fontSize: 12.5, fontWeight: 700, fontFamily: FONT, cursor: "pointer" }}
+          >
+            <Plus size={14} /> Block a Time
+          </button>
+        )}
+      </div>
+
+      {slots.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+          {slots.map((s) => (
+            <span
+              key={s.id}
+              style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#fbe7e7", color: C.red, borderRadius: 8, padding: "6px 10px", fontSize: 12, fontWeight: 700, fontFamily: FONT }}
+            >
+              <Lock size={12} />
+              {to12h(String(s.start_time).slice(0, 5))} – {to12h(String(s.end_time).slice(0, 5))}
+              {s.reason ? ` · ${s.reason}` : ""}
+              <button
+                type="button"
+                onClick={() => remove(s.id)}
+                aria-label="Remove this block"
+                style={{ border: "none", background: "transparent", color: C.red, cursor: "pointer", display: "flex", padding: 0 }}
+              >
+                <Trash2 size={13} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {adding && (
+        <div style={{ marginTop: 14, padding: isMobile ? 12 : 16, background: "#faf8f5", borderRadius: 12, fontFamily: FONT }}>
+          {/* Quick ranges */}
+          <div style={{ fontSize: 11.5, color: C.inkSoft, marginBottom: 6 }}>Quick pick</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
+            {BLOCK_PRESETS.map((p) => {
+              const active = start === p.start && end === p.end;
+              return (
+                <button
+                  key={p.label}
+                  type="button"
+                  onClick={() => { setStart(p.start); setEnd(p.end); }}
+                  style={{
+                    border: `1px solid ${active ? C.void : C.hair}`,
+                    background: active ? C.void : "#fff",
+                    color: active ? "#f5e9d8" : C.ink,
+                    borderRadius: 999,
+                    padding: "6px 12px",
+                    fontSize: 12,
+                    fontFamily: FONT,
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {p.label} · {to12h(p.start)} – {to12h(p.end)}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Or pick exact times */}
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "160px 160px 200px auto", gap: 10, alignItems: "end" }}>
+            <label style={labelStyle}>
+              From
+              <select
+                value={start}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setStart(next);
+                  // Keep "To" after "From"
+                  if (end <= next) {
+                    const later = BLOCK_TIMES.find((t) => t > next);
+                    if (later) setEnd(later);
+                  }
+                }}
+                style={inputStyle}
+              >
+                {BLOCK_TIMES.slice(0, -1).map((t) => (
+                  <option key={t} value={t}>{to12h(t)}</option>
+                ))}
+              </select>
+            </label>
+
+            <label style={labelStyle}>
+              To
+              <select value={end} onChange={(e) => setEnd(e.target.value)} style={inputStyle}>
+                {BLOCK_TIMES.filter((t) => t > start).map((t) => (
+                  <option key={t} value={t}>{to12h(t)}</option>
+                ))}
+              </select>
+            </label>
+
+            <label style={{ ...labelStyle, gridColumn: isMobile ? "1 / -1" : "auto" }}>
+              Reason
+              <select value={reason} onChange={(e) => setReason(e.target.value)} style={inputStyle}>
+                {BLOCK_REASONS.map((r) => <option key={r}>{r}</option>)}
+              </select>
+            </label>
+
+            <div style={{ display: "flex", gap: 6, gridColumn: isMobile ? "1 / -1" : "auto" }}>
+              <button
+                type="button"
+                onClick={add}
+                disabled={saving}
+                style={{ flex: isMobile ? 1 : "none", border: "none", borderRadius: 8, padding: "10px 18px", background: C.void, color: "#f5e9d8", fontSize: 12.5, fontWeight: 700, fontFamily: FONT, cursor: "pointer", opacity: saving ? 0.6 : 1 }}
+              >
+                {saving ? "Saving..." : "Block"}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setAdding(false); setError(""); }}
+                style={{ flex: isMobile ? 1 : "none", border: `1px solid ${C.hair}`, borderRadius: 8, padding: "10px 16px", background: "#fff", color: C.ink, fontSize: 12.5, fontFamily: FONT, cursor: "pointer" }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+
+          {/* What's about to be blocked, in plain words */}
+          <div style={{ fontSize: 12, color: C.ink, marginTop: 12 }}>
+            Blocking <b>{to12h(start)} – {to12h(end)}</b> · {reason}
+          </div>
+
+          {error && <div style={{ color: C.red, fontSize: 11.5, marginTop: 8 }}>{error}</div>}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 /* ---------------------------------------------------------------- */
 /* Phone card — a six-column table is unreadable at 375px            */
 /* ---------------------------------------------------------------- */
-function ReservationCard({ r, highlighted, cardRef, markStatus, onViewProof, showStatus = true, showDates = false }) {
-  const locked = r.paymentStatus !== "verified" && r.status !== "Cancelled";
-
+function ReservationCard({ r, highlighted, cardRef, markStatus, onViewProof, showStatus = true, showDates = false, onRemark }) {
   return (
     <div
       ref={cardRef}
@@ -771,7 +1137,7 @@ function ReservationCard({ r, highlighted, cardRef, markStatus, onViewProof, sho
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontWeight: 700, fontSize: 15, color: C.ink }}>
-            {r.type === "event" ? r.eventTitle : r.name}
+            <GuestName r={r} />
           </div>
           <div style={{ fontSize: 12.5, color: C.inkSoft, marginTop: 2 }}>
             {showDates ? `${displayDateFromISO(r.date)} · ` : ""}
@@ -793,12 +1159,14 @@ function ReservationCard({ r, highlighted, cardRef, markStatus, onViewProof, sho
       {showStatus ? (
         <StatusSelect
           status={r.status}
-          locked={locked}
           fullWidth
           onChange={(status) => markStatus(r.id, status)}
         />
       ) : (
         <StatusPill status={r.status} />
+      )}
+      {showStatus && r.status === "Pending" && onRemark && (
+        <RemarkEditor reservation={r} onSaved={onRemark} compact />
       )}
     </div>
   );
@@ -926,7 +1294,7 @@ function HistoryView({ reservations, onViewProof, isMobile }) {
                 <tr key={r.id} style={{ fontSize: 13.5, opacity: r.status === "Cancelled" ? 0.6 : 1 }}>
                   <td style={{ ...cell, whiteSpace: "nowrap" }}>{displayDateFromISO(r.date)}</td>
                   <td style={{ ...cell, fontWeight: 700, whiteSpace: "nowrap" }}>{to12h(r.time)}</td>
-                  <td style={cell}>{r.type === "event" ? r.eventTitle : r.name}</td>
+                  <td style={cell}><GuestName r={r} /></td>
                   <td style={{ ...cell, color: C.inkSoft }}>{r.pax}</td>
                   <td style={cell}>
                     <DownpaymentCell reservation={r} onViewProof={onViewProof} />
@@ -1055,7 +1423,7 @@ function bookedTime(r) {
     : "—";
 }
 
-function DayView({ selectedISO, reservations, markStatus, highlightId, highlightRef, onViewProof, isMobile }) {
+function DayView({ selectedISO, reservations, markStatus, highlightId, highlightRef, onViewProof, isMobile, onRemark, onBlockTime }) {
   // 1. Submitted on this day and still waiting for the front desk — newest booking first
   const toConfirm = reservations
     .filter((r) => r.status === "Pending" && bookedISO(r) === selectedISO)
@@ -1069,7 +1437,6 @@ function DayView({ selectedISO, reservations, markStatus, highlightId, highlight
     .sort((a, b) => (a.time > b.time ? 1 : -1));
 
   const cell = { padding: "16px 22px", borderBottom: `1px solid ${C.hair}`, verticalAlign: "top", textAlign: "left" };
-  const isLocked = (r) => r.paymentStatus !== "verified" && r.status !== "Cancelled";
 
   const countPill = (n) => (
     <span style={{ background: C.void, color: "#f5e9d8", fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, marginTop: -14, fontFamily: FONT }}>
@@ -1095,13 +1462,26 @@ function DayView({ selectedISO, reservations, markStatus, highlightId, highlight
     </div>
   );
 
-  // The status column: still-pending bookings can be confirmed right here
-  const statusCell = (r) =>
-    r.status === "Pending" ? (
-      <StatusSelect status={r.status} locked={isLocked(r)} onChange={(status) => markStatus(r.id, status)} />
-    ) : (
-      <StatusPill status={r.status} />
-    );
+  // Pending: confirm it, or leave the guest a remark. Confirmed events can close off their hours.
+  const statusCell = (r) => (
+    <div>
+      {r.status === "Pending" ? (
+        <StatusSelect status={r.status} onChange={(status) => markStatus(r.id, status)} />
+      ) : (
+        <StatusPill status={r.status} />
+      )}
+      {r.status === "Pending" && <RemarkEditor reservation={r} onSaved={onRemark} />}
+      {r.type === "event" && r.status === "Confirmed" && (
+        <button
+          type="button"
+          onClick={() => onBlockTime(r)}
+          style={{ display: "block", marginTop: 8, border: "none", background: "transparent", padding: 0, color: "#8a6228", fontSize: 11.5, fontWeight: 700, fontFamily: FONT, cursor: "pointer" }}
+        >
+          Block this time for tables
+        </button>
+      )}
+    </div>
+  );
 
   const rowStyle = (r) => ({
     fontSize: 13.5,
@@ -1127,7 +1507,17 @@ function DayView({ selectedISO, reservations, markStatus, highlightId, highlight
             onViewProof={onViewProof}
             showStatus={r.status === "Pending"}
             showDates={showDates}
+            onRemark={onRemark}
           />
+          {r.type === "event" && r.status === "Confirmed" && (
+            <button
+              type="button"
+              onClick={() => onBlockTime(r)}
+              style={{ marginTop: 6, border: "none", background: "transparent", padding: 0, color: "#8a6228", fontSize: 11.5, fontWeight: 700, fontFamily: FONT, cursor: "pointer" }}
+            >
+              Block this time for tables
+            </button>
+          )}
         </div>
       ))}
     </div>
@@ -1163,7 +1553,7 @@ function DayView({ selectedISO, reservations, markStatus, highlightId, highlight
                     <td style={{ ...cell, color: C.inkSoft, whiteSpace: "nowrap" }}>{bookedTime(r)}</td>
                     <td style={{ ...cell, whiteSpace: "nowrap" }}>{displayDateFromISO(r.date)}</td>
                     <td style={{ ...cell, fontWeight: 700, whiteSpace: "nowrap" }}>{to12h(r.time)}</td>
-                    <td style={cell}>{r.type === "event" ? r.eventTitle : r.name}</td>
+                    <td style={cell}><GuestName r={r} /></td>
                     <td style={cell}>
                       <Badge tone={r.type === "event" ? "amber" : "green"}>{r.type === "event" ? "Event" : "Table"}</Badge>
                     </td>
@@ -1204,7 +1594,7 @@ function DayView({ selectedISO, reservations, markStatus, highlightId, highlight
                 {forTheDay.map((r) => (
                   <tr key={r.id} ref={r.id === highlightId ? highlightRef : null} style={rowStyle(r)}>
                     <td style={{ ...cell, fontWeight: 700, whiteSpace: "nowrap" }}>{to12h(r.time)}</td>
-                    <td style={cell}>{r.type === "event" ? r.eventTitle : r.name}</td>
+                    <td style={cell}><GuestName r={r} /></td>
                     <td style={cell}>
                       <Badge tone={r.type === "event" ? "amber" : "green"}>{r.type === "event" ? "Event" : "Table"}</Badge>
                     </td>
@@ -1254,7 +1644,6 @@ function SearchView({ query, reservations, markStatus, onViewProof, onOpenDay, i
 
   // Only reservations still waiting on the front desk can be changed from here
   const canEdit = (r) => !DONE_STATUSES.includes(r.status) && r.date >= todayISO;
-  const isLocked = (r) => r.paymentStatus !== "verified" && r.status !== "Cancelled";
 
   const cell = { padding: "14px 22px", borderBottom: `1px solid ${C.hair}`, textAlign: "left", verticalAlign: "top" };
 
@@ -1322,7 +1711,7 @@ function SearchView({ query, reservations, markStatus, onViewProof, onOpenDay, i
                 <tr key={r.id} style={{ fontSize: 13.5, opacity: r.status === "Cancelled" ? 0.6 : 1 }}>
                   <td style={{ ...cell, whiteSpace: "nowrap" }}>{displayDateFromISO(r.date)}</td>
                   <td style={{ ...cell, fontWeight: 700, whiteSpace: "nowrap" }}>{to12h(r.time)}</td>
-                  <td style={cell}>{r.type === "event" ? r.eventTitle : r.name}</td>
+                  <td style={cell}><GuestName r={r} /></td>
                   <td style={{ ...cell, color: C.inkSoft }}>
                     <div style={{ whiteSpace: "nowrap" }}>{r.contact || "—"}</div>
                     {r.email && <div style={{ fontSize: 11.5 }}>{r.email}</div>}
@@ -1340,7 +1729,6 @@ function SearchView({ query, reservations, markStatus, onViewProof, onOpenDay, i
                     {canEdit(r) ? (
                       <StatusSelect
                         status={r.status}
-                        locked={isLocked(r)}
                         onChange={(status) => markStatus(r.id, status)}
                       />
                     ) : (
@@ -1399,6 +1787,11 @@ function normalizeReservation(r) {
     email: r.email || "",
     pax: r.party_size,
     location: r.special_requests || r.occasion || "—",
+    // Table guests can ask for the VIP area and leave a note (e.g. business meeting)
+    vip: Number(r.vip_area) === 1,
+    note: r.special_requests || "",
+    // What the desk told the guest while their booking is pending
+    remarks: r.remarks || "",
     downpayment: r.downpayment_amount,
     paymentMethod: r.payment_method,
     paymentStatus: String(r.payment_status || "pending").toLowerCase(),
@@ -1435,10 +1828,30 @@ export default function Reservations({ embedded = false, highlightTarget = null,
   const [search, setSearch] = useState("");
   const isSearching = search.trim().length > 0;
   const highlightRef = useRef(null);
+  // "Block this time" from an event fills in the Blocked Times form
+  const [blockPrefill, setBlockPrefill] = useState(null);
 
   const showError = (message) => setToast({ message, tone: "error" });
   const showSuccess = (message) => setToast({ message, tone: "success" });
   const closeToast = () => setToast({ message: "", tone: "error" });
+
+  // A remark saved by the desk shows right away without waiting for the next refresh
+  const handleRemark = (id, remarks) => {
+    setReservations((prev) => prev.map((r) => (r.id === id ? { ...r, remarks } : r)));
+    showSuccess(remarks ? "Remark sent to the guest." : "Remark cleared.");
+  };
+
+  // Events usually run about 4 hours; the desk can adjust before blocking
+  const blockEventTime = (r) => {
+    const [h, m] = r.time.split(":").map(Number);
+    const endH = Math.min(h + 4, 22);
+    setBlockPrefill({
+      start: r.time,
+      end: endH >= 22 ? "22:00" : `${String(endH).padStart(2, "0")}:${String(m).padStart(2, "0")}`,
+      reason: "Private event",
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   // showSpinner is only true on the first load — background polls stay silent
   const loadReservations = useCallback((showSpinner = false) => {
@@ -1453,8 +1866,7 @@ export default function Reservations({ embedded = false, highlightTarget = null,
     loadReservations(true);
   }, [loadReservations]);
 
-  // Keep the desk in sync so new bookings and cashier verifications appear
-  // without a refresh
+  // Keep the desk in sync so new bookings and payments appear without a refresh
   useEffect(() => {
     const interval = setInterval(() => loadReservations(), POLL_MS);
     return () => clearInterval(interval);
@@ -1521,7 +1933,7 @@ export default function Reservations({ embedded = false, highlightTarget = null,
       setReservations((prev) => prev.map((r) => (r.id === id ? { ...r, status } : r)));
       loadGuestCounts();
       if (status === "Cancelled") showSuccess("Reservation cancelled.");
-      if (status === "Confirmed") showSuccess("Reservation confirmed. It now shows on its reservation date.");
+      if (status === "Confirmed") showSuccess("Reservation confirmed. The guest can now pay the downpayment.");
     } catch (err) {
       console.error("Failed to update status:", err);
       showError("Failed to update reservation status. Please try again.");
@@ -1715,15 +2127,25 @@ export default function Reservations({ embedded = false, highlightTarget = null,
         ) : (
           <>
             {range === "Day" && (
-              <DayView
-                selectedISO={selectedISO}
-                reservations={reservations}
-                markStatus={markStatus}
-                highlightId={highlightId}
-                highlightRef={highlightRef}
-                onViewProof={setProofTarget}
-                isMobile={isMobile}
-              />
+              <>
+                <BlockedTimesCard
+                  dateISO={selectedISO}
+                  isMobile={isMobile}
+                  prefill={blockPrefill}
+                  onPrefillUsed={() => setBlockPrefill(null)}
+                />
+                <DayView
+                  selectedISO={selectedISO}
+                  reservations={reservations}
+                  markStatus={markStatus}
+                  highlightId={highlightId}
+                  highlightRef={highlightRef}
+                  onViewProof={setProofTarget}
+                  isMobile={isMobile}
+                  onRemark={handleRemark}
+                  onBlockTime={blockEventTime}
+                />
+              </>
             )}
             {range === "Week" && (
               <WeekView

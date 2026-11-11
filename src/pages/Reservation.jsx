@@ -1,10 +1,11 @@
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, ChevronDown, Check, X, Clock, Upload, AlertTriangle } from 'lucide-react'
 import heroImage from '../assets/bgHero.jpg'
 import { reservationsApi } from '../services/reservationsApi'
 import { useAuth } from '../context/AuthContext'
 import { readCachedReservations, cacheReservations } from '../hooks/CustomerNotif'
+import { setAdvanceOrder } from '../utils/advanceOrder'
 
 const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"]
 const ITEM_H = 40
@@ -13,6 +14,9 @@ const OPEN_HOUR = 11   // 11:00 AM
 const CLOSE_HOUR = 22  // 10:00 PM
 
 const CANCEL_CUTOFF_DAYS = 3
+
+// How often My Reservation checks for updates from the front desk and cashier
+const REFRESH_MS = 8000
 
 const DOWNPAYMENT = {
   table: 1000,
@@ -323,9 +327,9 @@ function WheelTimePicker({ value, onChange }) {
         }}
         className="w-full bg-white rounded-md px-4 py-3.5 flex items-center justify-between text-left font-[Prata] focus:outline-none focus:ring-1 focus:ring-[#1d080f]"
       >
-        <span className="flex items-baseline gap-2">
-          <span className="text-neutral-400">Time *</span>
-          {touched && <span className={currentIsAllowed ? 'text-[#1d080f] font-medium' : 'text-neutral-400 font-medium'}>{displayString}</span>}
+        {/* The label above already says "Reservation Time", so only the time shows here */}
+        <span className={touched ? (currentIsAllowed ? 'text-[#1d080f] font-medium' : 'text-neutral-400 font-medium') : 'text-neutral-400'}>
+          {touched ? displayString : 'Select a time'}
         </span>
         <Clock size={16} className="text-neutral-400 opacity-60" />
       </button>
@@ -533,6 +537,177 @@ function ZoomableImage({ src, alt, className, onRemove }) {
   )
 }
 
+/* A saved photo (proof of payment or theme) that's only downloaded when the guest taps it,
+   so the reservation list itself stays light and quick to refresh */
+function SavedPhoto({ reservationId, field, label, imgClass }) {
+  const [src, setSrc] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const load = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const full = await reservationsApi.getById(reservationId)
+      if (full?.[field]) setSrc(full[field])
+      else setError('No photo found.')
+    } catch {
+      setError('Could not load the photo. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (src) return <ZoomableImage src={src} alt={label} className={imgClass} />
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={load}
+        disabled={loading}
+        className="w-full border border-dashed border-neutral-300 rounded-md py-3 text-xs font-[Prata] text-neutral-600 hover:bg-neutral-50 transition disabled:opacity-60"
+      >
+        {loading ? 'Loading…' : `View ${label.toLowerCase()}`}
+      </button>
+      {error && <p className="text-xs text-red-500 font-[Prata] mt-1">{error}</p>}
+    </>
+  )
+}
+
+/* Shown once the front desk confirms: the guest pays the downpayment here */
+function DownpaymentPanel({ reservation, onPaid, onError }) {
+  const amount = Number(reservation.downpayment_amount || 0)
+  const [method, setMethod] = useState('')
+  const [proof, setProof] = useState('')
+  const [proofName, setProofName] = useState('')
+  const [sending, setSending] = useState(false)
+
+  const isCash = method === 'Cash'
+  const account = PAYMENT_ACCOUNTS[method]
+
+  const handleFile = (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setProofName(file.name)
+    const reader = new FileReader()
+    reader.onload = () => setProof(reader.result)
+    reader.readAsDataURL(file)
+  }
+
+  const submit = async () => {
+    if (!method) return onError("Please choose how you'll pay the downpayment.")
+    if (!isCash && !proof) return onError('Please upload your proof of payment.')
+    try {
+      setSending(true)
+      await reservationsApi.payDownpayment(reservation.id, {
+        payment_method: method,
+        payment_proof: isCash ? null : proof,
+      })
+      onPaid(reservation.id, method, !isCash)
+    } catch (err) {
+      onError(err.message || 'Failed to submit your downpayment. Please try again.')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <div className="mt-5 bg-emerald-50 border border-emerald-200 rounded-xl p-3 sm:p-4 text-left font-[Prata]">
+      <p className="text-sm font-bold text-emerald-900 mb-1">Your reservation is confirmed!</p>
+      <p className="text-xs text-emerald-900 leading-relaxed mb-3">
+        Pay your Php. {amount.toLocaleString()} downpayment to secure your reservation.
+      </p>
+
+      <div className="relative mb-3">
+        <select
+          value={method}
+          onChange={(e) => setMethod(e.target.value)}
+          className={`w-full bg-white rounded-md px-4 py-3 text-sm appearance-none focus:outline-none focus:ring-1 focus:ring-[#1d080f] ${method ? 'text-[#1d080f]' : 'text-neutral-400'}`}
+        >
+          <option value="" disabled>Choose how you'll pay</option>
+          <option className="text-[#1d080f]">GCash</option>
+          <option className="text-[#1d080f]">Paymaya</option>
+          <option className="text-[#1d080f]">Bank Transfer</option>
+          <option className="text-[#1d080f]">Cash</option>
+        </select>
+        <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-400" />
+      </div>
+
+      {isCash && (
+        <p className="text-xs text-neutral-700 leading-relaxed mb-3 bg-white rounded-lg p-3">
+          Pay the downpayment in cash at the restaurant. Our cashier will mark it as received.
+        </p>
+      )}
+
+      {account && (
+        <div className="bg-white rounded-lg p-3 mb-3 flex items-center gap-3">
+          {account.qrPlaceholder && (
+            <div className="w-16 h-16 shrink-0 rounded-md border border-dashed border-neutral-300 flex items-center justify-center text-[9px] text-neutral-400">
+              QR Code
+            </div>
+          )}
+          <div className="text-xs min-w-0">
+            <div className="text-neutral-500">Account Name</div>
+            <div className="text-[#1d080f] font-bold mb-1">{account.accountName}</div>
+            <div className="text-neutral-500">{method === 'Bank Transfer' ? 'Account Number' : 'Number'}</div>
+            <div className="text-[#1d080f] font-bold">{account.accountNumber}</div>
+          </div>
+        </div>
+      )}
+
+      {method && !isCash && (
+        <div className="mb-3">
+          <label className="flex items-center justify-center gap-2 bg-white border-2 border-dashed border-neutral-300 rounded-md py-4 px-3 cursor-pointer hover:bg-neutral-50 transition">
+            {proof ? (
+              <span className="text-xs text-emerald-800 font-semibold flex items-center gap-1.5">
+                <Check size={15} /> Photo attached — check it below
+              </span>
+            ) : (
+              <>
+                <Upload size={15} className="text-neutral-400" />
+                <span className="text-xs text-neutral-500">Upload proof of payment</span>
+              </>
+            )}
+            <input type="file" accept="image/*" className="hidden" onChange={handleFile} />
+          </label>
+          {proof && (
+            <div className="mt-2">
+              <ZoomableImage
+                src={proof}
+                alt="Proof of payment preview"
+                onRemove={() => { setProof(''); setProofName('') }}
+                className="w-full max-h-40 object-contain rounded-md bg-white"
+              />
+              <p className="mt-1.5 text-[11px] text-neutral-600 text-center break-all">{proofName}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={submit}
+        disabled={sending || !method}
+        className="w-full bg-[#1d080f] text-white text-xs sm:text-sm font-bold py-2.5 sm:py-3 rounded-full hover:opacity-90 transition disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+      >
+        {sending ? 'Submitting...' : isCash ? "I'll Pay in Cash at the Restaurant" : 'Submit Downpayment'}
+      </button>
+    </div>
+  )
+}
+
+/* A small label above each field, so guests know what goes where even after typing */
+function Field({ label, children }) {
+  return (
+    <div className="text-left min-w-0">
+      <label className="block text-xs font-[Prata] text-neutral-600 mb-1.5">{label}</label>
+      {children}
+    </div>
+  )
+}
+
 function Reservation() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -546,11 +721,10 @@ function Reservation() {
   const [selectedTime, setSelectedTime] = useState(getDefaultTime)
   const [showConfirm, setShowConfirm] = useState(false)
   const [occasion, setOccasion] = useState("")
-  const [paymentMethod, setPaymentMethod] = useState("")
-  const [paymentProofPreview, setPaymentProofPreview] = useState("")
+  // Table reservations: regular seating or the VIP area
+  const [vipArea, setVipArea] = useState(false)
   const [themeImagePreview, setThemeImagePreview] = useState("")
-  // File names, shown under each preview so the customer knows which photo they picked
-  const [paymentProofName, setPaymentProofName] = useState("")
+  // File name, shown under the preview so the customer knows which photo they picked
   const [themeImageName, setThemeImageName] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
@@ -578,7 +752,39 @@ function Reservation() {
     return t
   }, [])
 
-  // Load the logged-in customer's own reservations
+    // Times closed off on the chosen date (an event, or the front desk marked it full)
+  const [blockedSlots, setBlockedSlots] = useState([])
+
+  useEffect(() => {
+    if (tab === 'history') return
+    let cancelled = false
+    reservationsApi.getBlockedSlots(isoDate).then((slots) => {
+      if (!cancelled) setBlockedSlots(slots)
+    })
+    return () => { cancelled = true }
+  }, [isoDate, tab])
+
+  // "HH:MM" strings compare correctly as text
+  const slotStart = (b) => String(b.start_time || '').slice(0, 5)
+  const slotEnd = (b) => String(b.end_time || '').slice(0, 5)
+  const isTimeBlocked = (time) =>
+    blockedSlots.find((b) => time >= slotStart(b) && time < slotEnd(b)) || null
+
+  const chosenBlock = selectedTime ? isTimeBlocked(String(selectedTime).slice(0, 5)) : null
+
+  // The logged-in customer's own reservations
+  const loadReservations = useCallback(() => {
+    return reservationsApi.getMine()
+      .then((data) => {
+        setReservations(data)
+        cacheReservations(data)
+      })
+      .catch((err) => console.error('Failed to load reservations:', err))
+      .finally(() => setReservationsLoaded(true))
+  }, [])
+
+  // Load once, then keep checking so a confirmation, verification or failed
+  // downpayment shows up without refreshing the page
   useEffect(() => {
     if (!isAuthenticated) {
       setReservations([])
@@ -586,17 +792,20 @@ function Reservation() {
     }
     // Only show "Loading..." when there's no saved copy to show in the meantime
     if (readCachedReservations() === null) setLoadingReservations(true)
-    reservationsApi.getMine()
-      .then((data) => {
-        setReservations(data)
-        cacheReservations(data)
-      })
-      .catch((err) => console.error('Failed to load reservations:', err))
-      .finally(() => {
-        setLoadingReservations(false)
-        setReservationsLoaded(true)
-      })
-  }, [isAuthenticated])
+    loadReservations().finally(() => setLoadingReservations(false))
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') loadReservations()
+    }, REFRESH_MS)
+    // Coming back to the tab checks right away
+    const onFocus = () => loadReservations()
+    window.addEventListener('focus', onFocus)
+
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [isAuthenticated, loadReservations])
 
   // A notification tap lands here with the reservation it's about
   useEffect(() => {
@@ -673,24 +882,18 @@ function Reservation() {
     e.target.value = ''
   }
 
-  const handlePaymentProofChange = (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setPaymentProofName(file.name)
-    const reader = new FileReader()
-    reader.onload = () => setPaymentProofPreview(reader.result)
-    reader.readAsDataURL(file)
-    e.target.value = ''
-  }
-
   const clearThemeImage = () => {
     setThemeImagePreview("")
     setThemeImageName("")
   }
 
-  const clearPaymentProof = () => {
-    setPaymentProofPreview("")
-    setPaymentProofName("")
+  // Clears the form back to how it started
+  const resetForm = (form) => {
+    form?.reset()
+    setSelectedTime(getDefaultTime())
+    setOccasion("")
+    setVipArea(false)
+    clearThemeImage()
   }
 
   const handleConfirm = async (e) => {
@@ -704,20 +907,15 @@ function Reservation() {
       return
     }
 
-    if (!paymentMethod) {
-      showError("Please select a mode of payment.")
-      return
-    }
-
-    // Cash is handed over at the restaurant, so there's nothing to upload yet
-    if (paymentMethod !== "Cash" && !paymentProofPreview) {
-      showError("Please upload your proof of payment.")
-      return
-    }
-
     const [hh, mm] = time.split(':').map(Number)
     if (!isTimeAllowed(hh, mm)) {
       showError("Please choose a time between 11:00 AM and 10:00 PM.")
+      return
+    }
+
+        const blocked = isTimeBlocked(time.slice(0, 5))
+    if (blocked) {
+      showError(`That time isn't available. Please choose a time outside ${formatTimeDisplay(slotStart(blocked))} – ${formatTimeDisplay(slotEnd(blocked))}.`)
       return
     }
 
@@ -729,27 +927,25 @@ function Reservation() {
       contact_number: user.contact_number,
       email: user.email,
       party_size: formData.get('persons'),
-      occasion: occasion || null,
+      // Events have an occasion; tables pick regular or VIP seating instead
+      occasion: tab === 'event' ? (occasion || null) : null,
+      vip_area: tab === 'table' && vipArea ? 1 : 0,
       reservation_date: isoDate,
       reservation_time: `${time}:00`,
-      special_requests: tab === 'event' ? (formData.get('note') || null) : null,
+      // Both kinds have a note (e.g. why the VIP area, or event details)
+      special_requests: formData.get('note') || null,
       theme_image: tab === 'event' ? (themeImagePreview || null) : null,
       downpayment_amount: downpaymentAmount,
-      payment_method: paymentMethod,
-      payment_proof: paymentProofPreview,
+      // Paid later, once the front desk confirms — avoids paying for a slot that's taken
+      payment_method: null,
+      payment_proof: null,
     }
 
     try {
       setSubmitting(true)
       const created = await reservationsApi.create(payload)
       setReservations((prev) => [created, ...prev])
-
-      e.target.reset()
-      setSelectedTime(getDefaultTime())
-      setOccasion("")
-      setPaymentMethod("")
-      clearPaymentProof()
-      clearThemeImage()
+      resetForm(e.target)
       setShowConfirm(true)
     } catch (err) {
       console.error(err)
@@ -774,6 +970,33 @@ function Reservation() {
     }
   }
 
+    // Order food ahead for this reservation: pick dishes on the Menu page as usual
+  const startAdvanceOrder = (r) => {
+    const d = toLocalDate(r.reservation_date)
+    const date = d
+      ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      : ''
+    setAdvanceOrder({ reservationId: r.id, date, time: String(r.reservation_time || '').slice(0, 5) })
+    navigate('/menu')
+  }
+
+  // The guest paid the downpayment after the front desk confirmed
+  const handleDownpaymentPaid = (id, method, hasProof) => {
+    setReservations((prev) =>
+      prev.map((r) =>
+        r.id === id
+          ? { ...r, payment_method: method, payment_status: 'pending', has_payment_proof: hasProof ? 1 : r.has_payment_proof }
+          : r
+      )
+    )
+    setToast({
+      message: method === 'Cash'
+        ? 'Got it! Please pay your downpayment in cash at the restaurant.'
+        : 'Downpayment submitted. The cashier will verify it shortly.',
+      tone: 'success',
+    })
+  }
+
   // After a failed downpayment: read the new photo and send it straight to the cashier
   const handleReuploadProof = (reservation, e) => {
     const file = e.target.files?.[0]
@@ -788,7 +1011,7 @@ function Reservation() {
         setReservations((prev) =>
           prev.map((r) =>
             r.id === reservation.id
-              ? { ...r, payment_status: 'pending', payment_proof: reader.result }
+              ? { ...r, payment_status: 'pending', has_payment_proof: 1 }
               : r
           )
         )
@@ -811,12 +1034,20 @@ function Reservation() {
     const pastCutoff = remainingDays !== null && remainingDays < CANCEL_CUTOFF_DAYS
     const cancelDisabled = isClosed || pastCutoff
     const isHighlighted = r.id === highlightId
-    // The cashier rejected the downpayment proof; an upcoming reservation can send a new one
-    const downpaymentFailed =
-      Number(r.downpayment_amount) > 0 &&
-      String(r.payment_status || '').toLowerCase() === 'failed'
-    const canReupload = downpaymentFailed && !isClosed && !isPastDate
+
+    const status = String(r.status || '').toLowerCase()
+    const payStatus = String(r.payment_status || 'pending').toLowerCase()
+    const hasDownpayment = Number(r.downpayment_amount) > 0
     const isCashDownpayment = String(r.payment_method || '').toLowerCase() === 'cash'
+    // The cashier rejected the downpayment proof; an upcoming reservation can send a new one
+    const downpaymentFailed = hasDownpayment && payStatus === 'failed'
+    const canReupload = downpaymentFailed && !isClosed && !isPastDate
+    // Confirmed by the front desk but nothing paid yet: show the payment box
+    const needsDownpayment =
+      status === 'confirmed' && hasDownpayment && payStatus === 'pending' && !r.payment_method && !isPastDate
+    // Paid, now waiting for the cashier
+    const awaitingVerification =
+      hasDownpayment && payStatus === 'pending' && Boolean(r.payment_method) && !isClosed && !isPastDate
 
     return (
       <div
@@ -847,10 +1078,23 @@ function Reservation() {
               <span className="block text-xs text-neutral-400">Email Address</span>
               <span className="break-all">{r.email}</span>
             </div>
-            <div>
-              <span className="block text-xs text-neutral-400">Occasion</span>
-              <span>{r.occasion || '—'}</span>
-            </div>
+            {r.reservation_type === 'event' ? (
+              <div>
+                <span className="block text-xs text-neutral-400">Occasion</span>
+                <span>{r.occasion || '—'}</span>
+              </div>
+            ) : (
+              <div>
+                <span className="block text-xs text-neutral-400">Seating Area</span>
+                <span>{Number(r.vip_area) ? 'VIP Area' : 'Regular'}</span>
+              </div>
+            )}
+            {r.special_requests && (
+              <div>
+                <span className="block text-xs text-neutral-400">Note</span>
+                <span className="break-words">{r.special_requests}</span>
+              </div>
+            )}
           </div>
           <div className="flex flex-col gap-3">
             <div>
@@ -864,7 +1108,9 @@ function Reservation() {
             <div>
               <span className="block text-xs text-neutral-400">Downpayment</span>
               <span className={downpaymentFailed ? 'text-red-700 font-semibold' : ''}>
-                {r.downpayment_amount ? `Php. ${Number(r.downpayment_amount).toLocaleString()} (${formatPaymentStatus(r.payment_status)})` : '—'}
+                {hasDownpayment
+                  ? `Php. ${Number(r.downpayment_amount).toLocaleString()} (${r.payment_method ? formatPaymentStatus(r.payment_status) : 'Not paid yet'})`
+                  : '—'}
               </span>
             </div>
             <div>
@@ -875,6 +1121,22 @@ function Reservation() {
               <span className="block text-xs text-neutral-400 mb-1">Status</span>
               <StatusBadge status={r.status} />
             </div>
+
+            {/* Order food ahead once the front desk confirms, so nothing's cooked for a slot that falls through */}
+            {status === 'confirmed' && !isPastDate && (
+              <button
+                type="button"
+                onClick={() => startAdvanceOrder(r)}
+                className="w-full border border-[#1d080f] text-[#1d080f] font-[Prata] font-bold text-sm py-2.5 rounded-full hover:bg-[#1d080f] hover:text-white transition"
+              >
+                Advance Order
+              </button>
+            )}
+            {status === 'pending' && !isPastDate && (
+              <p className="text-[11px] text-neutral-500 font-[Prata] text-center leading-relaxed">
+                You can order your food ahead once your reservation is confirmed.
+              </p>
+            )}
 
             {/* Only upcoming reservations can still be cancelled */}
             {!isClosed && !isPastDate && (
@@ -896,9 +1158,38 @@ function Reservation() {
           </div>
         </div>
 
+        {/* Still with the front desk — and any note they left, e.g. "please wait 5 mins" */}
+        {status === 'pending' && !isPastDate && (
+          <div className="mt-5 bg-amber-50 border border-amber-200 rounded-xl p-3 sm:p-4 text-left font-[Prata]">
+            <p className="text-sm font-bold text-amber-900 mb-1">Waiting for confirmation</p>
+            <p className="text-xs text-amber-900 leading-relaxed">
+              The front desk is checking availability. You'll be asked to pay the downpayment once it's confirmed.
+            </p>
+            {r.remarks && (
+              <p className="text-xs text-amber-900 leading-relaxed mt-2 bg-white/70 rounded-lg p-2.5">
+                <span className="font-bold">Note from the front desk:</span> {r.remarks}
+              </p>
+            )}
+          </div>
+        )}
+
+        {needsDownpayment && (
+          <DownpaymentPanel reservation={r} onPaid={handleDownpaymentPaid} onError={showError} />
+        )}
+
+        {awaitingVerification && (
+          <div className="mt-5 bg-neutral-50 border border-neutral-200 rounded-xl p-3 sm:p-4 text-left font-[Prata]">
+            <p className="text-xs text-neutral-700 leading-relaxed">
+              {isCashDownpayment
+                ? 'Please pay your downpayment in cash at the restaurant. The cashier will mark it as received.'
+                : 'Downpayment submitted. Waiting for the cashier to verify your payment.'}
+            </p>
+          </div>
+        )}
+
         {/* Same as a failed order payment: explain it, and let them send a new proof */}
         {canReupload && (
-          <div className="mt-5 bg-red-50 border border-red-200 rounded-xl p-4 text-left">
+          <div className="mt-5 bg-red-50 border border-red-200 rounded-xl p-3 sm:p-4 text-left">
             <p className="text-sm font-[Prata] font-bold text-red-800 mb-1">Downpayment failed</p>
             {isCashDownpayment ? (
               <p className="text-xs font-[Prata] text-red-800 leading-relaxed">
@@ -907,8 +1198,9 @@ function Reservation() {
             ) : (
               <>
                 <p className="text-xs font-[Prata] text-red-800 leading-relaxed mb-3">
-                  Your payment couldn't be verified, possibly due to an unclear, incorrect photo or incorrect amount, so please upload a new one.
-                </p>
+                  {r.failure_reason
+                    ? <><b>Reason:</b> {r.failure_reason}. Please upload a new proof of payment.</>
+                    : "Your payment couldn't be verified, possibly due to an unclear photo or incorrect amount, so please upload a new one."}                </p>
                 <label
                   className={`flex items-center justify-center gap-2 w-full bg-[#c0392b] text-white font-[Prata] text-xs sm:text-sm font-bold px-4 py-2.5 sm:py-3 rounded-full whitespace-nowrap text-center leading-tight transition ${
                     reuploadingId === r.id ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-90 cursor-pointer'
@@ -929,23 +1221,29 @@ function Reservation() {
           </div>
         )}
 
-        {r.payment_proof && (
+        {Boolean(r.has_payment_proof ?? r.payment_proof) && (
           <div className="mt-4">
             <span className="block text-xs text-neutral-400 font-[Prata] mb-2">Proof of Payment</span>
-            <ZoomableImage
-              src={r.payment_proof}
-              alt="Proof of payment"
-              className="w-full max-h-48 object-contain rounded-md bg-neutral-50"
+            {/* The key resets it after a re-upload, so the new photo is the one shown */}
+            <SavedPhoto
+              key={`${r.id}-proof-${r.payment_status}`}
+              reservationId={r.id}
+              field="payment_proof"
+              label="Proof of Payment"
+              imgClass="w-full max-h-48 object-contain rounded-md bg-neutral-50"
             />
           </div>
         )}
 
-        {r.theme_image && (
+        {Boolean(r.has_theme_image ?? r.theme_image) && (
           <div className="mt-4">
-            <ZoomableImage
-              src={r.theme_image}
-              alt="Theme inspiration"
-              className="w-full max-h-48 object-cover rounded-md"
+            <span className="block text-xs text-neutral-400 font-[Prata] mb-2">Theme Inspiration</span>
+            <SavedPhoto
+              key={`${r.id}-theme`}
+              reservationId={r.id}
+              field="theme_image"
+              label="Theme Photo"
+              imgClass="w-full max-h-48 object-cover rounded-md"
             />
           </div>
         )}
@@ -1078,33 +1376,98 @@ function Reservation() {
 
                   <form id="reservation-form" onSubmit={handleConfirm} className="flex flex-col gap-4 min-w-0">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <input value={user?.full_name || ''} readOnly className={lockedInputClass} />
-                      <input value={user?.contact_number || ''} readOnly className={lockedInputClass} />
+                      <Field label="Full Name">
+                        <input value={user?.full_name || ''} readOnly className={lockedInputClass} />
+                      </Field>
+                      <Field label="Contact Number">
+                        <input value={user?.contact_number || ''} readOnly className={lockedInputClass} />
+                      </Field>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <input value={user?.email || ''} readOnly className={lockedInputClass} />
-                      <WheelTimePicker value={selectedTime} onChange={setSelectedTime} />
+                      <Field label="Email Address">
+                        <input value={user?.email || ''} readOnly className={lockedInputClass} />
+                      </Field>
+                      <Field label="Reservation Time *">
+                        <WheelTimePicker value={selectedTime} onChange={setSelectedTime} />
+                      </Field>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="relative">
-                        <select value={occasion} onChange={(e) => setOccasion(e.target.value)} required={tab === "event"} className={`${inputClass} appearance-none ${occasion ? 'text-[#1d080f]' : 'text-neutral-400'}`}>
-                          <option value="" disabled className="text-neutral-400">Occasion{tab === "event" ? " *" : ""}</option>
-                          <option className="text-[#1d080f]">Birthday</option>
-                          <option className="text-[#1d080f]">Anniversary</option>
-                          <option className="text-[#1d080f]">Wedding</option>
-                          <option className="text-[#1d080f]">Business</option>
-                          <option className="text-[#1d080f]">Casual</option>
-                        </select>
-                        <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-400" />
+                    {/* Closed-off times on this date: amber as a heads-up, red if the chosen time falls inside */}
+                    {blockedSlots.length > 0 && (
+                      <div
+                        className={`rounded-xl border p-3 sm:p-4 text-left font-[Prata] ${
+                          chosenBlock ? 'bg-red-50 border-red-200 text-red-800' : 'bg-amber-50 border-amber-200 text-amber-900'
+                        }`}
+                      >
+                        {chosenBlock ? (
+                          <p className="text-sm font-bold mb-1">
+                            {formatTimeDisplay(selectedTime)} isn't available.
+                          </p>
+                        ) : (
+                          <p className="text-sm font-bold mb-1">Unavailable on this date</p>
+                        )}
+                        <ul className="text-xs leading-relaxed space-y-0.5">
+                          {blockedSlots.map((b, i) => (
+                            <li key={i}>
+                              {formatTimeDisplay(slotStart(b))} – {formatTimeDisplay(slotEnd(b))}
+                              {b.reason ? ` (${b.reason})` : ''}
+                            </li>
+                          ))}
+                        </ul>
+                        {chosenBlock && (
+                          <p className="text-xs mt-1.5">Please choose a time outside these hours, or another date.</p>
+                        )}
                       </div>
-                      <input name="persons" type="number" min="1" placeholder="Number of Pax *" required className={inputClass} />
+                    )}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {tab === "table" ? (
+                        /* Tables: regular seating or the VIP area */
+                        <Field label="Seating Area *">
+                          <div className="grid grid-cols-2 gap-2">
+                            {[
+                              { value: false, label: "Regular" },
+                              { value: true, label: "VIP Area" },
+                            ].map((opt) => (
+                              <button
+                                key={opt.label}
+                                type="button"
+                                onClick={() => setVipArea(opt.value)}
+                                className={`py-3.5 rounded-md text-sm font-[Prata] transition ${
+                                  vipArea === opt.value
+                                    ? 'bg-[#1d080f] text-white'
+                                    : 'bg-white text-[#1d080f] hover:bg-neutral-100'
+                                }`}
+                              >
+                                {opt.label}
+                              </button>
+                            ))}
+                          </div>
+                        </Field>
+                      ) : (
+                        /* Events: what the celebration is */
+                        <div className="relative text-left">
+                          <label className="block text-xs font-[Prata] text-neutral-600 mb-1.5">Occasion *</label>
+                          <select value={occasion} onChange={(e) => setOccasion(e.target.value)} required className={`${inputClass} appearance-none ${occasion ? 'text-[#1d080f]' : 'text-neutral-400'}`}>
+                            <option value="" disabled className="text-neutral-400">Choose an occasion</option>
+                            <option className="text-[#1d080f]">Birthday</option>
+                            <option className="text-[#1d080f]">Anniversary</option>
+                            <option className="text-[#1d080f]">Wedding</option>
+                          </select>
+                          <ChevronDown size={16} className="absolute right-4 bottom-4 pointer-events-none text-neutral-400" />
+                        </div>
+                      )}
+                      <Field label="Number of Pax *">
+                        <input name="persons" type="number" min="1" placeholder="e.g. 4" required className={inputClass} />
+                      </Field>
                     </div>
 
                     {tab === "event" && (
                       <>
-                        <input name="preference" placeholder="Theme Preference *" required className={inputClass} />
+                        <Field label="Theme Preference *">
+                          <input name="preference" placeholder="e.g. rustic, all-white, garden" required className={inputClass} />
+                        </Field>
 
                         <div className="bg-white rounded-md p-4 text-left">
                           <label className="font-[Prata] text-sm text-neutral-600 block mb-2">
@@ -1146,125 +1509,42 @@ function Reservation() {
                             </div>
                           )}
                         </div>
-
-                        <textarea name="note" placeholder="Note (optional)" className={`${inputClass} resize-none h-20`} />
                       </>
                     )}
 
+                    {/* Tables only ask for a note when the VIP area is picked; events always can */}
+                    {(tab === "event" || vipArea) && (
+                      <Field label={tab === "table" ? "What's the VIP area for? (optional)" : "Note (optional)"}>
+                        <textarea
+                          name="note"
+                          placeholder={
+                            tab === "table"
+                              ? "e.g. business meeting, bridal shower, graduation celebration"
+                              : "Anything else we should know about your event"
+                          }
+                          className={`${inputClass} resize-none h-20`}
+                        />
+                      </Field>
+                    )}
+
+                    {/* No payment yet — it's asked for once the front desk confirms the slot */}
                     <div className="bg-white rounded-xl p-5 text-left">
-                      <div className="flex items-center justify-between gap-3 mb-3">
+                      <div className="flex items-center justify-between gap-3 mb-2">
                         <span className="font-[Prata] text-sm text-neutral-600">Required Downpayment</span>
                         <span className="font-[Prata] font-bold text-lg text-[#1d080f] whitespace-nowrap">
                           Php. {(tab === "event" ? DOWNPAYMENT.event : DOWNPAYMENT.table).toLocaleString()}
                         </span>
                       </div>
-                      <p className="text-xs text-neutral-500 font-[Prata] mb-4">
-                        This amount will be deducted from your final bill.
+                      <p className="text-xs text-neutral-500 font-[Prata] leading-relaxed">
+                        No payment needed yet. Once the front desk confirms your reservation, you'll pay the
+                        downpayment in My Reservation. It will be deducted from your final bill.
                       </p>
-
-                      <div className="relative">
-                        <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} className={`${inputClass} appearance-none ${paymentMethod ? 'text-[#1d080f]' : 'text-neutral-400'}`}>
-                          <option value="" disabled className="text-neutral-400">Mode of Payment *</option>
-                          <option className="text-[#1d080f]">Cash</option>
-                          <option className="text-[#1d080f]">GCash</option>
-                          <option className="text-[#1d080f]">Paymaya</option>
-                          <option className="text-[#1d080f]">Bank Transfer</option>
-                        </select>
-                        <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-400" />
-                      </div>
-                      {!paymentMethod && (
-                        <p className="text-xs text-red-500 font-[Prata] mt-2">Please select a mode of payment.</p>
-                      )}
-                      {paymentMethod === "Cash" && (
-                        <div className="mt-4 bg-[#f7f5f0] rounded-lg p-4">
-                          <p className="text-xs font-[Prata] text-neutral-600 leading-relaxed">
-                            Pay your Php. {(tab === "event" ? DOWNPAYMENT.event : DOWNPAYMENT.table).toLocaleString()} downpayment in cash at the restaurant. Our cashier will mark it as received, and your reservation will be confirmed after that.
-                          </p>
-                        </div>
-                      )}
-
-                      {paymentMethod && PAYMENT_ACCOUNTS[paymentMethod] && (
-                        <div className="mt-4 bg-[#f7f5f0] rounded-lg p-4">
-                          <p className="text-xs font-[Prata] text-neutral-600 mb-3">
-                            Send your Php. {(tab === "event" ? DOWNPAYMENT.event : DOWNPAYMENT.table).toLocaleString()} downpayment to:
-                          </p>
-
-                          <div className="flex items-center gap-4">
-                            {PAYMENT_ACCOUNTS[paymentMethod].qrPlaceholder && (
-                              <div className="w-20 h-20 shrink-0 bg-white rounded-md border border-dashed border-neutral-300 flex items-center justify-center text-[9px] text-neutral-400 text-center font-[Prata] leading-tight">
-                                QR Code
-                              </div>
-                            )}
-                            <div className="text-xs font-[Prata] min-w-0">
-                              <div className="text-neutral-500">Account Name</div>
-                              <div className="text-[#1d080f] font-bold mb-2">{PAYMENT_ACCOUNTS[paymentMethod].accountName}</div>
-                              <div className="text-neutral-500">{paymentMethod === "Bank Transfer" ? "Account Number" : "Number"}</div>
-                              <div className="text-[#1d080f] font-bold">{PAYMENT_ACCOUNTS[paymentMethod].accountNumber}</div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {paymentMethod && paymentMethod !== "Cash" && (
-                        <div className="mt-4 border-t border-neutral-200 pt-4">
-                          <label className="font-[Prata] text-sm text-neutral-600 block mb-2">
-                            Proof of Payment *
-                          </label>
-                          <p className="text-xs text-neutral-400 font-[Prata] mb-3 leading-relaxed">
-                            Upload a screenshot or photo of your payment receipt. The receptionist will verify this to confirm your reservation.
-                          </p>
-                          <label
-                            htmlFor="payment-proof-upload"
-                            className="flex items-center justify-center gap-2 border-2 border-dashed border-neutral-300 rounded-md py-6 px-3 cursor-pointer hover:bg-neutral-50 transition"
-                          >
-                            {paymentProofPreview ? (
-                              <span className="font-[Prata] text-xs text-emerald-800 font-semibold flex items-center gap-1.5">
-                                <Check size={16} /> Photo attached — check it below
-                              </span>
-                            ) : (
-                              <>
-                                <Upload size={16} className="text-neutral-400" />
-                                <span className="font-[Prata] text-xs text-neutral-500">Click to upload proof of payment</span>
-                              </>
-                            )}
-                          </label>
-                          <input
-                            id="payment-proof-upload"
-                            type="file"
-                            accept="image/*"
-                            onChange={handlePaymentProofChange}
-                            className="hidden"
-                          />
-                          {paymentProofPreview ? (
-                            <div className="mt-3">
-                              <ZoomableImage
-                                src={paymentProofPreview}
-                                alt="Proof of payment preview"
-                                onRemove={clearPaymentProof}
-                                className="w-full max-h-48 object-contain rounded-md bg-neutral-50"
-                              />
-                              <p className="mt-2 text-xs text-neutral-600 font-[Prata] text-center break-all">
-                                {paymentProofName} — tap the upload box above to choose a different one.
-                              </p>
-                            </div>
-                          ) : (
-                            <p className="text-xs text-red-500 font-[Prata] mt-2">Proof of payment is required.</p>
-                          )}
-                        </div>
-                      )}
                     </div>
 
                     <div className="flex gap-3 sm:gap-4 mt-8 w-full max-w-md">
                       <button
                         type="button"
-                        onClick={() => {
-                          document.getElementById('reservation-form')?.reset()
-                          setSelectedTime(getDefaultTime())
-                          setOccasion("")
-                          setPaymentMethod("")
-                          clearPaymentProof()
-                          clearThemeImage()
-                        }}
+                        onClick={() => resetForm(document.getElementById('reservation-form'))}
                         className="flex-1 px-3 bg-[#c0392b] text-white font-[Prata] font-bold text-sm sm:text-base py-3 sm:py-3.5 rounded-full hover:opacity-90 transition"
                       >
                         Cancel
@@ -1272,7 +1552,7 @@ function Reservation() {
                       <button
                         type="submit"
                         form="reservation-form"
-                        disabled={submitting}
+                        disabled={submitting || Boolean(chosenBlock)}
                         className="flex-[1.6] px-4 whitespace-nowrap bg-[#1d080f] text-white font-[Prata] font-bold text-sm sm:text-base py-3 sm:py-3.5 rounded-full hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {submitting ? "Submitting..." : "Submit Reservation"}
@@ -1362,7 +1642,8 @@ function Reservation() {
             </div>
             <h3 className="font-[Prata] text-lg mb-3">Reservation Submitted!</h3>
             <p className="text-xs text-neutral-500 leading-relaxed">
-              Your proof of payment will be verified by our receptionist. <br /><br />
+              Our front desk will check availability and confirm your reservation. Once confirmed, you can pay
+              your downpayment in My Reservation. <br /><br />
               <b>REMINDER:</b> Cancellations must be made at least 3 days before your reservation date.
             </p>
           </div>

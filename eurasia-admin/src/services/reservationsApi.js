@@ -35,12 +35,13 @@ export const reservationsApi = {
     return handleResponse(res, 'Failed to fetch reservation');
   },
 
-  // The front desk verifying or rejecting a downpayment
-  async updatePaymentStatus(id, payment_status) {
+  // The cashier verifying or rejecting a downpayment.
+  // failure_reason is optional — it's only sent when marking it as failed.
+  async updatePaymentStatus(id, payment_status, failure_reason = null) {
     const res = await fetch(`${API_URL}/${id}/payment`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ payment_status }),
+      body: JSON.stringify({ payment_status, failure_reason }),
     });
     return handleResponse(res, 'Failed to update payment status');
   },
@@ -52,5 +53,35 @@ export const reservationsApi = {
       body: JSON.stringify({ status }),
     });
     return handleResponse(res, 'Failed to update status');
+  },
+
+  // A note the guest sees while their booking is pending (null clears it)
+  async updateRemarks(id, remarks) {
+    const res = await fetch(`${API_URL}/${id}/remarks`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ remarks }),
+    });
+    return handleResponse(res, 'Failed to save the remark');
+  },
+
+  // Times the front desk has closed off on a date (an event, or fully booked)
+  async getBlockedSlots(date) {
+    const res = await fetch(`${API_URL}/blocked?date=${encodeURIComponent(date)}`);
+    return handleResponse(res, 'Failed to load blocked times');
+  },
+
+  async addBlockedSlot(slot) {
+    const res = await fetch(`${API_URL}/blocked`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(slot),
+    });
+    return handleResponse(res, 'Failed to block this time');
+  },
+
+  async deleteBlockedSlot(id) {
+    const res = await fetch(`${API_URL}/blocked/${id}`, { method: 'DELETE' });
+    return handleResponse(res, 'Failed to remove the blocked time');
   },
 };

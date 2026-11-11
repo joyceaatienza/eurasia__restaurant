@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import StaffHeader from "../components/StaffHeader";
 import { ordersApi } from "../services/ordersApi";
-import { Check, X, ChevronRight, Search } from "lucide-react";
+import { Check, X, ChevronRight, Search, CalendarClock } from "lucide-react";
 
 const STATUS_MAP = {
   pending: 'Waiting',
@@ -20,6 +20,9 @@ const REVERSE_STATUS_MAP = {
 const POLL_MS = 8000;
 const HIGHLIGHT_MS = 4000;
 const MOBILE_QUERY = "(max-width: 767px)";
+
+// An advance order turns red once it's this close to the reservation time
+const START_COOKING_MINS = 45;
 
 // Lets the standalone page size itself; inside the Owner shell the prop wins
 function useMediaQuery(query) {
@@ -40,6 +43,7 @@ function useMediaQuery(query) {
 
 function normalizeOrder(o) {
   const createdAt = new Date(o.created_at);
+  const scheduledFor = o.scheduled_for ? new Date(o.scheduled_for) : null;
   return {
     id: o.id,
     dailyNumber: o.daily_number,
@@ -51,6 +55,11 @@ function normalizeOrder(o) {
     cancelled: String(o.status || '').toLowerCase() === 'cancelled',
     // When the kitchen tapped "Mark as Ready" (saved by the backend as ready_at)
     readyAt: o.ready_at ? new Date(o.ready_at) : null,
+    // Advance orders: food ordered ahead for a reservation, due at its time
+    scheduledFor: scheduledFor && !isNaN(scheduledFor.getTime()) ? scheduledFor : null,
+    reservationId: o.reservation_id ?? null,
+    // 'before' = paid with the downpayment; 'restaurant' = added to the bill on the day
+    advancePayment: o.advance_payment || null,
     date: createdAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
     time: createdAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
     items: (o.items || []).map((it) => ({
@@ -63,6 +72,8 @@ function normalizeOrder(o) {
     })),
   };
 }
+
+const isAdvance = (order) => Boolean(order.scheduledFor || order.reservationId);
 
 // Uses the daily_number stored in the database (consistent across Kitchen, Payment, Cashier).
 // Falls back to a computed per-day number for older orders that have no daily_number yet.
@@ -99,6 +110,55 @@ const prepMinutes = (order) =>
   order.readyAt && !isNaN(order.readyAt.getTime())
     ? Math.max(0, Math.round((order.readyAt - order.createdAt) / 60000))
     : null;
+
+/* ---------------------------------------------------------------- */
+/* Advance order timing                                              */
+/* ---------------------------------------------------------------- */
+function startOfDay(d) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
+// "Today", "Tomorrow", or "Nov 20" — used to group the advance queue
+function dayLabel(date, now) {
+  const diffDays = Math.round((startOfDay(date) - startOfDay(now)) / 86400000);
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Tomorrow';
+  if (diffDays === -1) return 'Yesterday';
+  return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+function formatGap(mins) {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h === 0) return `${m} min`;
+  return m === 0 ? `${h} hr${h > 1 ? 's' : ''}` : `${h} hr${h > 1 ? 's' : ''} ${m} min`;
+}
+
+// How urgent an advance order is, from how long until the reservation time
+function urgency(order, now) {
+  if (!order.scheduledFor) return null;
+  const mins = Math.round((order.scheduledFor - now) / 60000);
+  const sameDay = startOfDay(order.scheduledFor).getTime() === startOfDay(now).getTime();
+
+  if (mins < 0) {
+    return { tone: 'red', label: `Overdue by ${formatGap(-mins)}` };
+  }
+  if (mins <= START_COOKING_MINS) {
+    return { tone: 'red', label: `Start cooking now · ${formatGap(mins)} left` };
+  }
+  if (sameDay) {
+    return { tone: 'amber', label: `Today · in ${formatGap(mins)}` };
+  }
+  return { tone: 'gray', label: 'Upcoming' };
+}
+
+const URGENCY_STYLES = {
+  red: 'bg-[#f8d7da] text-[#842029]',
+  amber: 'bg-[#fdf3df] text-[#9c7a1f]',
+  gray: 'bg-[#eeecec] text-[#555]',
+};
 
 // Matches the customer, the order number ("12" or "#12"), or any dish in the order
 function orderMatches(order, query) {
@@ -166,16 +226,26 @@ function OrderDetailsModal({ order, onClose }) {
               >
                 {order.cancelled ? 'Cancelled' : 'Ready'}
               </span>
+              {isAdvance(order) && (
+                <span className="text-xs px-2.5 py-1 rounded-md whitespace-nowrap bg-[#e9eefb] text-[#3b5ba8]">
+                  Advance
+                </span>
+              )}
             </div>
             <p className="text-sm text-[#1d080f] mt-1">{order.customer}</p>
             <p className="text-xs text-gray-600">Ordered: {order.date} · {order.time}</p>
+            {order.scheduledFor && (
+              <p className="text-xs text-gray-600">
+                For reservation: {order.scheduledFor.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} · {timeLabel(order.scheduledFor)}
+              </p>
+            )}
             {!order.cancelled && (
               <p className="text-xs text-gray-600">
                 Marked ready:{' '}
                 {timeLabel(order.readyAt) ? (
                   <span className="text-[#296c39]">
                     {timeLabel(order.readyAt)}
-                    {prepMinutes(order) != null && ` (${prepMinutes(order)} min after ordering)`}
+                    {!isAdvance(order) && prepMinutes(order) != null && ` (${prepMinutes(order)} min after ordering)`}
                   </span>
                 ) : (
                   <span className="italic">Not recorded</span>
@@ -246,26 +316,46 @@ export default function OrderQueue({ embedded = false, highlightTarget = null, i
   const detectedMobile = useMediaQuery(MOBILE_QUERY);
   const isMobile = isMobileProp ?? detectedMobile;
 
+  // Today's orders (the dine-in queue comes from here)
   const [orders, setOrders] = useState([]);
+  // Orders placed ahead for a reservation — any day, so they load on their own
+  const [advanceOrders, setAdvanceOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState({ message: "", tone: "success" });
+  // "active" = dine-in queue, "advance" = advance orders, "history" = finished
   const [view, setView] = useState(historyOnly ? "history" : "active");
   const [highlightId, setHighlightId] = useState(null);
   const highlightRef = useRef(null);
   // The History order whose dishes are being looked at
   const [detailsId, setDetailsId] = useState(null);
-  // Filters whichever tab is open — Active Orders or History
+  // Filters whichever tab is open
   const [search, setSearch] = useState("");
   const isSearching = search.trim().length > 0;
   // History keeps every finished order, not just today's, so it loads separately
   const [historyOrders, setHistoryOrders] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  // Ticks so the advance order timers ("in 2 hrs", "start cooking now") stay current
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(timer);
+  }, []);
 
   const loadOrders = useCallback((showSpinner = false) => {
     if (showSpinner) setLoading(true);
-    return ordersApi.getAll({ today_only: 'true' })
-      .then((data) => setOrders(assignDailyNumbers(data.map(normalizeOrder))))
+    return Promise.all([
+      ordersApi.getAll({ today_only: 'true' }),
+      // Every advance order still to be cooked, whatever day it was placed
+      ordersApi.getAll({ advance_only: 'true' }),
+    ])
+      .then(([todayData, advanceData]) => {
+        setOrders(assignDailyNumbers(todayData.map(normalizeOrder)));
+        setAdvanceOrders(
+          assignDailyNumbers(advanceData.map(normalizeOrder)).filter(isAdvance)
+        );
+      })
       .catch((err) => console.error('Failed to load orders:', err))
       .finally(() => { if (showSpinner) setLoading(false); });
   }, []);
@@ -275,7 +365,7 @@ export default function OrderQueue({ embedded = false, highlightTarget = null, i
   }, [loadOrders]);
 
   // All orders from every day — only fetched while the History tab is open,
-  // so the Active Orders screen stays light
+  // so the queues stay light
   const loadHistory = useCallback((showSpinner = false) => {
     if (showSpinner) setHistoryLoading(true);
     return ordersApi.getAll()
@@ -303,22 +393,32 @@ export default function OrderQueue({ embedded = false, highlightTarget = null, i
 
   // A notification click asks this page to surface one order. It arrives as a
   // prop inside the Owner shell, or through router state on the standalone page.
+  const [pendingHighlight, setPendingHighlight] = useState(null);
+
   useEffect(() => {
     if (historyOnly) return;
     const target = highlightTarget || location.state?.highlight;
     if (!target || target.type !== "order") return;
-    setView("active");
-    setHighlightId(target.id);
+    setPendingHighlight(target.id);
+  }, [highlightTarget, location.state]);
+
+  // Open the tab the order lives in (dine-in or advance), then flag it
+  useEffect(() => {
+    if (pendingHighlight == null || loading) return;
+    const inAdvance = advanceOrders.some((o) => o.id === pendingHighlight);
+    setView(inAdvance ? "advance" : "active");
+    setHighlightId(pendingHighlight);
+    setPendingHighlight(null);
     const timer = setTimeout(() => setHighlightId(null), HIGHLIGHT_MS);
     return () => clearTimeout(timer);
-  }, [highlightTarget, location.state]);
+  }, [pendingHighlight, loading, advanceOrders]);
 
   // Scroll the highlighted card into view once it renders
   useEffect(() => {
     if (highlightId && highlightRef.current) {
       highlightRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
     }
-  }, [highlightId, orders]);
+  }, [highlightId, orders, advanceOrders]);
 
   const showToast = (message, tone = "success") => {
     setToast({ message, tone });
@@ -328,16 +428,23 @@ export default function OrderQueue({ embedded = false, highlightTarget = null, i
 
   const closeDetails = useCallback(() => setDetailsId(null), []);
 
+  // An order can sit in today's list, the advance list, or both — update wherever it is
+  const updateOrder = (orderId, change) => {
+    const apply = (list) => list.map((o) => (o.id === orderId ? change(o) : o));
+    setOrders(apply);
+    setAdvanceOrders(apply);
+  };
+
+  const findOrder = (orderId) =>
+    advanceOrders.find((o) => o.id === orderId) || orders.find((o) => o.id === orderId);
+
   const handleToggleItem = async (orderId, itemId) => {
     try {
       const { checked } = await ordersApi.toggleItem(itemId);
-      setOrders((prev) =>
-        prev.map((order) =>
-          order.id === orderId
-            ? { ...order, items: order.items.map((it) => (it.id === itemId ? { ...it, checked } : it)) }
-            : order
-        )
-      );
+      updateOrder(orderId, (order) => ({
+        ...order,
+        items: order.items.map((it) => (it.id === itemId ? { ...it, checked } : it)),
+      }));
     } catch (err) {
       console.error(err);
       showError("Failed to update item. Please try again.");
@@ -345,18 +452,16 @@ export default function OrderQueue({ embedded = false, highlightTarget = null, i
   };
 
   const handleStatusChange = async (orderId) => {
-    const order = orders.find((o) => o.id === orderId);
+    const order = findOrder(orderId);
     if (!order) return;
     const nextStatus = order.status === 'Waiting' ? 'Preparing' : 'Ready';
     try {
       await ordersApi.updateStatus(orderId, REVERSE_STATUS_MAP[nextStatus]);
-      setOrders((prev) =>
-        prev.map((o) =>
-          o.id === orderId
-            ? { ...o, status: nextStatus, ...(nextStatus === 'Ready' ? { readyAt: new Date() } : {}) }
-            : o
-        )
-      );
+      updateOrder(orderId, (o) => ({
+        ...o,
+        status: nextStatus,
+        ...(nextStatus === 'Ready' ? { readyAt: new Date() } : {}),
+      }));
       showToast(nextStatus === 'Preparing' ? `Order ${order.displayNo} is now preparing` : `Order ${order.displayNo} marked as ready`);
     } catch (err) {
       console.error(err);
@@ -364,9 +469,25 @@ export default function OrderQueue({ embedded = false, highlightTarget = null, i
     }
   };
 
-  const activeOrders = orders.filter(
-    (order) => order.status !== 'Ready' && orderMatches(order, search)
-  );
+  // Dine-in queue: today's orders that aren't for a reservation, first come first served
+  const activeOrders = orders
+    .filter((order) => !isAdvance(order) && order.status !== 'Ready' && orderMatches(order, search))
+    .sort((a, b) => a.createdAt - b.createdAt);
+
+  // Advance queue: still to be cooked, the earliest reservation at the top
+  const advanceQueue = advanceOrders
+    .filter((order) => order.status !== 'Ready' && orderMatches(order, search))
+    .sort((a, b) => (a.scheduledFor?.getTime() ?? Infinity) - (b.scheduledFor?.getTime() ?? Infinity));
+
+  // Grouped by day: Today, Tomorrow, Nov 20 ...
+  const advanceGroups = [];
+  advanceQueue.forEach((order) => {
+    const label = order.scheduledFor ? dayLabel(order.scheduledFor, now) : 'No time set';
+    const last = advanceGroups[advanceGroups.length - 1];
+    if (last && last.label === label) last.orders.push(order);
+    else advanceGroups.push({ label, orders: [order] });
+  });
+
   // Every finished order from every day, newest first. Until the full history
   // arrives, today's finished orders show so the tab is never blank.
   const historySource = historyLoaded ? historyOrders : orders;
@@ -378,10 +499,176 @@ export default function OrderQueue({ embedded = false, highlightTarget = null, i
   const detailsOrder =
     historyOrders.find((o) => o.id === detailsId) ||
     orders.find((o) => o.id === detailsId) ||
+    advanceOrders.find((o) => o.id === detailsId) ||
     null;
 
   const emptyClass =
     "bg-white rounded-xl p-8 sm:p-12 text-center text-gray-500 font-[Prata] text-sm shadow-sm border border-gray-100";
+
+  const tabs = embedded
+    ? [
+        { key: "active", label: "Dine-in Orders", count: activeOrders.length },
+        { key: "advance", label: "Advance Orders", count: advanceQueue.length },
+      ]
+    : [
+        { key: "active", label: "Dine-in Orders", count: activeOrders.length },
+        { key: "advance", label: "Advance Orders", count: advanceQueue.length },
+        { key: "history", label: "History", count: isSearching ? completedOrders.length : null },
+      ];
+
+  /* One order card — the same flow for dine-in and advance orders */
+  const renderOrderCard = (order) => {
+    const isHighlighted = order.id === highlightId;
+    const advance = isAdvance(order);
+    const urgent = advance ? urgency(order, now) : null;
+    const canCheck = order.status === 'Preparing';
+    const doneCount = order.items.filter((it) => it.checked).length;
+    const allChecked = order.items.every((item) => item.checked);
+
+    return (
+      <div
+        key={order.id}
+        ref={isHighlighted ? highlightRef : null}
+        className={`bg-white rounded-xl p-4 sm:p-6 shadow-sm flex flex-col justify-between text-left transition-all duration-500 ${
+          isHighlighted
+            ? 'border-2 border-[#f2c14e] ring-4 ring-[#f2c14e]/25'
+            : urgent?.tone === 'red'
+            ? 'border-2 border-[#842029]/40'
+            : 'border border-gray-100'
+        }`}
+      >
+        <div>
+          {/* Advance orders lead with when the food has to be ready */}
+          {advance && order.scheduledFor && (
+            <div className="flex items-center justify-between gap-2 flex-wrap mb-3 pb-3 border-b border-dashed border-gray-200">
+              <span className="flex items-center gap-1.5 text-sm text-[#1d080f]" style={{ WebkitTextStroke: "0.3px #1d080f" }}>
+                <CalendarClock size={16} className="text-[#8a6228]" />
+                Prepare by {timeLabel(order.scheduledFor)} · {dayLabel(order.scheduledFor, now)}
+              </span>
+              {urgent && (
+                <span className={`text-xs px-2.5 py-1 rounded-md whitespace-nowrap ${URGENCY_STYLES[urgent.tone]}`}>
+                  {urgent.label}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Order number, badge and total wrap instead of squashing */}
+          <div className="flex justify-between items-start gap-3 mb-1 flex-wrap">
+            <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+              <h2
+                className="font-[Prata] text-xl sm:text-2xl text-[#1d080f]"
+                style={{ WebkitTextStroke: "0.7px #1d080f" }}
+              >
+                Order {order.displayNo}
+              </h2>
+              {order.status === 'Preparing' && (
+                <span className="bg-[#f5e79e] text-[#5e5113] text-xs font-[Prata] px-3 py-1 rounded-md whitespace-nowrap">
+                  Preparing
+                </span>
+              )}
+              {order.status === 'Waiting' && (
+                <span className="bg-[#e2e2e2] text-[#555] text-xs font-[Prata] px-3 py-1 rounded-md whitespace-nowrap">
+                  Waiting
+                </span>
+              )}
+            </div>
+            <div
+              className="font-[Prata] text-lg sm:text-xl text-[#1d080f] whitespace-nowrap"
+              style={{ WebkitTextStroke: "0.5px #1d080f" }}
+            >
+              Php. {order.total?.toLocaleString?.() ?? order.total}
+            </div>
+          </div>
+
+          <div className="text-xs text-gray-700 mb-4 space-y-0.5 font-[Prata]">
+            <p>{order.customer}</p>
+            <p className="text-gray-600">
+              {advance ? `Ordered ${order.date} · ${order.time}` : order.time}
+            </p>
+            {advance && order.advancePayment && (
+              <p className={order.advancePayment === 'before' ? 'text-[#296c39]' : 'text-[#8a6228]'}>
+                {order.advancePayment === 'before' ? 'Paid before arriving' : 'Pay at the restaurant'}
+              </p>
+            )}
+          </div>
+
+          <p className="text-xs font-[Prata] mb-2 text-gray-600">
+            {canCheck
+              ? `${doneCount} of ${order.items.length} dishes cooked`
+              : 'Tap "Start Preparing" to begin checking dishes'}
+          </p>
+          <div className="space-y-2 mb-5 sm:mb-6">
+            {order.items.map((item) => (
+              <button
+                type="button"
+                key={item.id}
+                role="checkbox"
+                aria-checked={item.checked}
+                disabled={!canCheck}
+                onClick={() => handleToggleItem(order.id, item.id)}
+                className={`w-full flex justify-between items-center gap-3 text-sm px-3 py-2.5 rounded-lg border transition font-[Prata] text-left ${
+                  item.checked
+                    ? 'bg-[#e6f4ea] border-[#296c39]/40'
+                    : 'bg-white border-gray-200'
+                } ${
+                  canCheck
+                    ? 'cursor-pointer hover:border-[#296c39] active:scale-[0.99]'
+                    : 'cursor-not-allowed opacity-60'
+                }`}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  {/* The checkbox itself */}
+                  <span
+                    className={`shrink-0 w-6 h-6 rounded-md border-2 flex items-center justify-center transition ${
+                      item.checked
+                        ? 'bg-[#296c39] border-[#296c39]'
+                        : 'bg-white border-gray-400'
+                    }`}
+                  >
+                    {item.checked && <Check size={16} strokeWidth={3} color="#fff" />}
+                  </span>
+                  <span className={item.checked ? 'line-through text-gray-500' : 'text-[#1d080f]'}>
+                    ({item.qty}) {item.name}{' '}
+                    {item.note ? <span className="text-gray-700">- {item.note}</span> : null}
+                  </span>
+                </div>
+                <span className="text-xs text-gray-800 tabular-nums shrink-0">
+                  Php. {item.price}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-2">
+          {order.status === 'Preparing' && (
+            <button
+              onClick={() => allChecked && handleStatusChange(order.id)}
+              disabled={!allChecked}
+              className={`w-full py-3 rounded-lg font-[Prata] text-sm transition ${
+                allChecked
+                  ? 'bg-[#296c39] text-white hover:bg-[#1f5129] cursor-pointer'
+                  : 'bg-[#e0e0e0] text-[#777777] cursor-not-allowed'
+              }`}
+            >
+              {allChecked
+                ? 'Mark as Ready'
+                : `Check all dishes first (${doneCount}/${order.items.length})`}
+            </button>
+          )}
+          {order.status === 'Waiting' && (
+            <button
+              onClick={() => handleStatusChange(order.id)}
+              className="w-full py-3 rounded-lg bg-[#1d080f] text-white font-[Prata] text-sm hover:bg-[#3a1420] transition"
+            >
+              Start Preparing
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className={`${historyOnly ? "" : "min-h-screen bg-[#f0eff3]"} font-[Prata] text-[#1d080f] text-left`}>
@@ -425,29 +712,22 @@ export default function OrderQueue({ embedded = false, highlightTarget = null, i
           )}
         </div>
 
-        {/* Inside the Owner shell, History lives on the Owner's own History page */}
+        {/* Dine-in, Advance, History. Inside the Owner shell, History lives on the Owner's own page */}
         {!historyOnly && (
         <div className="overflow-x-auto mb-5 sm:mb-6 -mx-4 px-4 sm:mx-0 sm:px-0">
           <div className="flex gap-1.5 bg-white p-1 rounded-lg w-fit shadow-sm border border-gray-100">
-            {(embedded
-              ? [{ key: "active", label: "Active Orders" }]
-              : [
-                  { key: "active", label: "Active Orders" },
-                  { key: "history", label: "History" },
-                ]
-            ).map((t) => (
+            {tabs.map((t) => (
               <button
                 key={t.key}
                 onClick={() => setView(t.key)}
-                className={`px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-[Prata] transition whitespace-nowrap ${
+                className={`px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-[Prata] transition whitespace-nowrap flex items-center ${
                   view === t.key ? "bg-[#1d080f] text-white" : "text-[#1d080f] hover:bg-gray-50"
                 }`}
               >
                 {t.label}
-                {/* While searching, each tab shows how many orders match */}
-                {isSearching && (
+                {t.count != null && t.count > 0 && (
                   <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#f5e79e] text-[#5e5113]">
-                    {t.key === "active" ? activeOrders.length : completedOrders.length}
+                    {t.count}
                   </span>
                 )}
               </button>
@@ -456,24 +736,32 @@ export default function OrderQueue({ embedded = false, highlightTarget = null, i
         </div>
         )}
 
-        {view === "active" && !loading && !isSearching && (
+        {(view === "active" || view === "advance") && !loading && !isSearching && (
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 sm:p-5 mb-5 sm:mb-6">
             <p
               className="font-[Prata] text-sm sm:text-base text-[#1d080f] mb-3"
               style={{ WebkitTextStroke: "0.3px #1d080f" }}
             >
-              How to use the order queue
+              {view === "advance" ? "Advance orders" : "How to use the order queue"}
             </p>
-            <ol className="grid gap-3 sm:grid-cols-3 text-xs sm:text-sm text-gray-700 font-[Prata]">
-              {KITCHEN_STEPS.map((step, i) => (
-                <li key={i} className="flex items-start gap-2.5">
-                  <span className="shrink-0 w-6 h-6 rounded-full bg-[#1d080f] text-white text-xs flex items-center justify-center">
-                    {i + 1}
-                  </span>
-                  <span className="leading-relaxed">{step}</span>
-                </li>
-              ))}
-            </ol>
+            {view === "advance" ? (
+              <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">
+                Food ordered ahead for a reservation, with the earliest reservation at the top.
+                An order turns <span className="text-[#842029]">red</span> when it's {START_COOKING_MINS} minutes or less
+                from the reservation time — that's when to start cooking. The steps are the same as dine-in orders.
+              </p>
+            ) : (
+              <ol className="grid gap-3 sm:grid-cols-3 text-xs sm:text-sm text-gray-700 font-[Prata]">
+                {KITCHEN_STEPS.map((step, i) => (
+                  <li key={i} className="flex items-start gap-2.5">
+                    <span className="shrink-0 w-6 h-6 rounded-full bg-[#1d080f] text-white text-xs flex items-center justify-center">
+                      {i + 1}
+                    </span>
+                    <span className="leading-relaxed">{step}</span>
+                  </li>
+                ))}
+              </ol>
+            )}
           </div>
         )}
 
@@ -489,151 +777,48 @@ export default function OrderQueue({ embedded = false, highlightTarget = null, i
           <div className={emptyClass}>{view === "history" ? "Loading order history..." : "Loading orders..."}</div>
         ) : (
           <>
+            {/* ---------- Dine-in queue ---------- */}
             {view === "active" && (
               activeOrders.length === 0 ? (
                 <div className={emptyClass}>
-                  {isSearching ? `No active orders match "${search.trim()}".` : "No orders yet."}
+                  {isSearching ? `No dine-in orders match "${search.trim()}".` : "No dine-in orders yet."}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 items-start">
-                  {activeOrders.map((order) => {
-                    const isHighlighted = order.id === highlightId;
-                    return (
-                      <div
-                        key={order.id}
-                        ref={isHighlighted ? highlightRef : null}
-                        className={`bg-white rounded-xl p-4 sm:p-6 shadow-sm flex flex-col justify-between text-left transition-all duration-500 ${
-                          isHighlighted
-                            ? 'border-2 border-[#f2c14e] ring-4 ring-[#f2c14e]/25'
-                            : 'border border-gray-100'
-                        }`}
-                      >
-                        <div>
-                          {/* Order number, badge and total wrap instead of squashing */}
-                          <div className="flex justify-between items-start gap-3 mb-1 flex-wrap">
-                            <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-                              <h2
-                                className="font-[Prata] text-xl sm:text-2xl text-[#1d080f]"
-                                style={{ WebkitTextStroke: "0.7px #1d080f" }}
-                              >
-                                Order {order.displayNo}
-                              </h2>
-                              {order.status === 'Preparing' && (
-                                <span className="bg-[#f5e79e] text-[#5e5113] text-xs font-[Prata] px-3 py-1 rounded-md whitespace-nowrap">
-                                  Preparing
-                                </span>
-                              )}
-                              {order.status === 'Waiting' && (
-                                <span className="bg-[#e2e2e2] text-[#555] text-xs font-[Prata] px-3 py-1 rounded-md whitespace-nowrap">
-                                  Waiting
-                                </span>
-                              )}
-                            </div>
-                            <div
-                              className="font-[Prata] text-lg sm:text-xl text-[#1d080f] whitespace-nowrap"
-                              style={{ WebkitTextStroke: "0.5px #1d080f" }}
-                            >
-                              Php. {order.total?.toLocaleString?.() ?? order.total}
-                            </div>
-                          </div>
-
-                          <div className="text-xs text-gray-700 mb-4 space-y-0.5 font-[Prata]">
-                            <p>{order.customer}</p>
-                            <p className="text-gray-600">{order.time}</p>
-                          </div>
-
-                          {(() => {
-                            const canCheck = order.status === 'Preparing';
-                            const doneCount = order.items.filter((it) => it.checked).length;
-                            return (
-                              <>
-                                <p className="text-xs font-[Prata] mb-2 text-gray-600">
-                                  {canCheck
-                                    ? `${doneCount} of ${order.items.length} dishes cooked`
-                                    : 'Tap "Start Preparing" to begin checking dishes'}
-                                </p>
-                                <div className="space-y-2 mb-5 sm:mb-6">
-                                  {order.items.map((item) => (
-                                    <button
-                                      type="button"
-                                      key={item.id}
-                                      role="checkbox"
-                                      aria-checked={item.checked}
-                                      disabled={!canCheck}
-                                      onClick={() => handleToggleItem(order.id, item.id)}
-                                      className={`w-full flex justify-between items-center gap-3 text-sm px-3 py-2.5 rounded-lg border transition font-[Prata] text-left ${
-                                        item.checked
-                                          ? 'bg-[#e6f4ea] border-[#296c39]/40'
-                                          : 'bg-white border-gray-200'
-                                      } ${
-                                        canCheck
-                                          ? 'cursor-pointer hover:border-[#296c39] active:scale-[0.99]'
-                                          : 'cursor-not-allowed opacity-60'
-                                      }`}
-                                    >
-                                      <div className="flex items-center gap-3 min-w-0">
-                                        {/* The checkbox itself */}
-                                        <span
-                                          className={`shrink-0 w-6 h-6 rounded-md border-2 flex items-center justify-center transition ${
-                                            item.checked
-                                              ? 'bg-[#296c39] border-[#296c39]'
-                                              : 'bg-white border-gray-400'
-                                          }`}
-                                        >
-                                          {item.checked && <Check size={16} strokeWidth={3} color="#fff" />}
-                                        </span>
-                                        <span className={item.checked ? 'line-through text-gray-500' : 'text-[#1d080f]'}>
-                                          ({item.qty}) {item.name}{' '}
-                                          {item.note ? <span className="text-gray-700">- {item.note}</span> : null}
-                                        </span>
-                                      </div>
-                                      <span className="text-xs text-gray-800 tabular-nums shrink-0">
-                                        Php. {item.price}
-                                      </span>
-                                    </button>
-                                  ))}
-                                </div>
-                              </>
-                            );
-                          })()}
-                        </div>
-
-                        <div className="mt-2">
-                          {order.status === 'Preparing' && (() => {
-                            const allChecked = order.items.every((item) => item.checked);
-                            const doneCount = order.items.filter((item) => item.checked).length;
-                            return (
-                              <button
-                                onClick={() => allChecked && handleStatusChange(order.id)}
-                                disabled={!allChecked}
-                                className={`w-full py-3 rounded-lg font-[Prata] text-sm transition ${
-                                  allChecked
-                                    ? 'bg-[#296c39] text-white hover:bg-[#1f5129] cursor-pointer'
-                                    : 'bg-[#e0e0e0] text-[#777777] cursor-not-allowed'
-                                }`}
-                              >
-                                {allChecked
-                                  ? 'Mark as Ready'
-                                  : `Check all dishes first (${doneCount}/${order.items.length})`}
-                              </button>
-                            );
-                          })()}
-                          {order.status === 'Waiting' && (
-                            <button
-                              onClick={() => handleStatusChange(order.id)}
-                              className="w-full py-3 rounded-lg bg-[#1d080f] text-white font-[Prata] text-sm hover:bg-[#3a1420] transition"
-                            >
-                              Start Preparing
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+                  {activeOrders.map(renderOrderCard)}
                 </div>
               )
             )}
 
+            {/* ---------- Advance queue, grouped by day ---------- */}
+            {view === "advance" && (
+              advanceQueue.length === 0 ? (
+                <div className={emptyClass}>
+                  {isSearching ? `No advance orders match "${search.trim()}".` : "No advance orders to prepare."}
+                </div>
+              ) : (
+                <div className="grid gap-6">
+                  {advanceGroups.map((group) => (
+                    <section key={group.label}>
+                      <h2
+                        className="text-base text-[#1d080f] mb-3 flex items-center gap-2"
+                        style={{ WebkitTextStroke: "0.3px #1d080f" }}
+                      >
+                        {group.label}
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#1d080f] text-white">
+                          {group.orders.length}
+                        </span>
+                      </h2>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 items-start">
+                        {group.orders.map(renderOrderCard)}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              )
+            )}
+
+            {/* ---------- History ---------- */}
             {view === "history" && (
               completedOrders.length === 0 ? (
                 <div className={emptyClass}>
@@ -652,10 +837,15 @@ export default function OrderQueue({ embedded = false, highlightTarget = null, i
                     >
                       <div className="flex items-start justify-between gap-3 mb-1">
                         <span
-                          className="font-[Prata] text-base text-[#1d080f]"
+                          className="font-[Prata] text-base text-[#1d080f] flex items-center gap-2"
                           style={{ WebkitTextStroke: "0.3px #1d080f" }}
                         >
                           Order #{o.displayNo}
+                          {isAdvance(o) && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-md bg-[#e9eefb] text-[#3b5ba8]" style={{ WebkitTextStroke: 0 }}>
+                              Advance
+                            </span>
+                          )}
                         </span>
                         <span className="font-[Prata] text-base text-[#1d080f] whitespace-nowrap">
                           Php. {o.total?.toLocaleString?.() ?? o.total}
@@ -693,7 +883,14 @@ export default function OrderQueue({ embedded = false, highlightTarget = null, i
                           className="border-b border-gray-100 last:border-0 text-sm cursor-pointer hover:bg-[#faf8f5] transition"
                         >
                           <td className="px-6 py-4" style={{ WebkitTextStroke: "0.3px #1d080f" }}>{o.displayNo}</td>
-                          <td className="px-6 py-4">{o.customer}</td>
+                          <td className="px-6 py-4">
+                            {o.customer}
+                            {isAdvance(o) && (
+                              <span className="ml-2 text-[10px] px-2 py-0.5 rounded-md bg-[#e9eefb] text-[#3b5ba8] whitespace-nowrap">
+                                Advance
+                              </span>
+                            )}
+                          </td>
                           <td className="px-6 py-4 text-gray-700 whitespace-nowrap">
                             {dishCount(o)} dish{dishCount(o) !== 1 ? 'es' : ''}
                           </td>

@@ -17,6 +17,7 @@ import { ordersApi } from '../services/ordersApi';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { readCachedOrders } from '../hooks/CustomerNotif';
+import { getAdvanceOrder, clearAdvanceOrder, advanceOrderLabel } from '../utils/advanceOrder';
 
 const PAYMENT_METHODS = [
   { id: 'cash', label: 'Cash' },
@@ -285,8 +286,9 @@ function OrderHistoryCard({ order, onRetry }) {
       {failed && onRetry && (
         <div className="mb-4 mt-2 bg-red-50 border border-red-200 rounded-xl p-3 text-left">
           <p className="text-xs font-[Prata] text-red-800 leading-relaxed mb-3">
-            Your payment couldn't be verified, possibly due to an unclear, incorrect photo or incorrect amount, so please upload a new one.
-            </p>
+            {order.failure_reason
+              ? <><b>Reason:</b> {order.failure_reason}. Please upload a new proof of payment.</>
+              : "Your payment couldn't be verified, possibly due to an unclear photo or incorrect amount, so please upload a new one."}            </p>
           <button
             type="button"
             onClick={onRetry}
@@ -453,6 +455,16 @@ function Payment() {
   const [justOrdered, setJustOrdered] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [openNotes, setOpenNotes] = useState({});
+    // Ordering ahead for a reservation (started from My Reservation)
+  const [advance, setAdvance] = useState(() => getAdvanceOrder());
+  // 'restaurant' = settle at the restaurant; 'before' = pay with the downpayment
+  const [advancePayWhen, setAdvancePayWhen] = useState('restaurant');
+
+  useEffect(() => {
+    const sync = () => setAdvance(getAdvanceOrder());
+    window.addEventListener('advance-order-change', sync);
+    return () => window.removeEventListener('advance-order-change', sync);
+  }, []);
 
   // --- Settle screen state ---
   const [unpaidOrders, setUnpaidOrders] = useState([]);
@@ -728,6 +740,10 @@ function Payment() {
         service_fee: orderServiceFee,
         discount_amount: 0,
         total: orderTotal,
+        // Advance order: which reservation, when the kitchen should have it ready, and when it's paid
+        reservation_id: advance?.reservationId ?? null,
+        scheduled_for: advance ? `${advance.date} ${advance.time}:00` : null,
+        advance_payment: advance ? advancePayWhen : null,
         items: orderItems.map((item) => ({
           menu_item_id: item.id,
           item_name: item.name,
@@ -747,6 +763,16 @@ function Payment() {
       }
 
       setOrderItems([]);
+
+      // An advance order goes back to the reservation it belongs to
+      if (advance) {
+        const reservationId = advance.reservationId;
+        clearAdvanceOrder();
+        setAdvance(null);
+        navigate('/reservation', { state: { highlight: { type: 'reservation', id: reservationId } } });
+        return;
+      }
+
       setJustOrdered(true);
       setScreen('empty');
 
@@ -1067,10 +1093,8 @@ function Payment() {
         {screen === 'order' && orderItems.length > 0 && (
           <div className="grid grid-cols-1 gap-6">
 
-            <div className="bg-white rounded-2xl shadow-sm p-8 border border-neutral-200/80">
-              <h2 className="text-center font-[Prata] text-amber-800 tracking-wide text-sm mb-4">
-                NAME
-              </h2>
+            {/* Just the guest's name — no heading above it */}
+            <div className="bg-white rounded-2xl shadow-sm p-5 border border-neutral-200/80">
               <div className="max-w-xs mx-auto">
                 <div className="w-full text-center bg-neutral-100 rounded-md px-4 py-3.5 font-[Prata] text-[#1d080f]">
                   {user?.full_name}
@@ -1078,7 +1102,39 @@ function Payment() {
               </div>
             </div>
 
-            <div className="bg-amber-50 border border-amber-300 rounded-xl p-5 text-sm text-amber-900 leading-relaxed text-left">
+            {advance && (
+              <div className="bg-white rounded-2xl border border-neutral-200/80 p-5 shadow-xs text-left">
+                <p className="font-[Prata] font-bold text-[#1d080f] mb-1">Advance Order</p>
+                <p className="text-sm text-neutral-700 mb-4">
+                  For your reservation on {advanceOrderLabel(advance)}. The kitchen will have it ready by then.
+                </p>
+                <p className="text-xs font-semibold text-neutral-700 mb-2">When will you pay for this order?</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {[
+                    { id: 'restaurant', label: 'Pay at the restaurant', note: 'Added to your bill on the day' },
+                    { id: 'before', label: 'Pay before arriving', note: 'Together with your downpayment' },
+                  ].map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setAdvancePayWhen(opt.id)}
+                      className={`text-left rounded-xl border px-4 py-3 transition ${
+                        advancePayWhen === opt.id
+                          ? 'border-[#1d080f] bg-[#1d080f] text-white'
+                          : 'border-neutral-300 text-[#1d080f] hover:bg-neutral-50'
+                      }`}
+                    >
+                      <span className="block text-sm font-semibold">{opt.label}</span>
+                      <span className={`block text-xs mt-0.5 ${advancePayWhen === opt.id ? 'text-white/80' : 'text-neutral-500'}`}>
+                        {opt.note}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className={`bg-amber-50 border border-amber-300 rounded-xl p-5 text-sm text-amber-900 leading-relaxed text-left ${advance ? 'hidden' : ''}`}>
               <p className="font-[Prata] font-bold text-amber-900 mb-2">How payment works</p>
               <ul className="list-disc pl-5 space-y-1.5">
                 <li>Tap <strong>Order Now</strong> to send your order to the kitchen.</li>
@@ -1274,7 +1330,8 @@ function Payment() {
                           className={`w-full bg-white border border-neutral-300 rounded-xl px-4 py-3.5 text-sm appearance-none focus:outline-none focus:ring-1 focus:ring-[#1d080f] ${method ? 'text-[#1d080f]' : 'text-neutral-600'}`}
                         >
                           <option value="" disabled className="text-neutral-600">Mode of Payment *</option>
-                          {PAYMENT_METHODS.map(({ id, label }) => (
+                          {/* Cash is only allowed as part of a split payment */}
+                          {ONLINE_METHODS.map(({ id, label }) => (
                             <option key={id} value={id} className="text-[#1d080f]">{label}</option>
                           ))}
                         </select>

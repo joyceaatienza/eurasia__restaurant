@@ -238,8 +238,8 @@ function DownpaymentModal({ reservation, busy, onClose, onConfirm, onFail }) {
           {reservation.isCash ? "Cash Downpayment" : "Verify Downpayment"}
         </h3>
         <p className="text-xs text-gray-600 mb-5">
-          Once verified, the front desk can confirm this reservation.
-        </p>
+          The front desk already confirmed this reservation. Verify the guest's downpayment.
+          </p>
 
         <div className="space-y-3 text-sm mb-5">
           <div className="flex justify-between gap-3">
@@ -320,6 +320,104 @@ function DownpaymentModal({ reservation, busy, onClose, onConfirm, onFail }) {
   );
 }
 
+/* ---------------------------------------------------------------- */
+/* Reason picker — the guest is told why their payment failed         */
+/* ---------------------------------------------------------------- */
+const FAIL_REASONS = [
+  "Blurry or unclear photo",
+  "Amount doesn't match",
+  "Reference number not visible",
+  "Payment not received in our account",
+  "Sent to the wrong account",
+  "Other",
+];
+
+function FailReasonModal({ target, busy, onClose, onSubmit }) {
+  const [choice, setChoice] = useState("");
+  const [other, setOther] = useState("");
+
+  // Start fresh each time it opens
+  useEffect(() => {
+    if (target) {
+      setChoice("");
+      setOther("");
+    }
+  }, [target]);
+
+  if (!target) return null;
+
+  const reason = choice === "Other" ? other.trim() : choice;
+
+  return (
+    <div
+      onClick={onClose}
+      className="fixed inset-0 bg-black/40 flex items-center justify-center z-[70] px-4 py-6"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative bg-white rounded-xl p-5 sm:p-7 max-w-sm w-full font-[Prata] max-h-[88vh] overflow-y-auto"
+      >
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-500 hover:text-gray-700">
+          <X size={18} />
+        </button>
+
+        <h3 className="text-lg text-[#1d080f] mb-1 pr-8" style={{ WebkitTextStroke: "0.5px #1d080f" }}>
+          Why did it fail?
+        </h3>
+        <p className="text-xs text-gray-600 mb-4">
+          {target.label} — the guest will see this reason and can upload a new proof.
+        </p>
+
+        <div className="flex flex-col gap-2 mb-4">
+          {FAIL_REASONS.map((r) => (
+            <label
+              key={r}
+              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border text-sm cursor-pointer transition ${
+                choice === r ? "border-[#842029] bg-[#fdf1f2] text-[#842029]" : "border-gray-200 text-[#1d080f] hover:bg-gray-50"
+              }`}
+            >
+              <input
+                type="radio"
+                name="fail-reason"
+                checked={choice === r}
+                onChange={() => setChoice(r)}
+                className="accent-[#842029]"
+              />
+              {r}
+            </label>
+          ))}
+        </div>
+
+        {choice === "Other" && (
+          <textarea
+            value={other}
+            onChange={(e) => setOther(e.target.value)}
+            placeholder="Type the reason the guest will see"
+            rows={3}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-[#1d080f] mb-4 focus:outline-none focus:ring-1 focus:ring-[#1d080f] resize-none"
+          />
+        )}
+
+        <div className="flex gap-2">
+          <button
+            onClick={onClose}
+            className="flex-1 py-2.5 rounded-lg border border-gray-300 text-sm text-[#1d080f] hover:bg-gray-50 transition"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => onSubmit(reason)}
+            disabled={!reason || busy}
+            className="flex-1 py-2.5 rounded-lg bg-[#842029] text-white text-sm hover:opacity-90 transition flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Ban size={15} /> {busy ? "Saving..." : "Mark as Failed"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // The list no longer carries the photos — only has_receipt (1 or 0).
 // The photo itself is loaded with ordersApi.getById when someone opens it.
 function normalizeTransaction(o) {
@@ -365,7 +463,10 @@ function normalizeDownpayment(r) {
     reservationStatus: String(r.status || "").toLowerCase(),
     hasProof: Boolean(r.has_payment_proof ?? r.payment_proof),
     // Cash is handed over at the counter, so there's no upload to check
+    // Cash is handed over at the counter, so there's no upload to check
     isCash: (r.payment_method || "").toLowerCase() === "cash",
+    // The guest pays after the front desk confirms; no method yet means nothing to verify
+    paid: Boolean(r.payment_method),
     createdAt,
     // The reservation day (midnight) — used to drop reservations that already passed
     resDay: validDate ? new Date(resDate.getFullYear(), resDate.getMonth(), resDate.getDate()) : null,
@@ -470,10 +571,12 @@ function PaymentCard({ t, highlighted, cardRef, loadingId, onView, onVerify, sho
           </button>
         )}
 
-        {showStatusOnly ? (
-          <div className="flex-1 flex items-center justify-center">
-            <StatusBadge status={t.status} />
-          </div>
+      {!d.paid && d.status === "Pending" ? (
+        <div className="text-center text-xs text-gray-500 italic py-2">Not paid yet</div>
+      ) : showStatusOnly ? (
+        <div className="flex justify-center">
+          <StatusBadge status={d.status} />
+        </div>
         ) : t.hasReceipt ? (
           <button
             onClick={() => onVerify(t)}
@@ -687,7 +790,7 @@ export default function PaymentTransactions({
       : d.createdAt?.getTime() ?? 0;
 
   const pendingDownpayments = activeDownpayments
-    .filter((d) => d.status === "Pending")
+    .filter((d) => d.status === "Pending" && d.paid)
     .sort((a, b) => {
       const diff = dpSortValue(b) - dpSortValue(a);
       return dpNewestFirst ? diff : -diff;
@@ -721,7 +824,7 @@ export default function PaymentTransactions({
         .sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0))
     : [];
   // A downpayment can still be acted on only while it's pending and the reservation is ahead
-  const isActiveDownpayment = (d) => activeDownpayments.includes(d) && d.status === "Pending";
+  const isActiveDownpayment = (d) => activeDownpayments.includes(d) && d.status === "Pending" && d.paid;
 
   // The list endpoint leaves out the images to stay light, so pull the full order on demand
   const openVerify = async (t) => {
@@ -779,15 +882,36 @@ export default function PaymentTransactions({
     }
   };
 
-  const handleFail = async (id) => {
+  // "Mark as Failed" opens the reason picker first; nothing is saved until a reason is chosen
+  const [failTarget, setFailTarget] = useState(null);
+
+  const handleFail = (id) => {
     const tx = transactions.find((t) => t.id === id) || allOrders.find((t) => t.id === id);
+    setFailTarget({ kind: "order", id, label: `Order #${tx?.displayNo ?? id}` });
+  };
+
+  const handleDownpaymentFail = (id) => {
+    const dp = downpayments.find((d) => d.id === id);
+    setFailTarget({ kind: "downpayment", id, label: `Downpayment for ${dp?.guestName ?? "guest"}` });
+  };
+
+  const submitFail = async (reason) => {
+    if (!failTarget) return;
+    const { kind, id, label } = failTarget;
     setSaving(true);
     try {
-      await ordersApi.updatePaymentStatus(id, "failed");
-      setTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, status: "Failed" } : t)));
-      setAllOrders((prev) => prev.map((t) => (t.id === id ? { ...t, status: "Failed" } : t)));
-      setModalTx(null);
-      showToast(`Payment #${tx?.displayNo ?? id} marked as failed`);
+      if (kind === "order") {
+        await ordersApi.updatePaymentStatus(id, "failed", reason);
+        setTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, status: "Failed" } : t)));
+        setAllOrders((prev) => prev.map((t) => (t.id === id ? { ...t, status: "Failed" } : t)));
+        setModalTx(null);
+      } else {
+        await reservationsApi.updatePaymentStatus(id, "failed", reason);
+        setDownpayments((prev) => prev.map((d) => (d.id === id ? { ...d, status: "Failed" } : d)));
+        setModalDp(null);
+      }
+      setFailTarget(null);
+      showToast(`${label} marked as failed`);
     } catch (err) {
       console.error(err);
       showError("Failed to update payment. Please try again.");
@@ -1094,7 +1218,9 @@ export default function PaymentTransactions({
                           </td>
                           <td className={`${cellClass} whitespace-nowrap`}>Php. {d.amount.toLocaleString()}</td>
                           <td className={cellClass}>
-                            {!isActiveDownpayment(d) ? (
+                            {!d.paid && d.status === "Pending" ? (
+                              <span className="text-xs text-gray-500 italic whitespace-nowrap">Not paid yet</span>
+                            ) : !isActiveDownpayment(d) ? (
                               <StatusBadge status={d.status} />
                             ) : d.isCash || d.hasProof ? (
                               <button
@@ -1461,7 +1587,14 @@ export default function PaymentTransactions({
         busy={saving}
         onClose={() => setModalDp(null)}
         onConfirm={(id) => handleDownpayment(id, "verified")}
-        onFail={(id) => handleDownpayment(id, "failed")}
+        onFail={handleDownpaymentFail}
+      />
+
+      <FailReasonModal
+        target={failTarget}
+        busy={saving}
+        onClose={() => setFailTarget(null)}
+        onSubmit={submitFail}
       />
 
       <ImageViewer src={viewerImage} onClose={() => setViewerImage(null)} />

@@ -19,6 +19,26 @@ export const reservationsApi = {
     return res.json();
   },
 
+  // One reservation with its photos, fetched only when the guest opens one
+  async getById(id) {
+    const res = await fetch(`${API_URL}/${id}`, { headers: authHeaders() });
+    if (!res.ok) throw new Error('Failed to load reservation');
+    return res.json();
+  },
+
+    // Times the front desk has closed off on a date (events, or marked full).
+  // Never blocks the form if it can't be loaded — it just shows nothing.
+  async getBlockedSlots(date) {
+    try {
+      const res = await fetch(`${API_URL}/blocked?date=${encodeURIComponent(date)}`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    } catch {
+      return [];
+    }
+  },
+  
   async create(data) {
     const res = await fetch(API_URL, {
       method: 'POST',
@@ -39,6 +59,20 @@ export const reservationsApi = {
       body: JSON.stringify({ status }),
     });
     if (!res.ok) throw new Error('Failed to update status');
+    return res.json();
+  },
+
+  // Paying the downpayment after the front desk confirms the reservation
+  async payDownpayment(id, { payment_method, payment_proof }) {
+    const res = await fetch(`${API_URL}/${id}/downpayment`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ payment_method, payment_proof }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to submit your downpayment.');
+    }
     return res.json();
   },
 

@@ -28,11 +28,12 @@ export const ordersApi = {
     if (!res.ok) throw new Error('Failed to toggle item');
     return res.json();
   },
-  async updatePaymentStatus(id, payment_status) {
+  // failure_reason is optional — it's only sent when marking a payment as failed
+  async updatePaymentStatus(id, payment_status, failure_reason = null) {
     const res = await fetch(`${API_URL}/${id}/payment-status`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ payment_status }),
+      body: JSON.stringify({ payment_status, failure_reason }),
     });
     if (!res.ok) throw new Error('Failed to update payment status');
     return res.json();

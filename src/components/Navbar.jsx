@@ -8,6 +8,7 @@ import { useCart } from '../context/CartContext'
 import { useAuth } from '../context/AuthContext'
 import NotificationBell from './NotifBell'
 import { useCustomerNotifications } from '../hooks/CustomerNotif'
+import { getAdvanceOrder, clearAdvanceOrder, advanceOrderLabel } from '../utils/advanceOrder'
 
 // Shown once per login, so it reminds without nagging on every page
 const BALANCE_SEEN_KEY = 'eurasia_balance_notice_seen'
@@ -86,6 +87,16 @@ function Navbar() {
 
   // One source for both the desktop and the mobile bell
   const notif = useCustomerNotifications()
+
+
+    // An advance order in progress for a reservation (started from My Reservation)
+  const [advance, setAdvance] = useState(() => getAdvanceOrder())
+  useEffect(() => {
+    const sync = () => setAdvance(getAdvanceOrder())
+    window.addEventListener('advance-order-change', sync)
+    return () => window.removeEventListener('advance-order-change', sync)
+  }, [])
+  const showAdvanceBar = advance && ['/menu', '/payment'].includes(location.pathname)
 
   // Unpaid-balance reminder: once per login, only after fresh data has loaded
   const [showBalance, setShowBalance] = useState(false)
@@ -188,6 +199,20 @@ function Navbar() {
           </button>
         </div>
       </div>
+
+            {showAdvanceBar && (
+        <div className="bg-[#1d080f] text-[#f5e9d8] px-4 py-2 flex items-center justify-center gap-3 text-xs sm:text-sm font-heading">
+          <span className="text-center">
+            Advance order for your reservation on {advanceOrderLabel(advance)}
+          </span>
+          <button
+            onClick={() => clearAdvanceOrder()}
+            className="underline whitespace-nowrap hover:opacity-80"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
 
       {mobileOpen && (
         <div className="md:hidden bg-white border-t border-neutral-100 px-6 py-4 flex flex-col gap-4 font-heading text-[#1d080f]">

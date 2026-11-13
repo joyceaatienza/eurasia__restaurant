@@ -144,8 +144,7 @@ export default function AboutUs() {
             {SERVICES.map(({ label, icon: Icon }) => (
               <div 
                 key={label}
-                className="flex items-center gap-2.5 px-5 py-3 rounded-xl bg-[#faf8f5] border border-neutral-200/80 text-neutral-800 text-xs font-medium hover:border-[#b38548] hover:text-[#1d080f] transition-all cursor-default"
-              >
+                className="flex items-center gap-2.5 px-5 py-3 rounded-xl bg-[#faf8f5] border border-neutral-200/80 text-neutral-800 text-xs font-medium cursor-default select-none"              >
                 <Icon size={16} className="text-[#b38548]" />
                 <span>{label}</span>
               </div>

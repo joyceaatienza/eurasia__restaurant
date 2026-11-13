@@ -161,12 +161,15 @@ function buildNotifications(orders, reservations) {
         target: { type: 'settle' },
       })
     } else if (o.receipt_image) {
+      const isCash = (o.payment_method || '').toLowerCase() === 'cash';
       list.push({
         id: `orderpay-${o.id}-submitted`,
         kind: 'payment',
         tone: 'info',
-        title: 'Payment proof submitted',
-        detail: `Order #${no} · ${peso(o.total)} · Waiting for the cashier to verify`,
+        title: isCash ? 'Cash payment recorded' : 'Payment proof submitted',
+        detail: isCash
+          ? `Order #${no} · ${peso(o.total)} · The cashier will mark it as received`
+          : `Order #${no} · ${peso(o.total)} · Waiting for the cashier to verify`,
         at,
         link: '/payment',
         target: { type: 'order', id: o.id },

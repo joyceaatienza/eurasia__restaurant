@@ -1082,20 +1082,34 @@ function Menu() {
   const beverageBoardRef = useRef(null)
 
   useEffect(() => {
-    setDishRatings(getDishRatings())
+    getDishRatings().then(setDishRatings)
   }, [])
 
-  const handleAddToTray = (item, event) => {
-    const rect = event.currentTarget.getBoundingClientRect()
-    flyToCart(item.image, rect)
-    addToCart({
-      id: item.id,
-      name: item.name,
-      price: item.price,
-      image: item.image,
-      flag: item.flag,
-      emoji: item.emoji,
-    })
+  const [qtyModal, setQtyModal] = useState(null)
+
+  const handleAddToTray = (item) => {
+    setQtyModal({ item, qty: 1 })
+  }
+
+  const handleQtyConfirm = (e) => {
+    if (!qtyModal) return
+    const { item, qty } = qtyModal
+    const btn = e?.currentTarget
+    if (btn) {
+      const rect = btn.getBoundingClientRect()
+      flyToCart(item.image, rect)
+    }
+    for (let i = 0; i < qty; i++) {
+      addToCart({
+        id: item.id,
+        name: item.name,
+        price: item.price,
+        image: item.image,
+        flag: item.flag,
+        emoji: item.emoji,
+      })
+    }
+    setQtyModal(null)
   }
 
   // Drinks from the beverage board have no photo, so the tray icon stands in for one
@@ -1281,7 +1295,7 @@ const handleBuyNow = (item) => {
                     {/* Add to Tray Button */}
                     <button
                       type="button"
-                      onClick={(e) => handleAddToTray(item, e)}
+                      onClick={() => handleAddToTray(item)}
                       className="flex flex-1 items-center justify-center gap-1.5 border-l border-neutral-200 bg-neutral-100 text-xs text-neutral-800 transition-colors hover:bg-neutral-200"
                     >
                       <img src={trayIcon} alt="" className="h-4 w-4 shrink-0" />
@@ -1305,6 +1319,43 @@ const handleBuyNow = (item) => {
           )}
         </main>
       </div>
+
+            {qtyModal && (
+        <div onClick={() => setQtyModal(null)} className="fixed inset-0 z-[100] bg-black/40 flex items-end sm:items-center justify-center p-4">
+          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
+            <div className="flex gap-4 p-5 border-b border-neutral-100">
+              <img src={qtyModal.item.image} alt={qtyModal.item.name} className="w-20 h-20 rounded-xl object-cover shrink-0" />
+              <div className="flex flex-col justify-center">
+                <p className="font-[Prata] font-bold text-[#1d080f] text-base leading-snug">{qtyModal.item.name}</p>
+                <p className="font-[Prata] text-sm text-neutral-500 mt-1">Php. {qtyModal.item.price}</p>
+                <p className="font-[Prata] text-sm font-semibold text-[#1d080f] mt-1">
+                  Total: Php. {(qtyModal.item.price * qtyModal.qty).toLocaleString()}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-between px-6 py-5">
+              <span className="font-[Prata] text-sm text-neutral-700">Quantity</span>
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setQtyModal((prev) => ({ ...prev, qty: Math.max(1, prev.qty - 1) }))}
+                  className="w-9 h-9 rounded-full border border-neutral-300 text-[#1d080f] text-lg font-bold flex items-center justify-center hover:bg-neutral-100 transition cursor-pointer"
+                >−</button>
+                <span className="font-[Prata] text-lg font-bold text-[#1d080f] w-6 text-center">{qtyModal.qty}</span>
+                <button
+                  onClick={() => setQtyModal((prev) => ({ ...prev, qty: prev.qty + 1 }))}
+                  className="w-9 h-9 rounded-full border border-neutral-300 text-[#1d080f] text-lg font-bold flex items-center justify-center hover:bg-neutral-100 transition cursor-pointer"
+                >+</button>
+              </div>
+            </div>
+            <div className="flex gap-3 px-5 pb-5">
+              <button onClick={() => setQtyModal(null)} className="flex-1 border border-neutral-300 text-neutral-700 font-[Prata] text-sm font-semibold py-3 rounded-xl hover:bg-neutral-50 transition cursor-pointer">Cancel</button>
+              <button onClick={handleQtyConfirm} className="flex-2 flex-[2] bg-[#1d080f] text-white font-[Prata] text-sm font-semibold py-3 rounded-xl hover:opacity-90 transition cursor-pointer">
+                Add to Tray
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -90,7 +90,7 @@ export default function Feedback() {
       .catch((e) => console.error("Failed to load ordered dishes:", e));
   }, [isAuthenticated]);
 
-  const isValid = rating > 0 && name.trim().length > 0;
+  const isValid = rating > 0;  // message is optional — stars + name are enough
 
   const setDishRating = (dish, value) => {
     setDishRatings((prev) => ({ ...prev, [dish]: value }));

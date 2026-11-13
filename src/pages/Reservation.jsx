@@ -1122,7 +1122,7 @@ function Reservation() {
               <StatusBadge status={r.status} />
             </div>
 
-            {/* Order food ahead once the front desk confirms, so nothing's cooked for a slot that falls through */}
+            {/* Order food ahead once the front desk confirms */}
             {status === 'confirmed' && !isPastDate && (
               <button
                 type="button"
@@ -1165,11 +1165,15 @@ function Reservation() {
             <p className="text-xs text-amber-900 leading-relaxed">
               The front desk is checking availability. You'll be asked to pay the downpayment once it's confirmed.
             </p>
-            {r.remarks && (
-              <p className="text-xs text-amber-900 leading-relaxed mt-2 bg-white/70 rounded-lg p-2.5">
-                <span className="font-bold">Note from the front desk:</span> {r.remarks}
-              </p>
-            )}
+          </div>
+        )}
+
+        {/* The front desk's note shows whatever the status is */}
+        {r.remarks && (
+          <div className="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-3 sm:p-4 text-left font-[Prata]">
+            <p className="text-xs text-amber-900 leading-relaxed">
+              <span className="font-bold">Note from the front desk:</span> {r.remarks}
+            </p>
           </div>
         )}
 

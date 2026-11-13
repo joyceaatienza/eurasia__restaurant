@@ -894,6 +894,156 @@ function snapToBlockTime(time) {
   return snapped;
 }
 
+const ITEM_H = 40;
+const BLOCK_OPEN_H = 11;  // 11 AM
+const BLOCK_CLOSE_H = 22; // 10 PM
+
+function WheelCol({ options, selected, onSelect, loop = true, isDisabled }) {
+  const looped = loop ? [...options, ...options, ...options] : options;
+  const containerRef = useRef(null);
+  const scrollTimer = useRef(null);
+  const fromScroll = useRef(false);
+  const baseOffset = loop ? options.length : 0;
+
+  const jumpTo = (el, top) => {
+    const prev = el.style.scrollBehavior;
+    el.style.scrollBehavior = "auto";
+    el.scrollTop = top;
+    el.style.scrollBehavior = prev;
+  };
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || fromScroll.current) { fromScroll.current = false; return; }
+    const idx = options.indexOf(selected);
+    if (idx === -1) return;
+    jumpTo(el, (baseOffset + idx) * ITEM_H);
+  }, [selected, options, baseOffset]);
+
+  const handleScroll = () => {
+    const el = containerRef.current; if (!el) return;
+    if (scrollTimer.current) clearTimeout(scrollTimer.current);
+    scrollTimer.current = setTimeout(() => {
+      const node = containerRef.current; if (!node) return;
+      let index = Math.round(node.scrollTop / ITEM_H);
+      if (loop) {
+        const setLen = options.length;
+        if (index < setLen * 0.5) { jumpTo(node, node.scrollTop + setLen * ITEM_H); index += setLen; }
+        else if (index >= setLen * 2.5) { jumpTo(node, node.scrollTop - setLen * ITEM_H); index -= setLen; }
+      }
+      const option = looped[index];
+      if (option !== undefined && option !== selected) { fromScroll.current = true; onSelect(option); }
+    }, 100);
+  };
+
+  return (
+    <div
+      ref={containerRef}
+      onScroll={handleScroll}
+      style={{ height: 160, overflowY: "auto", scrollSnapType: "y mandatory", scrollbarWidth: "none", msOverflowStyle: "none", flex: 1, textAlign: "center", cursor: "grab", userSelect: "none", scrollBehavior: "smooth" }}
+    >
+      <div style={{ height: 60 }} />
+      {looped.map((option, i) => {
+        const disabled = isDisabled ? isDisabled(option) : false;
+        return (
+          <div
+            key={`${option}-${i}`}
+            onClick={() => { if (disabled) return; fromScroll.current = true; onSelect(option); if (containerRef.current) jumpTo(containerRef.current, i * ITEM_H); }}
+            style={{ height: 40, scrollSnapAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: FONT, cursor: disabled ? "default" : "pointer",
+              fontSize: selected === option ? 15 : 12,
+              fontWeight: selected === option ? 700 : 400,
+              color: selected === option ? (disabled ? C.gray : C.ink) : C.inkSoft,
+              opacity: disabled ? 0.25 : selected === option ? 1 : 0.4,
+              transition: "all 0.15s",
+            }}
+          >
+            {option}
+          </div>
+        );
+      })}
+      <div style={{ height: 60 }} />
+    </div>
+  );
+}
+
+function to24HourBlock(hour12, ampm) {
+  let h = parseInt(hour12, 10);
+  if (ampm === "PM" && h < 12) h += 12;
+  if (ampm === "AM" && h === 12) h = 0;
+  return h;
+}
+
+function isBlockTimeAllowed(h, m) {
+  const mins = h * 60 + m;
+  return mins >= BLOCK_OPEN_H * 60 && mins <= BLOCK_CLOSE_H * 60;
+}
+
+function BlockTimeWheelPicker({ label, value, onChange }) {
+  // value is "HH:MM" (24h), e.g. "17:00"
+  const parse = (v) => {
+    const [h, m] = (v || "17:00").split(":").map(Number);
+    const ampm = h >= 12 ? "PM" : "AM";
+    const hour = h % 12 === 0 ? 12 : h % 12;
+    return { hour: hour.toString().padStart(2, "0"), minute: m.toString().padStart(2, "0"), ampm };
+  };
+
+  const current = parse(value);
+
+  const hours = Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, "0"));
+  const minutes = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, "0"));
+  const periods = ["AM", "PM"];
+
+  const isHourDisabled = (hr) => {
+    const h24 = to24HourBlock(hr, current.ampm);
+    return !isBlockTimeAllowed(h24, 0) && !isBlockTimeAllowed(h24, 59);
+  };
+  const isMinuteDisabled = (min) => {
+    const h24 = to24HourBlock(current.hour, current.ampm);
+    return !isBlockTimeAllowed(h24, parseInt(min, 10));
+  };
+  const isPeriodDisabled = (ap) => {
+    const h24 = to24HourBlock(current.hour, ap);
+    return !isBlockTimeAllowed(h24, 0) && !isBlockTimeAllowed(h24, 59);
+  };
+
+  const update = (hr, min, ap) => {
+    const h24 = to24HourBlock(hr, ap);
+    onChange(`${h24.toString().padStart(2, "0")}:${min}`);
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <span style={{ fontSize: 11.5, color: C.inkSoft, fontFamily: FONT }}>{label}</span>
+      <div style={{ background: "#fff", borderRadius: 10, border: `1px solid ${C.hair}`, overflow: "hidden", position: "relative", width: 180 }}>
+        {/* Selection highlight */}
+        <div style={{ position: "absolute", top: 60, left: 0, right: 0, height: 40, borderTop: `2px solid ${C.ink}`, borderBottom: `2px solid ${C.ink}`, opacity: 0.12, pointerEvents: "none", zIndex: 1 }} />
+        <div style={{ display: "flex", alignItems: "center" }}>
+          <WheelCol
+            options={hours}
+            selected={current.hour}
+            onSelect={(v) => update(v, current.minute, current.ampm)}
+            isDisabled={isHourDisabled}
+          />
+          <span style={{ fontFamily: FONT, fontWeight: 700, fontSize: 16, color: C.ink, flexShrink: 0, zIndex: 2 }}>:</span>
+          <WheelCol
+            options={minutes}
+            selected={current.minute}
+            onSelect={(v) => update(current.hour, v, current.ampm)}
+            isDisabled={isMinuteDisabled}
+          />
+          <WheelCol
+            options={periods}
+            selected={current.ampm}
+            onSelect={(v) => update(current.hour, current.minute, v)}
+            loop={false}
+            isDisabled={isPeriodDisabled}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function BlockedTimesCard({ dateISO, isMobile, prefill, onPrefillUsed }) {
   const [slots, setSlots] = useState([]);
   const [adding, setAdding] = useState(false);
@@ -983,15 +1133,23 @@ function BlockedTimesCard({ dateISO, isMobile, prefill, onPrefillUsed }) {
             Guests can't book a table during these hours on this date.
           </div>
         </div>
-        {!adding && (
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            style={{ display: "flex", alignItems: "center", gap: 6, border: "none", borderRadius: 8, padding: "8px 14px", background: C.void, color: "#f5e9d8", fontSize: 12.5, fontWeight: 700, fontFamily: FONT, cursor: "pointer" }}
-          >
-            <Plus size={14} /> Block a Time
-          </button>
-        )}
+         {!adding && (() => {
+          const [y, m, d] = dateISO.split("-").map(Number);
+          const isPast = new Date(y, m - 1, d) < new Date(new Date().setHours(0, 0, 0, 0));
+          return isPast ? (
+            <span style={{ fontSize: 12, color: C.inkSoft, fontFamily: FONT, fontStyle: "italic" }}>
+              Can't block times on a past date.
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setAdding(true)}
+              style={{ display: "flex", alignItems: "center", gap: 6, border: "none", borderRadius: 8, padding: "8px 14px", background: C.void, color: "#f5e9d8", fontSize: 12.5, fontWeight: 700, fontFamily: FONT, cursor: "pointer" }}
+            >
+              <Plus size={14} /> Block a Time
+            </button>
+          );
+        })()}
       </div>
 
       {slots.length > 0 && (
@@ -1047,59 +1205,37 @@ function BlockedTimesCard({ dateISO, isMobile, prefill, onPrefillUsed }) {
             })}
           </div>
 
-          {/* Or pick exact times */}
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "160px 160px 200px auto", gap: 10, alignItems: "end" }}>
-            <label style={labelStyle}>
-              From
-              <select
-                value={start}
-                onChange={(e) => {
-                  const next = e.target.value;
-                  setStart(next);
-                  // Keep "To" after "From"
-                  if (end <= next) {
-                    const later = BLOCK_TIMES.find((t) => t > next);
-                    if (later) setEnd(later);
-                  }
-                }}
-                style={inputStyle}
-              >
-                {BLOCK_TIMES.slice(0, -1).map((t) => (
-                  <option key={t} value={t}>{to12h(t)}</option>
-                ))}
-              </select>
-            </label>
-
-            <label style={labelStyle}>
-              To
-              <select value={end} onChange={(e) => setEnd(e.target.value)} style={inputStyle}>
-                {BLOCK_TIMES.filter((t) => t > start).map((t) => (
-                  <option key={t} value={t}>{to12h(t)}</option>
-                ))}
-              </select>
-            </label>
-
-            <label style={{ ...labelStyle, gridColumn: isMobile ? "1 / -1" : "auto" }}>
-              Reason
-              <select value={reason} onChange={(e) => setReason(e.target.value)} style={inputStyle}>
-                {BLOCK_REASONS.map((r) => <option key={r}>{r}</option>)}
-              </select>
-            </label>
-
-            <div style={{ display: "flex", gap: 6, gridColumn: isMobile ? "1 / -1" : "auto" }}>
-              <button
-                type="button"
-                onClick={add}
-                disabled={saving}
-                style={{ flex: isMobile ? 1 : "none", border: "none", borderRadius: 8, padding: "10px 18px", background: C.void, color: "#f5e9d8", fontSize: 12.5, fontWeight: 700, fontFamily: FONT, cursor: "pointer", opacity: saving ? 0.6 : 1 }}
-              >
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 14, alignItems: "flex-end" }}>
+            <BlockTimeWheelPicker
+              label="From"
+              value={start}
+              onChange={(next) => {
+                setStart(next);
+                if (end <= next) {
+                  const later = BLOCK_TIMES.find((t) => t > next);
+                  if (later) setEnd(later);
+                }
+              }}
+            />
+            <BlockTimeWheelPicker
+              label="To"
+              value={end}
+              onChange={setEnd}
+            />
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{ fontSize: 11.5, color: C.inkSoft, fontFamily: FONT }}>Reason</span>
+              <div style={{ position: "relative" }}>
+                <select value={reason} onChange={(e) => setReason(e.target.value)} style={{ padding: "10px 32px 10px 12px", borderRadius: 8, border: `1px solid ${C.hair}`, fontSize: 13, fontFamily: FONT, color: C.ink, background: "#fff", outline: "none", cursor: "pointer", appearance: "none", WebkitAppearance: "none" }}>
+                  {BLOCK_REASONS.map((r) => <option key={r}>{r}</option>)}
+                </select>
+                <ChevronDown size={14} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: C.inkSoft }} />
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button type="button" onClick={add} disabled={saving} style={{ border: "none", borderRadius: 8, padding: "10px 18px", background: C.void, color: "#f5e9d8", fontSize: 12.5, fontWeight: 700, fontFamily: FONT, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
                 {saving ? "Saving..." : "Block"}
               </button>
-              <button
-                type="button"
-                onClick={() => { setAdding(false); setError(""); }}
-                style={{ flex: isMobile ? 1 : "none", border: `1px solid ${C.hair}`, borderRadius: 8, padding: "10px 16px", background: "#fff", color: C.ink, fontSize: 12.5, fontFamily: FONT, cursor: "pointer" }}
-              >
+              <button type="button" onClick={() => { setAdding(false); setError(""); }} style={{ border: `1px solid ${C.hair}`, borderRadius: 8, padding: "10px 16px", background: "#fff", color: C.ink, fontSize: 12.5, fontFamily: FONT, cursor: "pointer" }}>
                 Cancel
               </button>
             </div>
@@ -1359,7 +1495,7 @@ function GuestCard({ counts, onAddWalkIn, busy, isToday, isMobile }) {
 
       {!isToday ? (
         <span style={{ fontSize: 11.5, color: C.inkSoft, fontFamily: FONT, fontStyle: "italic" }}>
-          Walk-ins can only be logged for today
+          Walk-ins can only be logged for this day
         </span>
       ) : (
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>

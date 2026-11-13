@@ -1279,14 +1279,23 @@ function DashboardPage({ isMobile, isTablet }) {
   const totalGuests = guestCounts.total;
 
   const reservationStatusCounts = {
-    Completed: filteredReservations.filter((r) => r.status === "completed").length,
-    Pending: filteredReservations.filter((r) => ["pending", "confirmed", "seated"].includes(r.status)).length,
+    Completed: filteredReservations.filter((r) => r.status === "confirmed").length,
+    Pending: filteredReservations.filter((r) => ["pending"].includes(r.status)).length,
     Cancelled: filteredReservations.filter((r) => r.status === "cancelled").length,
   };
-  const computedOrderStats = [
+  const computedReservationStats = [
     { label: "Completed", value: reservationStatusCounts.Completed, color: C.green },
     { label: "Pending", value: reservationStatusCounts.Pending, color: C.amber },
     { label: "Cancelled", value: reservationStatusCounts.Cancelled, color: C.red },
+  ];
+
+  const orderStatusCounts = {
+    Completed: filteredOrders.filter((o) => ["completed", "served", "ready"].includes(o.status)).length,
+    Pending: filteredOrders.filter((o) => ["pending", "preparing"].includes(o.status)).length,
+    };
+  const computedOrderStats = [
+    { label: "Completed", value: orderStatusCounts.Completed, color: C.green },
+    { label: "Pending / Preparing", value: orderStatusCounts.Pending, color: C.amber },
   ];
 
   const itemTotals = {};
@@ -1866,21 +1875,26 @@ function DashboardPage({ isMobile, isTablet }) {
               </ResponsiveContainer>
             </Card>
 
-            <Card>
-              <SectionTitle>Order &amp; Cancellation Stats</SectionTitle>
-              <p style={{ fontSize: 11.5, color: C.inkSoft, marginTop: -8, marginBottom: 12 }}>
-                (Based on reservations)
-              </p>
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <Card>
+              <SectionTitle>Order Stats</SectionTitle>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20 }}>
                 {computedOrderStats.map((s) => (
-                  <div
-                    key={s.label}
-                    style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
-                  >
+                  <div key={s.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <span style={{ fontSize: 13.5, color: C.ink, fontWeight: 600 }}>{s.label}</span>
                     <span style={{ fontSize: 15, fontWeight: 700, color: s.color }}>{s.value}</span>
                   </div>
                 ))}
+              </div>
+              <div style={{ borderTop: `1px solid ${C.hair}`, paddingTop: 16 }}>
+                <SectionTitle>Reservation Stats</SectionTitle>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {computedReservationStats.map((s) => (
+                    <div key={s.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: 13.5, color: C.ink, fontWeight: 600 }}>{s.label}</span>
+                      <span style={{ fontSize: 15, fontWeight: 700, color: s.color }}>{s.value}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </Card>
           </div>

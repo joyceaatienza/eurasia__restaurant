@@ -734,7 +734,7 @@ function Reservation() {
   const [cancelTarget, setCancelTarget] = useState(null)
   // The reservation whose new downpayment proof is being sent
   const [reuploadingId, setReuploadingId] = useState(null)
-
+  const [paxValue, setPaxValue] = useState("")
   // --- Jumping to a reservation from a notification ---
   const [highlightId, setHighlightId] = useState(null)
   const highlightRef = useRef(null)
@@ -894,8 +894,8 @@ function Reservation() {
     setOccasion("")
     setVipArea(false)
     clearThemeImage()
+    setPaxValue("")
   }
-
   const handleConfirm = async (e) => {
     e.preventDefault()
 
@@ -939,6 +939,12 @@ function Reservation() {
       // Paid later, once the front desk confirms — avoids paying for a slot that's taken
       payment_method: null,
       payment_proof: null,
+    }
+
+    const maxPax = tab === "event" ? 96 : vipArea ? 20 : 76
+    if (Number(formData.get('persons')) > maxPax) {
+      showError(`Maximum of ${maxPax} pax only.`)
+      return
     }
 
     try {
@@ -1462,8 +1468,34 @@ function Reservation() {
                           <ChevronDown size={16} className="absolute right-4 bottom-4 pointer-events-none text-neutral-400" />
                         </div>
                       )}
-                      <Field label="Number of Pax *">
-                        <input name="persons" type="number" min="1" placeholder="e.g. 4" required className={inputClass} />
+                         <Field label="Number of Pax *">
+                        {(() => {
+                          const maxPax = tab === "event" ? 96 : vipArea ? 20 : 76
+                          const paxExceeds = Number(paxValue) > maxPax
+                          return (
+                            <>
+                              <input
+                                name="persons"
+                                type="number"
+                                min="1"
+                                value={paxValue}
+                                onChange={(e) => setPaxValue(e.target.value)}
+                                placeholder="e.g. 4"
+                                required
+                                className={`${inputClass} ${paxExceeds ? 'bg-neutral-100 text-neutral-400' : ''}`}
+                              />
+                              {paxExceeds ? (
+                                <p className="text-xs text-red-600 font-[Prata] mt-1">
+                                  Maximum of {maxPax} pax only.
+                                </p>
+                              ) : (
+                                <p className="text-xs text-neutral-500 font-[Prata] mt-1">
+                                  Max: {maxPax} pax
+                                </p>
+                              )}
+                            </>
+                          )
+                        })()}
                       </Field>
                     </div>
 

@@ -460,7 +460,7 @@ function Payment() {
                   <div className="bg-white rounded-2xl border border-neutral-200/80 p-12 text-center shadow-xs">
                     <div className="w-16 h-16 bg-emerald-50 text-emerald-700 rounded-full flex items-center justify-center mx-auto mb-4"><CheckCircle2 size={28} /></div>
                     <h2 className="font-[Prata] text-xl font-bold mb-3">{isCash ? 'Cash Payment Recorded!' : 'Proof Submitted!'}</h2>
-                    <p className="text-sm text-neutral-700 mb-6 leading-relaxed">{isCash ? 'Please settle your bill in cash at the restaurant. The cashier will mark it as received.' : 'Thank you for dining with Eurasia San Jose. The cashier will verify your payment shortly.'}</p>
+                    <p className="text-sm text-neutral-700 mb-6 leading-relaxed">{isCash ? 'Cash payment recorded! The cashier will mark it as received.' : 'Thank you for dining with Eurasia San Jose. The cashier will verify your payment shortly.'}</p>
                     <button onClick={openHistory} className="flex items-center justify-center gap-2 border border-[#1d080f] text-[#1d080f] text-sm font-semibold px-6 py-3 rounded-xl hover:bg-[#1d080f]/5 transition cursor-pointer w-full max-w-xs mx-auto"><History size={16} /> View Order History</button>
                   </div>
                 ) : unpaidOrders.length === 0 ? (

@@ -199,7 +199,8 @@ function buildNotifications(orders, reservations) {
     }
 
     // ---------- Downpayment status ----------
-    if (Number(r.downpayment_amount) > 0) {
+    // ---------- Downpayment status ----------
+    if (Number(r.downpayment_amount) > 0 && r.payment_method) {
       if (pay === 'verified') {
         list.push({
           id: `downpayment-${r.id}-verified`,
